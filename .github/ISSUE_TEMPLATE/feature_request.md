@@ -7,15 +7,6 @@ assignees: ''
 
 ---
 
----
-name: "FEATURE \bISSUE TEMPLATE"
-about: FEATURE ISSUE TEMPLATE 입니다.
-title: "[FEAT] "
-labels: "✨ Feature"
-assignees: ''
-
----
-
 # ISSUE: ✨ Feature
 Feature 작업을 입력해주세요.
 
