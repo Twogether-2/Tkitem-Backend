@@ -4,4 +4,93 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="tkitem.backend.domain.member.mapper.MemberMapper">
+    <!-- 회원 가입 -->
+    <insert id="insertMember" parameterType="tkitem.backend.domain.member.vo.SignUp">
+        <selectKey keyProperty="id" resultType="long" order="BEFORE">
+            SELECT MEMBER_SEQ.NEXTVAL FROM DUAL
+        </selectKey>
+        INSERT INTO MEMBER (
+            ID,
+            EMAIL,
+            PASSWORD,
+            NICKNAME,
+            ROLE,
+            BIRTHDAY,
+            GENDER,
+            CREATED_BY,
+            UPDATED_BY
+        ) VALUES (
+            #{id},
+            #{email},
+            #{password},
+            #{nickname},
+            'ROLE_USER',
+            TO_DATE(#{birthday}, 'YYYY-MM-DD'),
+            #{gender},
+            #{id},
+            #{id}
+        )
+    </insert>
+
+    <!-- 회원 조회 -->
+    <select id="selectMemberById" parameterType="long" resultType="tkitem.backend.domain.member.vo.Member">
+        SELECT
+            ID AS id,
+            EMAIL AS email,
+            PASSWORD AS password,
+            NICKNAME AS nickname,
+            ROLE AS role,
+            TO_CHAR(BIRTHDAY, 'YYYY-MM-DD') AS birthday,
+            IS_DELETED AS isDeleted,
+            GENDER AS gender,
+            IMG_URL AS imgUrl,
+            UPDATED_AT AS updatedAt
+        FROM MEMBER
+        WHERE ID = #{id} AND IS_DELETED = 'F'
+    </select>
+
+    <!-- 이메일 존재 여부 -->
+    <select id="existsByEmail" resultType="boolean">
+        SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
+        FROM MEMBER
+        WHERE EMAIL = #{email}
+    </select>
+
+    <!-- 일반 로그인 시 이메일 + 비밀번호 존재 여부 -->
+    <select id="existsByEmailAndPassword" resultType="boolean">
+        SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
+        FROM MEMBER
+        JOIN SOCIAL_TYPE ON MEMBER.ID = SOCIAL_TYPE.MEMBER_ID
+        WHERE
+        EMAIL = #{email}
+        AND PASSWORD = #{password}
+        AND IS_DELETED = 'F'
+        AND SOCIAL_TYPE.TYPE = 'NONE'
+    </select>
+
+    <!-- 이메일 + 소셜타입 존재 여부 -->
+    <select id="existsByEmailAndSocialType" resultType="boolean">
+        SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
+        FROM MEMBER
+        JOIN SOCIAL_TYPE ON MEMBER.ID = SOCIAL_TYPE.MEMBER_ID
+        WHERE
+        EMAIL = #{email}
+        AND SOCIAL_TYPE.TYPE = #{type}
+    </select>
+
+    <!-- 회원 탈퇴   -->
+    <update id="updateIsDeleted" parameterType="long">
+        UPDATE MEMBER
+        SET IS_DELETED = 'T', UPDATED_AT = SYSDATE, UPDATED_BY = #{id}
+        WHERE ID = #{id}
+    </update>
+
+    <!-- 회원 재가입  -->
+    <update id="updateIsDeletedFalse">
+        UPDATE MEMBER
+        SET IS_DELETED = 'F', UPDATED_AT = SYSDATE
+        WHERE IS_DELETED = 'T' AND EMAIL = #{email}
+    </update>
 </mapper>
+
+

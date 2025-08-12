@@ -39,4 +39,8 @@ public class SocialSignUpRequest {
 	@NotBlank(message = "생년월일은 필수입니다.")
 	@Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "생년월일 형식은 YYYY-MM-DD이어야 합니다.")
 	private String birthday;
+
+	@Schema(description = "소셜 로그인 타입 (예: KAKAO, GOOGLE)", example = "KAKAO")
+	@NotBlank(message = "소셜 타입은 필수입니다.")
+	private String type;
 }
