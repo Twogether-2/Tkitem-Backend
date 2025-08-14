@@ -36,11 +36,6 @@ public class MemberServiceImpl implements MemberService {
 	}
 
 	@Override
-	public void logout(Member member) {
-
-	}
-
-	@Override
 	public void resign(Member member) {
 
 	}

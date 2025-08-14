@@ -9,6 +9,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import lombok.Getter;
 import lombok.Setter;
+import tkitem.backend.domain.member.dto.response.MemberInfoResponse;
 
 @Getter
 @Setter
@@ -40,5 +41,18 @@ public class Member implements UserDetails {
 	public String getUsername() {
 
 		return email;
+	}
+
+	public MemberInfoResponse toDto(){
+		return new MemberInfoResponse(
+			email,
+			nickname,
+			role,
+			birthday,
+			isDeleted,
+			gender,
+			imgUrl,
+			updatedAt
+		);
 	}
 }

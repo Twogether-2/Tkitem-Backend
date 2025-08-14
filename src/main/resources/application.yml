@@ -34,21 +34,22 @@ jwt:
 kakao:
   api-key: ${KAKAO_API_KEY}
 
-#cloud:
-#  aws:
-#    s3:
-#      bucket: ${AWS_S3_BUCKET}
-#    stack:
-#      auto: false
-#    region:
-#      static: ${AWS_REGION}
-#    credentials:
-#      access-key: ${AWS_ACCESS_KEY}
-#      secret-key: ${AWS_SECRET_KEY}
+cloud:
+  aws:
+    s3:
+      bucket: ${AWS_S3_BUCKET}
+    stack:
+      auto: false
+    region:
+      static: ${AWS_REGION}
+    credentials:
+      access-key: ${AWS_ACCESS_KEY}
+      secret-key: ${AWS_SECRET_KEY}
 
-#redis:
-#  host: ${REDIS_HOST}
-#  port: ${REDIS_PORT}
+redis:
+  enabled: true
+  host: ${REDIS_HOST}
+  port: ${REDIS_PORT}
 
 #management:
 #  endpoints:

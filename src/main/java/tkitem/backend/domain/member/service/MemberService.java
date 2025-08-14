@@ -12,8 +12,6 @@ public interface MemberService {
 	TokenResponse signUp(SignUpRequest signUpRequest);
 	// 소셜 회원 가입
 	TokenResponse socialSignUp(SocialSignUpRequest signUpRequest, String memberType);
-	// 로그아웃
-	void logout(Member member);
 	// 탈퇴
 	void resign(Member member);
 }
