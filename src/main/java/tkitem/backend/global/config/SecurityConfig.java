@@ -1,167 +1,167 @@
-package tkitem.backend.global.config;
-
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.ProviderManager;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-@EnableMethodSecurity(prePostEnabled = true)
-@Slf4j
-@RequiredArgsConstructor
-@EnableWebSecurity
-@Configuration
-public class SecurityConfig {
-
-    // public static final String LOGIN_URL = "/api/member/login";
-    // public static final String SOCIAL_LOGIN_URL = "/api/member/login/kakao";
-    // public static final String SIGNUP_URL = "/api/member/sign-up";
-    // public static final String STATIC_RESOURCE = "/css/**";
-    //
-    // private final LoginService socialLoginService;
-    // private final GeneralLoginService generalLoginService;
-    // private final JwtProvider jwtProvider;
-    // private final ObjectMapper objectMapper;
-    // private final MemberMapper memberMapper;
-    // private final RedisUtil redisUtil;
-    //
-    // @Bean
-    // public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-    //     http
-    //         .csrf(csrf -> csrf.disable()) // CSRF 보호 비활성화
-    //         .formLogin(form -> form.disable()) // 기본 폼 로그인 비활성화
-    //         .httpBasic(basic -> basic.disable()) // HTTP Basic 인증 비활성화
-    //         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // 세션 정책을 STATELESS로 설정
-    //         .authorizeHttpRequests(authorize -> authorize
-    //             .requestMatchers(
-    //                 LOGIN_URL,
-    //                 SIGNUP_URL,
-    //                 SIGNUP_URL + "/**",
-    //                 STATIC_RESOURCE,
-    //                 SOCIAL_LOGIN_URL,
-    //                 SOCIAL_LOGIN_URL + "/**",
-    //                 "/api/actuator/health",
-    //                 "/actuator/health",
-    //                 "/api/member/develop",
-    //                 "/v3/api-docs/**",
-    //                 "/swagger-ui/**",
-    //                 "/swagger-resources/**",
-    //                 "/webjars/**"
-    //             ).permitAll()
-    //             .anyRequest().authenticated()) // 나머지 모든 경로 인증 필요
-    //         .addFilterBefore(jwtAuthenticationExceptionHandler(), UsernamePasswordAuthenticationFilter.class)
-    //         .addFilterBefore(jwtAuthenticationProcessingFilter(), UsernamePasswordAuthenticationFilter.class)
-    //         .addFilterAfter(customSocialLoginAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
-    //         .addFilterBefore(customJsonUsernameAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
-    //     return http.build();
-    // }
-    //
-    // /**
-    //  * PasswordEncoder 빈 등록
-    //  */
-    // @Bean
-    // public PasswordEncoder passwordEncoder() {
-    //     return new BCryptPasswordEncoder();
-    // }
-    //
-    // /**
-    //  * 기본 AuthenticationManager (Spring Security가 사용할 기본 빈)
-    //  * @Primary 어노테이션으로 기본 빈으로 지정
-    //  */
-    // @Bean
-    // @Primary
-    // public AuthenticationManager authenticationManager() {
-    //     return new ProviderManager(socialAuthenticationProvider());
-    // }
-    //
-    // /**
-    //  * 소셜 로그인용 AuthenticationManager 등록
-    //  */
-    // @Bean("socialAuthenticationManager")
-    // public AuthenticationManager socialAuthenticationManager() {
-    //     return new ProviderManager(socialAuthenticationProvider());
-    // }
-    //
-    // /**
-    //  * 일반 로그인용 AuthenticationManager 등록
-    //  */
-    // @Bean("generalAuthenticationManager")
-    // public AuthenticationManager generalAuthenticationManager() {
-    //     return new ProviderManager(generalAuthenticationProvider());
-    // }
-    //
-    // @Bean
-    // public CustomAuthenticationProvider socialAuthenticationProvider() {
-    //     return new CustomAuthenticationProvider(socialLoginService);
-    // }
-    //
-    // @Bean
-    // public GeneralAuthenticationProvider generalAuthenticationProvider() {
-    //     return new GeneralAuthenticationProvider(generalLoginService, passwordEncoder());
-    // }
-    //
-    // /**
-    //  * 로그인 실패 시 호출되는 LoginFailureHandler 빈 등록
-    //  */
-    // @Bean
-    // public LoginFailureHandler loginFailureHandler() {
-    //     return new LoginFailureHandler();
-    // }
-    //
-    // /**
-    //  * 소셜 로그인용 필터 빈 등록
-    //  */
-    // @Bean
-    // public CustomSocialLoginAuthenticationFilter customSocialLoginAuthenticationFilter() {
-    //     CustomSocialLoginAuthenticationFilter customSocialLoginFilter
-    //         = new CustomSocialLoginAuthenticationFilter(objectMapper, memberMapper);
-    //     customSocialLoginFilter.setAuthenticationManager(socialAuthenticationManager());
-    //     customSocialLoginFilter.setAuthenticationFailureHandler(loginFailureHandler());
-    //     customSocialLoginFilter.setAuthenticationSuccessHandler(loginSuccessHandler());
-    //     return customSocialLoginFilter;
-    // }
-    //
-    // /**
-    //  * 일반 로그인용 필터 빈 등록
-    //  */
-    // @Bean
-    // public CustomJsonUsernameAuthenticationFilter customJsonUsernameAuthenticationFilter() {
-    //     CustomJsonUsernameAuthenticationFilter customJsonUsernameFilter
-    //         = new CustomJsonUsernameAuthenticationFilter(objectMapper, memberMapper);
-    //     customJsonUsernameFilter.setAuthenticationManager(generalAuthenticationManager());
-    //     customJsonUsernameFilter.setAuthenticationFailureHandler(loginFailureHandler());
-    //     customJsonUsernameFilter.setAuthenticationSuccessHandler(loginSuccessHandler());
-    //     return customJsonUsernameFilter;
-    // }
-    //
-    // /**
-    //  * 로그인 성공 시 호출되는 LoginSuccessHandler 빈 등록
-    //  */
-    // @Bean
-    // public LoginSuccessHandler loginSuccessHandler() {
-    //     return new LoginSuccessHandler(jwtProvider, memberMapper);
-    // }
-    //
-    // @Bean
-    // public JwtAuthenticationProcessingFilter jwtAuthenticationProcessingFilter() {
-    //     return new JwtAuthenticationProcessingFilter(jwtProvider, memberMapper, redisUtil);
-    // }
-    //
-    // @Bean
-    // public JwtAuthenticationExceptionHandler jwtAuthenticationExceptionHandler() {
-    //     return new JwtAuthenticationExceptionHandler();
-    // }
-}
+// package tkitem.backend.global.config;
+//
+// import org.springframework.context.annotation.Bean;
+// import org.springframework.context.annotation.Configuration;
+// import org.springframework.context.annotation.Primary;
+// import org.springframework.security.authentication.AuthenticationManager;
+// import org.springframework.security.authentication.ProviderManager;
+// import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+// import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+// import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+// import org.springframework.security.config.http.SessionCreationPolicy;
+// import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+// import org.springframework.security.crypto.password.PasswordEncoder;
+// import org.springframework.security.web.SecurityFilterChain;
+// import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+//
+// import com.fasterxml.jackson.databind.ObjectMapper;
+//
+// import lombok.RequiredArgsConstructor;
+// import lombok.extern.slf4j.Slf4j;
+//
+// @EnableMethodSecurity(prePostEnabled = true)
+// @Slf4j
+// @RequiredArgsConstructor
+// @EnableWebSecurity
+// @Configuration
+// public class SecurityConfig {
+//
+//     public static final String LOGIN_URL = "/api/member/login";
+//     public static final String SOCIAL_LOGIN_URL = "/api/member/login/kakao";
+//     public static final String SIGNUP_URL = "/api/member/sign-up";
+//     public static final String STATIC_RESOURCE = "/css/**";
+//
+//     private final LoginService socialLoginService;
+//     private final GeneralLoginService generalLoginService;
+//     private final JwtProvider jwtProvider;
+//     private final ObjectMapper objectMapper;
+//     private final MemberMapper memberMapper;
+//     private final RedisUtil redisUtil;
+//
+//     @Bean
+//     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+//         http
+//             .csrf(csrf -> csrf.disable()) // CSRF 보호 비활성화
+//             .formLogin(form -> form.disable()) // 기본 폼 로그인 비활성화
+//             .httpBasic(basic -> basic.disable()) // HTTP Basic 인증 비활성화
+//             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // 세션 정책을 STATELESS로 설정
+//             .authorizeHttpRequests(authorize -> authorize
+//                 .requestMatchers(
+//                     LOGIN_URL,
+//                     SIGNUP_URL,
+//                     SIGNUP_URL + "/**",
+//                     STATIC_RESOURCE,
+//                     SOCIAL_LOGIN_URL,
+//                     SOCIAL_LOGIN_URL + "/**",
+//                     "/api/actuator/health",
+//                     "/actuator/health",
+//                     "/api/member/develop",
+//                     "/v3/api-docs/**",
+//                     "/swagger-ui/**",
+//                     "/swagger-resources/**",
+//                     "/webjars/**"
+//                 ).permitAll()
+//                 .anyRequest().authenticated()) // 나머지 모든 경로 인증 필요
+//             .addFilterBefore(jwtAuthenticationExceptionHandler(), UsernamePasswordAuthenticationFilter.class)
+//             .addFilterBefore(jwtAuthenticationProcessingFilter(), UsernamePasswordAuthenticationFilter.class)
+//             .addFilterAfter(customSocialLoginAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
+//             .addFilterBefore(customJsonUsernameAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+//         return http.build();
+//     }
+//
+//     /**
+//      * PasswordEncoder 빈 등록
+//      */
+//     @Bean
+//     public PasswordEncoder passwordEncoder() {
+//         return new BCryptPasswordEncoder();
+//     }
+//
+//     /**
+//      * 기본 AuthenticationManager (Spring Security가 사용할 기본 빈)
+//      * @Primary 어노테이션으로 기본 빈으로 지정
+//      */
+//     @Bean
+//     @Primary
+//     public AuthenticationManager authenticationManager() {
+//         return new ProviderManager(socialAuthenticationProvider());
+//     }
+//
+//     /**
+//      * 소셜 로그인용 AuthenticationManager 등록
+//      */
+//     @Bean("socialAuthenticationManager")
+//     public AuthenticationManager socialAuthenticationManager() {
+//         return new ProviderManager(socialAuthenticationProvider());
+//     }
+//
+//     /**
+//      * 일반 로그인용 AuthenticationManager 등록
+//      */
+//     @Bean("generalAuthenticationManager")
+//     public AuthenticationManager generalAuthenticationManager() {
+//         return new ProviderManager(generalAuthenticationProvider());
+//     }
+//
+//     @Bean
+//     public CustomAuthenticationProvider socialAuthenticationProvider() {
+//         return new CustomAuthenticationProvider(socialLoginService);
+//     }
+//
+//     @Bean
+//     public GeneralAuthenticationProvider generalAuthenticationProvider() {
+//         return new GeneralAuthenticationProvider(generalLoginService, passwordEncoder());
+//     }
+//
+//     /**
+//      * 로그인 실패 시 호출되는 LoginFailureHandler 빈 등록
+//      */
+//     @Bean
+//     public LoginFailureHandler loginFailureHandler() {
+//         return new LoginFailureHandler();
+//     }
+//
+//     /**
+//      * 소셜 로그인용 필터 빈 등록
+//      */
+//     @Bean
+//     public CustomSocialLoginAuthenticationFilter customSocialLoginAuthenticationFilter() {
+//         CustomSocialLoginAuthenticationFilter customSocialLoginFilter
+//             = new CustomSocialLoginAuthenticationFilter(objectMapper, memberMapper);
+//         customSocialLoginFilter.setAuthenticationManager(socialAuthenticationManager());
+//         customSocialLoginFilter.setAuthenticationFailureHandler(loginFailureHandler());
+//         customSocialLoginFilter.setAuthenticationSuccessHandler(loginSuccessHandler());
+//         return customSocialLoginFilter;
+//     }
+//
+//     /**
+//      * 일반 로그인용 필터 빈 등록
+//      */
+//     @Bean
+//     public CustomJsonUsernameAuthenticationFilter customJsonUsernameAuthenticationFilter() {
+//         CustomJsonUsernameAuthenticationFilter customJsonUsernameFilter
+//             = new CustomJsonUsernameAuthenticationFilter(objectMapper, memberMapper);
+//         customJsonUsernameFilter.setAuthenticationManager(generalAuthenticationManager());
+//         customJsonUsernameFilter.setAuthenticationFailureHandler(loginFailureHandler());
+//         customJsonUsernameFilter.setAuthenticationSuccessHandler(loginSuccessHandler());
+//         return customJsonUsernameFilter;
+//     }
+//
+//     /**
+//      * 로그인 성공 시 호출되는 LoginSuccessHandler 빈 등록
+//      */
+//     @Bean
+//     public LoginSuccessHandler loginSuccessHandler() {
+//         return new LoginSuccessHandler(jwtProvider, memberMapper);
+//     }
+//
+//     @Bean
+//     public JwtAuthenticationProcessingFilter jwtAuthenticationProcessingFilter() {
+//         return new JwtAuthenticationProcessingFilter(jwtProvider, memberMapper, redisUtil);
+//     }
+//
+//     @Bean
+//     public JwtAuthenticationExceptionHandler jwtAuthenticationExceptionHandler() {
+//         return new JwtAuthenticationExceptionHandler();
+//     }
+// }
