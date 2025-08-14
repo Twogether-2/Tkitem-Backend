@@ -6,7 +6,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class SignUp {
-	private Long id;
+	private Long memberId;
 
 	private String email;
 

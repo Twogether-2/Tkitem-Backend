@@ -10,7 +10,7 @@
             SELECT MEMBER_SEQ.NEXTVAL FROM DUAL
         </selectKey>
         INSERT INTO MEMBER (
-            ID,
+            MEMBER_ID,
             EMAIL,
             PASSWORD,
             NICKNAME,
@@ -20,33 +20,74 @@
             CREATED_BY,
             UPDATED_BY
         ) VALUES (
-            #{id},
+            #{memberId},
             #{email},
             #{password},
             #{nickname},
             'ROLE_USER',
             TO_DATE(#{birthday}, 'YYYY-MM-DD'),
             #{gender},
-            #{id},
-            #{id}
+            #{memberId},
+            #{memberId}
         )
     </insert>
 
     <!-- 회원 조회 -->
-    <select id="selectMemberById" parameterType="long" resultType="tkitem.backend.domain.member.vo.Member">
+    <select id="selectMemberByMemberId" parameterType="long" resultType="tkitem.backend.domain.member.vo.Member">
         SELECT
-            ID AS id,
-            EMAIL AS email,
-            PASSWORD AS password,
-            NICKNAME AS nickname,
-            ROLE AS role,
+            MEMBER_ID as memberId,
+            EMAIL,
+            PASSWORD,
+            NICKNAME,
+            ROLE,
             TO_CHAR(BIRTHDAY, 'YYYY-MM-DD') AS birthday,
             IS_DELETED AS isDeleted,
-            GENDER AS gender,
+            GENDER,
             IMG_URL AS imgUrl,
             UPDATED_AT AS updatedAt
         FROM MEMBER
-        WHERE ID = #{id} AND IS_DELETED = 'F'
+        WHERE MEMBER_ID = #{memberId} AND IS_DELETED = 'F'
+    </select>
+
+    <!-- 이메일로 회원 조회 -->
+    <select id="selectMemberByEmail" resultType="tkitem.backend.domain.member.vo.Member">
+        SELECT
+        MEMBER_ID as memberId,
+        EMAIL,
+        PASSWORD,
+        NICKNAME,
+        ROLE,
+        TO_CHAR(BIRTHDAY, 'YYYY-MM-DD') AS birthday,
+        IS_DELETED AS isDeleted,
+        GENDER,
+        IMG_URL AS imgUrl,
+        UPDATED_AT AS updatedAt
+        FROM MEMBER
+        WHERE EMAIL = #{email} AND IS_DELETED = 'F'
+    </select>
+
+    <!-- 이메일과 타입, oauthId로 회원 조회 -->
+    <select id="selectMemberByEmailAndTypeAndOauthId" resultType="tkitem.backend.domain.member.vo.Member">
+        SELECT
+        MEMBER_ID AS memberId,
+        EMAIL,
+        PASSWORD,
+        NICKNAME,
+        ROLE,
+        TO_CHAR(BIRTHDAY, 'YYYY-MM-DD') AS birthday,
+        IS_DELETED AS isDeleted,
+        GENDER,
+        IMG_URL AS imgUrl,
+        TYPE,
+        UPDATED_AT AS updatedAt
+        FROM MEMBER
+        JOIN SOCIAL_TYPE ON MEMBER.MEMBER_ID = SOCIAL_TYPE.MEMBER_ID
+        WHERE EMAIL = #{email}
+        AND SOCIAL_TYPE.TYPE = #{type}
+        AND IS_DELETED = 'F'
+        <if test="oauthId != null">
+            AND OAUTH_ID = #{oauthId}
+        </if>
     </select>
 
     <!-- 이메일 존재 여부 -->
@@ -60,7 +101,7 @@
     <select id="existsByEmailAndPassword" resultType="boolean">
         SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
         FROM MEMBER
-        JOIN SOCIAL_TYPE ON MEMBER.ID = SOCIAL_TYPE.MEMBER_ID
+        JOIN SOCIAL_TYPE ON MEMBER.MEMBER_ID = SOCIAL_TYPE.MEMBER_ID
         WHERE
         EMAIL = #{email}
         AND PASSWORD = #{password}
@@ -72,17 +113,18 @@
     <select id="existsByEmailAndSocialType" resultType="boolean">
         SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
         FROM MEMBER
-        JOIN SOCIAL_TYPE ON MEMBER.ID = SOCIAL_TYPE.MEMBER_ID
+        JOIN SOCIAL_TYPE ON MEMBER.MEMBER_ID = SOCIAL_TYPE.MEMBER_ID
         WHERE
         EMAIL = #{email}
         AND SOCIAL_TYPE.TYPE = #{type}
+        AND OAUTH_ID = #{oauthId}
     </select>
 
     <!-- 회원 탈퇴   -->
     <update id="updateIsDeleted" parameterType="long">
         UPDATE MEMBER
-        SET IS_DELETED = 'T', UPDATED_AT = SYSDATE, UPDATED_BY = #{id}
-        WHERE ID = #{id}
+        SET IS_DELETED = 'T', UPDATED_AT = SYSDATE, UPDATED_BY = #{memberId}
+        WHERE MEMBER_ID = #{memberId}
     </update>
 
     <!-- 회원 재가입  -->

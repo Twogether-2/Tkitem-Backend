@@ -5,5 +5,9 @@ import org.apache.ibatis.annotations.Param;
 
 @Mapper
 public interface SocialTypeMapper {
-	void insertSocialType(@Param("memberId") Long memberId, @Param("type") String type);
+	void insertSocialType(
+		@Param("memberId") Long memberId,
+		@Param("type") String type,
+		@Param("oauthId") String oauthId
+	);
 }

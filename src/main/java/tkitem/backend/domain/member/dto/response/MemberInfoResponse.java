@@ -8,6 +8,7 @@ public record MemberInfoResponse(
     char isDeleted,
     Character gender,
     String imgUrl,
+	String type,
     String updatedAt
 ) {
 

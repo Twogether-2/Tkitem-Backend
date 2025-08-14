@@ -12,11 +12,7 @@ import lombok.Setter;
 public class SocialSignUpRequest {
 
 	@Schema(description = "회원 고유 ID (서버에서 내부적으로 사용)", example = "1")
-	private Long id;
-
-	@Schema(description = "로그인 시 사용자 고유 식별자", example = "kakao_123456")
-	@NotBlank(message = "oauthId는 필수입니다.")
-	private String oauthId;
+	private Long memberId;
 
 	@Schema(description = "이메일 주소", example = "example@example.com")
 	@NotBlank(message = "이메일은 필수입니다.")

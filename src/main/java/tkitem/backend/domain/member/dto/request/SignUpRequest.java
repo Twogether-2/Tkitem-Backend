@@ -11,7 +11,7 @@ import lombok.Setter;
 @Setter
 public class SignUpRequest{
 	@Schema(description = "회원 고유 ID (서버에서 내부적으로 사용)", example = "1")
-	private Long id;
+	private Long memberId;
 
 	@Schema(description = "이메일 주소", example = "example@example.com")
 	@NotBlank(message = "이메일은 필수입니다.")

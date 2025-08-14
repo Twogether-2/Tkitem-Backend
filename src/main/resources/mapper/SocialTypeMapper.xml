@@ -11,7 +11,8 @@
             TYPE
         ) VALUES (
             #{memberId},
-            #{type}
+            #{type},
+            #{oauthId}
         )
     </insert>
 </mapper>

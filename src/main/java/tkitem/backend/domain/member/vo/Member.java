@@ -14,7 +14,7 @@ import tkitem.backend.domain.member.dto.response.MemberInfoResponse;
 @Getter
 @Setter
 public class Member implements UserDetails {
-	private Long id;
+	private Long memberId;
 	private String email;
 	private String password;
 	private String nickname;
@@ -23,6 +23,7 @@ public class Member implements UserDetails {
 	private char isDeleted;
 	private Character gender;
 	private String imgUrl;
+	private String type;
 	private String updatedAt;
 
 	@Override
@@ -52,6 +53,7 @@ public class Member implements UserDetails {
 			isDeleted,
 			gender,
 			imgUrl,
+			type,
 			updatedAt
 		);
 	}
