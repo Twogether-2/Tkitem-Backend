@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -25,5 +26,6 @@ public class SignUpRequest{
 
 	@Schema(description = "사용자 이름", example = "홍길동")
 	@NotBlank(message = "이름은 필수입니다.")
+	@Size(min = 1, max = 10, message = "이름은 1자 이상 10자 이하여야 합니다.")
 	private String nickname;
 }
