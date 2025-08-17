@@ -21,4 +21,7 @@ public class SocialSignUpRequest {
 	@Schema(description = "사용자 이름", example = "홍길동")
 	@NotBlank(message = "이름은 필수입니다.")
 	private String nickname;
+
+	@Schema(description = "재가입 여부", example = "false")
+	private boolean resignUp;
 }

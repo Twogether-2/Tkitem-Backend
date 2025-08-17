@@ -51,7 +51,7 @@ public class CustomSocialLoginAuthenticationFilter extends AbstractAuthenticatio
 
 	@Override
 	public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) throws AuthenticationException, IOException{
-		log.info("CustomSocialLoginAuthenticationFilter 진입");
+		log.info("[CustomSocialLoginAuthenticationFilter] 진입");
 
 		if(request.getContentType() == null || !request.getContentType().startsWith(CONTENT_TYPE)) {
 			throw new AuthenticationServiceException("Authentication Content-Type not supported: " + request.getContentType());
@@ -70,6 +70,7 @@ public class CustomSocialLoginAuthenticationFilter extends AbstractAuthenticatio
 		String email = (String) loginDataMap.get(EMAIL_KEY);
 		String idToken = (String) loginDataMap.get(ID_TOKEN_KEY);
 
+		log.info("[CustomSocialLoginAuthenticationFilter] {} 타입 {} 로그인 시도", oauthType, email);
 		Object reSignUpObj = loginDataMap.get(RE_SIGNUP);
 		boolean isReSignUp = reSignUpObj != null && "true".equalsIgnoreCase(reSignUpObj.toString().trim());
 

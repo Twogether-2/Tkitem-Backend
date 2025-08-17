@@ -74,6 +74,7 @@ public class SecurityConfig {
                     "/webjars/**"
                 ).permitAll()
                 .requestMatchers("/member/info").hasRole("GUEST")
+                .requestMatchers("/member").hasAnyRole("GUEST", "USER") // /member 경로는 GUEST와 USER 모두 허용
                 .anyRequest().hasRole("USER")) // 나머지 모든 경로 인증 필요
             .addFilterBefore(jwtAuthenticationExceptionHandler(), UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationProcessingFilter(), UsernamePasswordAuthenticationFilter.class)
