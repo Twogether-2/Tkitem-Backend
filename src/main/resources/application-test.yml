@@ -2,10 +2,14 @@ spring:
   application:
     name: Tkitem-Backend
   datasource:
-    url: ${ORACLE_DB_URL}
-    driver-class-name: oracle.jdbc.OracleDriver
-    username: ${ORACLE_DB_USERNAME}
-    password: ${ORACLE_DB_PASSWORD}
+    url: jdbc:h2:mem:testdb;MODE=Oracle;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
 
   servlet:
     multipart:

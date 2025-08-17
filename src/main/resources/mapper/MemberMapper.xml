@@ -4,4 +4,152 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="tkitem.backend.domain.member.mapper.MemberMapper">
+    <!-- 회원 가입 -->
+    <insert id="insertMember" parameterType="tkitem.backend.domain.member.vo.SignUp">
+        <selectKey keyProperty="memberId" resultType="long" order="BEFORE">
+            SELECT MEMBER_SEQ.NEXTVAL FROM DUAL
+        </selectKey>
+        INSERT INTO MEMBER (
+            MEMBER_ID,
+            EMAIL,
+            PASSWORD,
+            NICKNAME,
+            ROLE,
+            TYPE,
+            OAUTH_ID,
+            CREATED_BY,
+            UPDATED_BY
+        ) VALUES (
+            #{memberId},
+            #{email},
+            #{password},
+            #{nickname},
+            'ROLE_GUEST',
+            #{type},
+            #{oauthId, jdbcType=VARCHAR},
+            #{memberId},
+            #{memberId}
+        )
+    </insert>
+
+    <!-- 회원 조회 -->
+    <select id="selectMemberByMemberId" parameterType="long" resultType="tkitem.backend.domain.member.vo.Member">
+        SELECT
+            MEMBER_ID as memberId,
+            EMAIL,
+            PASSWORD,
+            NICKNAME,
+            ROLE,
+            TO_CHAR(BIRTHDAY, 'YYYY-MM-DD') AS birthday,
+            IS_DELETED AS isDeleted,
+            GENDER,
+            IMG_URL AS imgUrl,
+            TYPE,
+            UPDATED_AT AS updatedAt
+        FROM MEMBER
+        WHERE MEMBER_ID = #{memberId} AND IS_DELETED = 'F'
+    </select>
+
+    <!-- 이메일로 회원 조회 -->
+    <select id="selectMemberByEmail" resultType="tkitem.backend.domain.member.vo.Member">
+        SELECT
+            MEMBER_ID as memberId,
+            EMAIL,
+            PASSWORD,
+            NICKNAME,
+            ROLE,
+            TO_CHAR(BIRTHDAY, 'YYYY-MM-DD') AS birthday,
+            IS_DELETED AS isDeleted,
+            GENDER,
+            IMG_URL AS imgUrl,
+            TYPE,
+            UPDATED_AT AS updatedAt
+        FROM MEMBER
+        WHERE EMAIL = #{email} AND IS_DELETED = 'F'
+    </select>
+
+    <!-- 이메일과 타입, oauthId로 회원 조회 -->
+    <select id="selectMemberByEmailAndTypeAndOauthId" resultType="tkitem.backend.domain.member.vo.Member">
+        SELECT
+            MEMBER_ID as memberId,
+            EMAIL,
+            PASSWORD,
+            NICKNAME,
+            ROLE,
+            TO_CHAR(BIRTHDAY, 'YYYY-MM-DD') AS birthday,
+            IS_DELETED AS isDeleted,
+            GENDER,
+            IMG_URL AS imgUrl,
+            TYPE,
+            UPDATED_AT AS updatedAt
+        FROM MEMBER
+        <where>
+            EMAIL = #{email}
+            AND TYPE = #{type}
+            AND IS_DELETED = 'F'
+            <choose>
+                <when test="oauthId != null">
+                    AND OAUTH_ID = #{oauthId, jdbcType=VARCHAR}
+                </when>
+                <otherwise>
+                    AND OAUTH_ID IS NULL
+                </otherwise>
+            </choose>
+        </where>
+    </select>
+
+    <!-- 이메일 존재 여부 -->
+    <select id="existsByEmail" resultType="boolean">
+        SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
+        FROM MEMBER
+        WHERE EMAIL = #{email}
+    </select>
+
+    <!-- 일반 로그인 시 이메일 + 비밀번호 존재 여부 -->
+    <select id="existsByEmailAndPassword" resultType="boolean">
+        SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
+        FROM MEMBER
+        WHERE
+        EMAIL = #{email}
+        AND PASSWORD = #{password}
+        AND IS_DELETED = 'F'
+        AND TYPE = 'NONE'
+    </select>
+
+    <!-- 이메일 + 소셜타입 존재 여부 -->
+    <select id="existsByEmailAndType" resultType="boolean">
+        SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
+        FROM MEMBER
+        WHERE
+        EMAIL = #{email}
+        AND TYPE = #{type}
+    </select>
+
+    <!-- 회원 탈퇴   -->
+    <update id="updateIsDeleted" parameterType="long">
+        UPDATE MEMBER
+        SET IS_DELETED = 'T', UPDATED_AT = SYSDATE, UPDATED_BY = #{memberId}
+        WHERE MEMBER_ID = #{memberId}
+    </update>
+
+    <!-- 회원 재가입  -->
+    <update id="updateIsDeletedFalse">
+        UPDATE MEMBER
+        SET IS_DELETED = 'F', UPDATED_AT = SYSDATE
+        WHERE IS_DELETED = 'T' AND EMAIL = #{email}
+    </update>
+
+    <!-- 멤버아이디로 닉네임, 성별 업데이트 -->
+    <update id="updateBirthdayAndGender">
+        UPDATE MEMBER
+        SET
+            BIRTHDAY = #{birthday},
+            GENDER = #{gender},
+            ROLE = 'ROLE_USER',
+            UPDATED_AT = SYSDATE,
+            UPDATED_BY = #{memberId}
+        WHERE MEMBER_ID = #{memberId}
+    </update>
 </mapper>
+
+
