@@ -12,7 +12,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.AbstractAuthenticationProcessingFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.StreamUtils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,8 +32,13 @@ public class CustomSocialLoginAuthenticationFilter extends AbstractAuthenticatio
 	private static final String EMAIL_KEY = "email";
 	private static final String ID_TOKEN_KEY = "idToken";
 	private static final String RE_SIGNUP = "reSignUp";
-	private static final AntPathRequestMatcher DEFAULT_LOGIN_PATH_REQUEST_MATCHER =
-		new AntPathRequestMatcher(SOCIAL_LOGIN_URL, HTTP_METHOD); // 로그인 요청
+	private static final RequestMatcher DEFAULT_LOGIN_PATH_REQUEST_MATCHER = request -> {
+	    if (!HTTP_METHOD.equalsIgnoreCase(request.getMethod())) {
+	        return false;
+	    }
+	    String path = request.getServletPath();
+	    return path.startsWith(LOGIN_URL + "/");
+	};
 
 	private final ObjectMapper objectMapper;
 	private final MemberMapper memberMapper;
@@ -52,7 +57,14 @@ public class CustomSocialLoginAuthenticationFilter extends AbstractAuthenticatio
 			throw new AuthenticationServiceException("Authentication Content-Type not supported: " + request.getContentType());
 		}
 
-		String type = "KAKAO";
+		String uri = request.getRequestURI();
+		// "/auth/login/" 이후 문자열만 추출
+		String oauthType = null;
+
+		if (uri.startsWith(LOGIN_URL)) {
+			oauthType = uri.substring(LOGIN_URL.length() + 1);
+		}
+
 		String messageBody = StreamUtils.copyToString(request.getInputStream(), StandardCharsets.UTF_8);
 		Map<String, Object> loginDataMap = objectMapper.readValue(messageBody, Map.class);
 		String email = (String) loginDataMap.get(EMAIL_KEY);
@@ -69,7 +81,7 @@ public class CustomSocialLoginAuthenticationFilter extends AbstractAuthenticatio
 		String password = HashUtil.hash(UUID.randomUUID().toString());
 		UsernamePasswordAuthenticationToken authRequest =
 			new UsernamePasswordAuthenticationToken(
-				email + ":" + type + ":" + idToken,
+				email + ":" + oauthType.toUpperCase() + ":" + idToken,
 				password
 			);
 

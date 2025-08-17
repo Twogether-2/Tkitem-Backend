@@ -23,7 +23,6 @@ import tkitem.backend.global.security.jwt.JwtProvider;
 public class LoginSuccessHandler implements AuthenticationSuccessHandler {
 
 	private final JwtProvider jwtProvider;
-	private final MemberMapper memberMapper;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	@Override

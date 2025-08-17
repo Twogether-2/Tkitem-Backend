@@ -40,8 +40,7 @@ import tkitem.backend.global.util.RedisUtil;
 public class SecurityConfig {
 
     public static final String PREFIX = "";
-    public static final String LOGIN_URL = PREFIX + "/member/login";
-    public static final String SOCIAL_LOGIN_URL = PREFIX + "/member/login/kakao";
+    public static final String LOGIN_URL = PREFIX + "/auth/login";
     public static final String SIGNUP_URL = PREFIX + "/member/sign-up";
     public static final String STATIC_RESOURCE = "/css/**";
 
@@ -62,11 +61,10 @@ public class SecurityConfig {
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers(
                     LOGIN_URL,
+                    LOGIN_URL + "/**",
                     SIGNUP_URL,
                     SIGNUP_URL + "/**",
                     STATIC_RESOURCE,
-                    SOCIAL_LOGIN_URL,
-                    SOCIAL_LOGIN_URL + "/**",
                     PREFIX + "/actuator/health",
                     "/actuator/health",
                     "/v3/api-docs/**",
@@ -74,7 +72,8 @@ public class SecurityConfig {
                     "/swagger-resources/**",
                     "/webjars/**"
                 ).permitAll()
-                .anyRequest().authenticated()) // 나머지 모든 경로 인증 필요
+                .requestMatchers("/member/info").hasRole("GUEST")
+                .anyRequest().hasRole("USER")) // 나머지 모든 경로 인증 필요
             .addFilterBefore(jwtAuthenticationExceptionHandler(), UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationProcessingFilter(), UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(customSocialLoginAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
@@ -165,7 +164,7 @@ public class SecurityConfig {
      */
     @Bean
     public LoginSuccessHandler loginSuccessHandler() {
-        return new LoginSuccessHandler(jwtProvider, memberMapper);
+        return new LoginSuccessHandler(jwtProvider);
     }
 
     @Bean

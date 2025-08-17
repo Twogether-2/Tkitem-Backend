@@ -20,10 +20,15 @@ public interface MemberMapper {
     );
     boolean existsByEmail(@Param("email") String email);
     boolean existsByEmailAndPassword(@Param("email") String email, @Param("password") String password);
-    boolean existsByEmailAndSocialTypeAndOauthId(
+    boolean existsByEmailAndType(
         @Param("email") String email,
-        @Param("type") String type,
-        @Param("oauthId") String oauthId);
+        @Param("type") String type
+    );
+    void updateBirthdayAndGender(
+        @Param("memberId") Long memberId,
+        @Param("birthday") String birthday,
+        @Param("gender") char gender
+    );
     void updateIsDeleted(@Param("memberId") Long memberId);
     void updateIsDeletedFalse(@Param("email") String email);
 }

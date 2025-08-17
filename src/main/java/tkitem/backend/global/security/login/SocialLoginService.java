@@ -65,7 +65,7 @@ public class SocialLoginService implements UserDetailsService {
                 throw new UsernameNotFoundException(ErrorCode.LOGIN_FAILED.getCode());
             }
 
-            return member.get();
+            return userDetails;
         }
         else{
             throw new UsernameNotFoundException(ErrorCode.LOGIN_FAILED.getCode());

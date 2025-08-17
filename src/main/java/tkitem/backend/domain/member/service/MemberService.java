@@ -1,5 +1,6 @@
 package tkitem.backend.domain.member.service;
 
+import tkitem.backend.domain.member.dto.request.InfoInputRequest;
 import tkitem.backend.domain.member.dto.request.SignUpRequest;
 import tkitem.backend.domain.member.dto.request.SocialSignUpRequest;
 import tkitem.backend.domain.member.dto.response.TokenResponse;
@@ -11,7 +12,9 @@ public interface MemberService {
 	// 일반 회원 가입
 	TokenResponse signUp(SignUpRequest signUpRequest);
 	// 소셜 회원 가입
-	TokenResponse socialSignUp(SocialSignUpRequest signUpRequest, String memberType);
+	TokenResponse socialSignUp(SocialSignUpRequest signUpRequest, String provider);
+	// 추가 회원 정보 입력
+	void updateAdditionalInfo(InfoInputRequest inputRequest, Member member);
 	// 탈퇴
 	void resign(Member member);
 }

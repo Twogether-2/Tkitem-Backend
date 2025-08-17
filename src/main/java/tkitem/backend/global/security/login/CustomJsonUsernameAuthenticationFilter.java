@@ -11,7 +11,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.AbstractAuthenticationProcessingFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.StreamUtils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,8 +30,8 @@ public class CustomJsonUsernameAuthenticationFilter extends AbstractAuthenticati
 	private static final String EMAIL_KEY = "email";
 	private static final String PASSWORD_KEY = "password";
 	private static final String RE_SIGNUP = "reSignUp";
-	private static final AntPathRequestMatcher DEFAULT_LOGIN_PATH_REQUEST_MATCHER =
-		new AntPathRequestMatcher(LOGIN_URL, HTTP_METHOD); // 일반 로그인 요청
+	private static final RequestMatcher DEFAULT_LOGIN_PATH_REQUEST_MATCHER = request ->
+		HTTP_METHOD.equalsIgnoreCase(request.getMethod()) && request.getServletPath().equals(LOGIN_URL);
 
 	private final ObjectMapper objectMapper;
 	private final MemberMapper memberMapper;

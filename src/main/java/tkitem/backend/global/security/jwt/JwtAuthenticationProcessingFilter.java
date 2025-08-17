@@ -40,18 +40,17 @@ public class JwtAuthenticationProcessingFilter extends OncePerRequestFilter{
      * 4. 유효하지 않은 refresh token -> 인증 실패 (401)
      */
 
-    private static final String REISSUE_TOKEN_URL = PREFIX + "/member/reissue";
+    private static final String REISSUE_TOKEN_URL = PREFIX + "/auth/reissue";
     private final JwtProvider jwtProvider;
     private final MemberMapper memberMapper;
     private final GrantedAuthoritiesMapper authoritiesMapper = new NullAuthoritiesMapper();
     private final RedisUtil redisUtil;
     private static final String[] EXCLUDE_URLS = {
         LOGIN_URL,
+        LOGIN_URL + "/**",
         SIGNUP_URL,
         SIGNUP_URL + "/**",
         STATIC_RESOURCE,
-        SOCIAL_LOGIN_URL,
-        SOCIAL_LOGIN_URL + "/**",
         PREFIX + "/actuator/health",
         "/actuator/health",
         "/v3/api-docs/**",
@@ -66,7 +65,7 @@ public class JwtAuthenticationProcessingFilter extends OncePerRequestFilter{
         ServletException,
         IOException {
         for (String path : EXCLUDE_URLS) {
-            if (pathMatcher.match(path, request.getRequestURI())) {
+            if (pathMatcher.match(path, request.getServletPath())) {
                 filterChain.doFilter(request, response);
                 return;
             }
