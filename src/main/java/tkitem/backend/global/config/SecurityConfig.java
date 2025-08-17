@@ -64,6 +64,7 @@ public class SecurityConfig {
                     LOGIN_URL + "/**",
                     SIGNUP_URL,
                     SIGNUP_URL + "/**",
+                    PREFIX + "/member/duplicate",
                     STATIC_RESOURCE,
                     PREFIX + "/actuator/health",
                     "/actuator/health",

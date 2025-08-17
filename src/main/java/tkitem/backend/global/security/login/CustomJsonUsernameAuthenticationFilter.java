@@ -54,6 +54,7 @@ public class CustomJsonUsernameAuthenticationFilter extends AbstractAuthenticati
 		Map<String, Object> loginDataMap = objectMapper.readValue(messageBody, Map.class);
 		String email = (String) loginDataMap.get(EMAIL_KEY);
 		String password = (String) loginDataMap.get(PASSWORD_KEY);
+		log.info("password : {}", password);
 
 		Object reSignUpObj = loginDataMap.get(RE_SIGNUP);
 		boolean isReSignUp = reSignUpObj != null && "true".equalsIgnoreCase(reSignUpObj.toString().trim());

@@ -92,7 +92,7 @@
                     AND OAUTH_ID = #{oauthId, jdbcType=VARCHAR}
                 </when>
                 <otherwise>
-                    AND OAUTH_ID IS NULLㅔ
+                    AND OAUTH_ID IS NULL
                 </otherwise>
             </choose>
         </where>

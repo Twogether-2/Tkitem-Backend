@@ -35,7 +35,7 @@ public class MemberServiceImpl implements MemberService {
 
 	@Override
 	public boolean isDuplicatedEmail(String email) {
-		log.info("[MEMBER] 이메일 중복 검증");
+		log.info("[MEMBER] 이메일 중복 검증 email: {}", email);
 		return memberMapper.existsByEmailAndType(email, "NONE");
 	}
 
