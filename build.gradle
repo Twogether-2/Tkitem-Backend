@@ -40,6 +40,8 @@ dependencies {
     implementation 'com.oracle.database.security:oraclepki:21.9.0.0'
     implementation 'com.oracle.database.security:osdt_core:21.9.0.0'
     implementation 'com.oracle.database.security:osdt_cert:21.9.0.0'
+
+    implementation 'com.opencsv:opencsv:5.7.1'
 }
 
 tasks.named('test') {
