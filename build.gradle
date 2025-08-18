@@ -42,6 +42,8 @@ dependencies {
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
     implementation 'com.nimbusds:nimbus-jose-jwt:9.37'
+    // Email : Spring으로 465포트를 통해 메일을 보내주는 역할
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
 
     // Test용 H2 데이터베이스
     implementation 'com.h2database:h2' // H2 데이터베이스 의존성 추가 (테스트용)
