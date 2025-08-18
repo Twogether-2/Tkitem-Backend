@@ -9,12 +9,16 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import tkitem.backend.domain.image.ImageService;
 import tkitem.backend.domain.member.dto.request.InfoInputRequest;
+import tkitem.backend.domain.member.dto.request.InfoUpdateRequest;
 import tkitem.backend.domain.member.dto.request.SignUpRequest;
 import tkitem.backend.domain.member.dto.request.SocialSignUpRequest;
 import tkitem.backend.domain.member.dto.response.MemberInfoResponse;
@@ -28,6 +32,7 @@ import tkitem.backend.domain.member.vo.Member;
 @RequiredArgsConstructor
 public class MemberController {
 	private final MemberService memberService;
+	private final ImageService imageService;
 
 	@GetMapping("/duplicate")
 	@Operation(summary = "이메일 중복 체크", description = "이메일이 중복된 회원인지 검증")
@@ -68,6 +73,20 @@ public class MemberController {
 	public ResponseEntity<String> resign(@AuthenticationPrincipal Member member){
 		memberService.resign(member);
 		return ResponseEntity.ok().body("success");
+	}
+
+	@PatchMapping(value = "/me", consumes = "multipart/form-data")
+	@Operation(summary = "회원 정보 수정", description = "Multipart로 프로필 이미지 업로드, 닉네임 수정 가능")
+	public ResponseEntity<String> uploadOne(
+		@RequestPart(value = "file", required = false) MultipartFile file,
+		@RequestPart(value = "nickname", required = false) InfoUpdateRequest request,
+		@AuthenticationPrincipal Member member) throws Exception {
+		String imgUrl = null;
+		if(file != null && !file.isEmpty()){
+			imgUrl = imageService.upload(file);
+		}
+		memberService.updateImgUrlAndNickname(member, imgUrl, request.getNickname());
+		return ResponseEntity.ok("success");
 	}
 
 	@GetMapping()

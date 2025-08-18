@@ -17,4 +17,6 @@ public interface MemberService {
 	void updateAdditionalInfo(InfoInputRequest inputRequest, Member member);
 	// 탈퇴
 	void resign(Member member);
+	// 프로필 및 닉네임 수정
+	void updateImgUrlAndNickname(Member member, String imgUrl, String nickname);
 }
