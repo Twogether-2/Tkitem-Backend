@@ -2,9 +2,11 @@ package tkitem.backend.domain.auth.api;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,7 +18,7 @@ import tkitem.backend.domain.auth.service.AuthService;
 import tkitem.backend.domain.image.ImageService;
 import tkitem.backend.domain.member.dto.request.LoginRequest;
 import tkitem.backend.domain.member.dto.request.SocialLoginRequest;
-import tkitem.backend.domain.member.service.MailService;
+import tkitem.backend.domain.auth.service.EmailService;
 import tkitem.backend.domain.member.vo.Member;
 
 @Slf4j
@@ -24,7 +26,7 @@ import tkitem.backend.domain.member.vo.Member;
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
-	private final MailService mailService;
+	private final EmailService emailService;
 	private final AuthService authService;
 	private final ImageService imageService;
 
@@ -55,5 +57,19 @@ public class AuthController {
 	public ResponseEntity<String> logout(@AuthenticationPrincipal Member member){
 		authService.logout(member);
 		return ResponseEntity.ok().body("success");
+	}
+
+	@GetMapping("/email")
+	@Operation(summary = "이메일 인증 코드 발송", description = "이메일 인증 코드 전송(유효 시간 5분), 만료 기준 시간 반환")
+	public ResponseEntity<String> mail(@RequestParam("email") String email){
+		String result = emailService.sendEmail(email);
+		return ResponseEntity.ok().body(result);
+	}
+
+	@GetMapping("/email/verify")
+	@Operation(summary = "이메일 인증 코드 검사", description = "이메일 인증 코드 유효성 검사 (true or false)")
+	public ResponseEntity<Boolean> mail(@RequestParam("email") String email, @RequestParam("code") String code){
+		boolean result = emailService.verifyAuthCode(email, code);
+		return ResponseEntity.ok().body(result);
 	}
 }
