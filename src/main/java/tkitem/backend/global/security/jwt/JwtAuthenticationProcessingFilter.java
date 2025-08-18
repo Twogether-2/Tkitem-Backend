@@ -51,6 +51,8 @@ public class JwtAuthenticationProcessingFilter extends OncePerRequestFilter{
         SIGNUP_URL,
         SIGNUP_URL + "/**",
         STATIC_RESOURCE,
+        PREFIX + "/auth/email",
+        PREFIX + "/auth/email/verify",
         PREFIX + "/member/duplicate",
         PREFIX + "/actuator/health",
         "/actuator/health",
