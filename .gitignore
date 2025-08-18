@@ -43,3 +43,7 @@ local.env
 application.properties
 src/main/resources/wallet/
 src/main/resources/wallet/**
+
+
+### macOS ###
+.DS_Store

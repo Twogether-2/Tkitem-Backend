@@ -8,7 +8,7 @@ public record SocialLoginRequest(
 	@NotBlank
 	String email,
 
-	@Schema(description = "소셜 인증 후 받은 ID 토큰", example = "(아직 미사용이라 예시값 그대로 두면 됩니다)")
+	@Schema(description = "소셜 인증 후 받은 ID 토큰", example = "")
 	@NotBlank
 	String idToken,
 

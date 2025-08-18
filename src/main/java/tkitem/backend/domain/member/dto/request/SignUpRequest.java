@@ -11,7 +11,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class SignUpRequest{
-	@Schema(description = "이메일 주소", example = "example@example.com")
+	@Schema(description = "이메일 주소", example = "qlrqod3356@gmail.com")
 	@NotBlank(message = "이메일은 필수입니다.")
 	@Email(message = "올바른 이메일 형식이어야 합니다.")
 	private String email;
@@ -24,7 +24,7 @@ public class SignUpRequest{
 	)
 	private String password;
 
-	@Schema(description = "사용자 이름", example = "홍길동")
+	@Schema(description = "사용자 이름", example = "admin")
 	@NotBlank(message = "이름은 필수입니다.")
 	@Size(min = 1, max = 10, message = "이름은 1자 이상 10자 이하여야 합니다.")
 	private String nickname;
