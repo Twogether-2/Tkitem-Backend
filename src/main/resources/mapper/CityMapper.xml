@@ -8,4 +8,19 @@
         INSERT INTO CITY (country_name, city_name, created_at, updated_at)
         VALUES(#{countryName}, #{cityName}, SYSTIMESTAMP, SYSTIMESTAMP)
     </insert>
+
+    <select id="findCitiesByName" resultType="tkitem.backend.domain.city.vo.City">
+        SELECT city_id, city_name, country_name
+        FROM city
+        WHERE city_name IN
+        <foreach collection="names" item="name" open="(" separator="," close=")">
+            #{name}
+        </foreach>
+    </select>
+
+    <select id="findCityIdByName" resultType="long" parameterType="String">
+        SELECT city_id
+        FROM city
+        WHERE city_name = #{name}
+    </select>
 </mapper>

@@ -2,8 +2,6 @@ package tkitem.backend.domain.tour.vo;
 
 import lombok.*;
 
-import java.time.LocalDate;
-
 @Getter
 @Builder
 @NoArgsConstructor
@@ -12,8 +10,10 @@ import java.time.LocalDate;
 public class TourDetailSchedule {
     private Long tourDetailScheduleId;
     private Long tourId;
+    private Long cityId;
     private String title;
-    private LocalDate scheduleDate;
+    private Integer scheduleDate;
     private String description;
     private int sortOrder;
+    private String defaultType;
 }

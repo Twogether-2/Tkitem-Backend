@@ -15,5 +15,7 @@ public class TourPackage {
     private int price;
     private LocalDate departureDate;
     private LocalDate returnDate;
+    private String departureAirline;
+    private String returnAirline;
     private String packageDateCode; // 현대트레블 travleId 값
 }
