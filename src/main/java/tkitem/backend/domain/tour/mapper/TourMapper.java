@@ -24,20 +24,20 @@ public interface TourMapper {
     Tour findTourByTripCode(String tripCode);
 
     /**
-     * TourPackage 객체 리스트를 받아 배치(batch)로 삽입
-     * @param tourPackageList
+     * TourPackage 객체를 받아 단일(single)로 삽입
+     * @param tourPackage
      */
-    void insertTourPackageList(List<TourPackage> tourPackageList);
+    void insertTourPackage(TourPackage tourPackage);
 
     /**
-     * TourDetailSchedule 객체 리스트를 받아 배치(batch)로 삽입
-     * @param scheduleList
+     * TourDetailSchedule 객체를 받아 단일(single)로 삽입
+     * @param schedule
      */
-    void insertTourDetailScheduleList(List<TourDetailSchedule> scheduleList);
+    void insertTourDetailSchedule(TourDetailSchedule schedule);
 
     /**
-     * TourCity 객체 리스트를 받아 배치(batch)로 삽입
-     * @param tourCityList
+     * TourCity 객체를 받아 단일(single)로 삽입
+     * @param tourCity
      */
-    void insertTourCityList(List<TourCity> tourCityList);
+    void insertTourCity(TourCity tourCity);
 }

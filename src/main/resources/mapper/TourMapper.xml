@@ -4,9 +4,9 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="tkitem.backend.domain.tour.mapper.TourMapper">
-    <insert id="insertTour" useGeneratedKeys="true" keyProperty="tourId" parameterType="tkitem.backend.domain.tour.vo.Tour">
+    <insert id="insertTour" useGeneratedKeys="true" keyProperty="tourId" keyColumn="tour_id" parameterType="tkitem.backend.domain.tour.vo.Tour">
         INSERT INTO TOUR(title, provider, trip_code, duration_days, nights, booking_url, source_url, itinerary_json, feature, summary, hotel_rating, img_url, created_at, updated_at)
-        VALUES (#{title}, #{provider}, #{tripCode}, #{durationDays}, #{nights}, #{bookingUrl}, #{sourceUrl}, #{itineraryJson}, #{feature}, #{summary}, #{hotelRating}, #{imgUrl}, SYSTIMESTAMP, SYSTIMESTAMP)
+        VALUES (#{title}, #{provider}, #{tripCode}, #{durationDays}, #{nights}, #{bookingUrl}, #{sourceUrl}, #{itineraryJson, jdbcType=CLOB}, #{feature}, #{summary}, #{hotelRating}, #{imgUrl}, SYSTIMESTAMP, SYSTIMESTAMP)
     </insert>
 
     <select id="findTourByTripCode" resultType="tkitem.backend.domain.tour.vo.Tour" parameterType="String">
@@ -15,27 +15,18 @@
         WHERE trip_code = #{tripCode}
     </select>
 
-    <insert id="insertTourPackageList" parameterType="java.util.List">
-        INSERT INTO TOUR_PACKAGE(tour_id, price, departure_date, return_date, package_date_code, created_at, updated_at)
-        <foreach collection="list" item="pkg" separator=" UNION ALL ">
-            SELECT #{pkg.tourId}, #{pkg.price}, #{pkg.departureDate}, #{pkg.returnDate}, #{pkg.packageDateCode}, SYSTIMESTAMP, SYSTIMESTAMP
-            FROM DUAL
-        </foreach>
+    <insert id="insertTourPackage" parameterType="tkitem.backend.domain.tour.vo.TourPackage">
+        INSERT INTO TOUR_PACKAGE(tour_id, price, departure_date, return_date, package_date_code, departure_airline, return_airline, created_at, updated_at)
+        VALUES (#{tourId}, #{price}, #{departureDate}, #{returnDate}, #{packageDateCode}, #{departureAirline}, #{returnAirline}, SYSTIMESTAMP, SYSTIMESTAMP)
     </insert>
 
-    <insert id="insertTourDetailScheduleList" parameterType="java.util.List">
-        INSERT INTO TOUR_DETAIL_SCHEDULE(tour_id, title, schedule_date, description, sort_order, created_at, updated_at)
-        <foreach collection="list" item="sc" separator=" UNION ALL ">
-            SELECT #{sc.tourId}, #{sc.title}, #{sc.scheduleDate}, #{sc.description}, #{sc.sortOrder}, SYSTIMESTAMP, SYSTIMESTAMP
-            FROM DUAL
-        </foreach>
+    <insert id="insertTourDetailSchedule" parameterType="tkitem.backend.domain.tour.vo.TourDetailSchedule">
+        INSERT INTO TOUR_DETAIL_SCHEDULE(tour_id, city_id, title, schedule_date, description, sort_order, default_type, created_at, updated_at)
+        VALUES (#{tourId}, #{cityId}, #{title}, #{scheduleDate}, #{description}, #{sortOrder}, #{defaultType}, SYSTIMESTAMP, SYSTIMESTAMP)
     </insert>
 
-    <insert id="insertTourCityList" parameterType="java.util.List">
-        INSERT INTO TOUR_CITY(city_id, tour_id, sort_order, nights, created_at, updated_at)
-        <foreach collection="list" item="city" separator=" UNION ALL ">
-            SELECT #{city.cityId}, #{city.tourId}, #{city.sortOrder}, #{city.ights}, SYSTIMESTAMP, SYSTIMESTAMP
-            FROM DUAL
-        </foreach>
+    <insert id="insertTourCity" parameterType="tkitem.backend.domain.tour.vo.TourCity">
+        INSERT INTO TOUR_CITY(city_id, tour_id, created_at, updated_at)
+        VALUES (#{cityId}, #{tourId}, SYSTIMESTAMP, SYSTIMESTAMP)
     </insert>
 </mapper>

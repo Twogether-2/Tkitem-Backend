@@ -21,6 +21,6 @@
     <select id="findCityIdByName" resultType="long" parameterType="String">
         SELECT city_id
         FROM city
-        WHERE city_name = #{name}
+        WHERE city_name = #{name} and country_name = #{countryName}
     </select>
 </mapper>

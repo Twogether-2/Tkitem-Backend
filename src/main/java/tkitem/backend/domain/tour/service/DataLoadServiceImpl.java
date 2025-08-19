@@ -2,7 +2,10 @@ package tkitem.backend.domain.tour.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opencsv.CSVParser;
+import com.opencsv.CSVParserBuilder;
 import com.opencsv.CSVReader;
+import com.opencsv.CSVReaderBuilder;
 import com.opencsv.exceptions.CsvValidationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,7 +51,14 @@ public class DataLoadServiceImpl implements DataLoadService {
     public void loadDataFromCsv(String filePath) throws Exception {
         log.info("CSV 데이터 적재를 시작합니다. 파일 경로: {}", filePath);
 
-        try (CSVReader reader = new CSVReader(new FileReader(filePath))) {
+        CSVParser parser = new CSVParserBuilder()
+                .withSeparator(',')     // 필요시 '\t' 로 교체
+                .withQuoteChar('"')
+                .withEscapeChar('\\')   // JSON 이스케이프 유지
+                .build();
+        try (CSVReader reader = new CSVReaderBuilder(new FileReader(filePath))
+                .withCSVParser(parser)
+                .build()) {
             String[] header = reader.readNext(); // 헤더 스킵
             if (header == null) {
                 log.warn("CSV 파일이 비어있거나 헤더가 없습니다.");
@@ -60,8 +70,13 @@ public class DataLoadServiceImpl implements DataLoadService {
             String[] line;
             long lineCount = 1; // 헤더 이후부터 라인 수 계산
             int consecutiveEmptyLines = 0; // 연속된 빈 줄 카운터
+            int processedRowCount = 0; // 테스트용
 
             while (true) {
+                if(processedRowCount >= 100) { // 테스트용
+                    log.info("100개 행만 테스트하고 종료함");
+                    break;
+                }
                 line = reader.readNext();
                 lineCount++;
 
@@ -99,6 +114,7 @@ public class DataLoadServiceImpl implements DataLoadService {
                 }
 
                 currentRows.add(line);
+                processedRowCount++; // 실제 데이터 행이 추가될 때마다 카운터 증가 테스트용.
             }
 
             // 파일의 마지막 그룹 처리
@@ -124,10 +140,56 @@ public class DataLoadServiceImpl implements DataLoadService {
             // TourDetailSchedule 새로 등록
             // TourPackage 새로 등록
 
+            // TourPackage 만 저장하면 된다.
+
+            log.info("중복 확인을 위해 tripCode='{}'로 tour를 조회합니다.", tripCode);
             if (tourMapper.findTourByTripCode(tripCode) == null) {
                 // 첫 번째 행의 detail_json을 대표로 사용
                 String detailJsonStr = rows.get(0)[7]; // detail_json은 8번째 컬럼(인덱스 7)
-                JsonNode rootNode = objectMapper.readTree(detailJsonStr);
+
+                // [변경 시작] detailJsonStr → JsonNode 파싱 로직 교체 (블록 제거, 바로 try-catch 체인)
+                JsonNode rootNode = null;                 // [변경] 선언과 동시에 null 초기화
+                String work = detailJsonStr;              // [추가]
+
+                // [추가] 0단계: CSV 이스케이프("" → ") 해제 시도
+                if (work != null && work.length() >= 2
+                        && work.charAt(0) == '"' && work.charAt(work.length() - 1) == '"'
+                        && work.contains("\"\"")) {
+                    work = work.substring(1, work.length() - 1).replace("\"\"", "\"");
+                }
+
+                try {
+                    // 1) 원본 그대로
+                    rootNode = objectMapper.readTree(work);
+                    detailJsonStr = work;                 // [추가]
+                } catch (IOException e1) {
+                    // 2) 과이중 백슬래시 복구
+                    String restored = work
+                            .replace("\\\\\"", "\\\"")
+                            .replace("\\\\\\\\", "\\\\");
+                    try {
+                        rootNode = objectMapper.readTree(restored);
+                        detailJsonStr = restored;         // [추가]
+                    } catch (IOException e2) {
+                        // 3) 문제 패턴 보정 (Raw 제어문자/잘못된 이스케이프 등)
+                        String sanitized = restored
+                                .replace("\t", "\\t")
+                                .replace("\r", "\\r")
+                                .replace("\n", "\\n")
+                                .replaceAll("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]", " ")
+                                .replaceAll("\\\\(?=\\d)", "₩")
+                                .replaceAll("\\\\(?![\"\\\\/bfnrtu])", "\\\\\\\\");
+                        rootNode = objectMapper.readTree(sanitized);
+                        detailJsonStr = sanitized;        // [추가]
+                    }
+                }
+
+                // [추가] 최종 방어: 여전히 null이면 예외 (로깅 후 continue 등)
+                if (rootNode == null) {
+                    throw new IOException("detail_json 파싱 실패: tripCode=" + tripCode);
+                }
+                // [변경 끝]
+
 
                 // 도시 이름 수집
                 // 각 일정 내에서 방문 도시 목록으로도 확인 필요함.
@@ -135,8 +197,11 @@ public class DataLoadServiceImpl implements DataLoadService {
                 JsonNode placesNode = rootNode.get("places");
                 if(placesNode.isArray()){
                     for(JsonNode place : placesNode){
-                        Long cityId = cityMapper.findCityIdByName(place.get("name").asText());
-                        cityNames.put(place.get("name").asText(), cityId);
+                        String cityName = place.get("name").asText();
+                        String countryName = place.get("country").get("name").asText();
+                        log.info("도시 ID 조회를 위해 cityName='{}'으로 city를 조회합니다.", cityName);
+                        Long cityId = cityMapper.findCityIdByName(cityName, countryName);
+                        cityNames.put(cityName, cityId);
                     }
                 }
 
@@ -148,7 +213,9 @@ public class DataLoadServiceImpl implements DataLoadService {
                 // TourDetailSchedule 리스트 생성 및 삽입
                 List<TourDetailSchedule> schedules = createSchedulesFrom(rootNode, generatedTourId, cityNames);
                 if (!schedules.isEmpty()) {
-                    tourMapper.insertTourDetailScheduleList(schedules);
+                    for (TourDetailSchedule schedule : schedules) {
+                        tourMapper.insertTourDetailSchedule(schedule);
+                    }
                 }
 
                 // TourCity 리스트 생성 및 삽입
@@ -156,13 +223,17 @@ public class DataLoadServiceImpl implements DataLoadService {
                 // city 에 city_name 으로 검색해서 city_id 속성들 뽑아와서 저장
                 List<TourCity> tourCityList = createCitiesForm(generatedTourId, cityNames);
                 if (!tourCityList.isEmpty()) {
-                    tourMapper.insertTourCityList(tourCityList);
+                    for (TourCity tourCity : tourCityList) {
+                        tourMapper.insertTourCity(tourCity);
+                    }
                 }
 
                 // TourPackage 리스트 생성 및 삽입
                 List<TourPackage> tourPackages = createTourPackagesFrom(rows, generatedTourId);
                 if (!tourPackages.isEmpty()) {
-                    tourMapper.insertTourPackageList(tourPackages);
+                    for (TourPackage tourPackage : tourPackages) {
+                        tourMapper.insertTourPackage(tourPackage);
+                    }
                 }
 
                 log.info("tripCode '{}' 처리 완료 (Tour 1개, Package {}개, Schedule {}개)",
@@ -220,7 +291,7 @@ public class DataLoadServiceImpl implements DataLoadService {
 
     private List<TourPackage> createTourPackagesFrom(List<String[]> rows, Long tourId) {
         List<TourPackage> packages = new ArrayList<>();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
         for (String[] row : rows) {
             packages.add(TourPackage.builder()
@@ -250,6 +321,7 @@ public class DataLoadServiceImpl implements DataLoadService {
         if (dailies.isArray()) {
 
             String place = "";
+            String country = "";
 
             for (JsonNode day : dailies) {
                 int dayNum = day.path("dayNum").asInt();
@@ -266,6 +338,7 @@ public class DataLoadServiceImpl implements DataLoadService {
                             case "PLACE":
                                 description.append(contents.path("country").path("name").asText());
                                 place = contents.path("name").asText();
+                                country = contents.path("country").path("name").asText();
                                 break;
                             case "MEAL":
                                 description.append(item.path("extra").asText());
@@ -273,12 +346,14 @@ public class DataLoadServiceImpl implements DataLoadService {
                             case "ACCOMMODATION":
                                 description.append(contents.path("star").asText());
                                 place = contents.path("place").path("name").asText();
+                                country = contents.path("place").path("country").path("name").asText();
                                 break;
                             case "SPOT_ACTIVITY":
                                 description.append(item.path("extra").asText())
                                         .append(", ")
                                         .append(contents.path("description").asText());
                                 place = contents.path("place").path("name").asText();
+                                country = contents.path("place").path("country").path("name").asText();
                                 break;
                             case "COLLECTION":
                                 description.append(item.path("extra").asText())
@@ -288,7 +363,7 @@ public class DataLoadServiceImpl implements DataLoadService {
                         }
 
                         if(!cityNames.containsKey(place)){
-                            Long cityId = cityMapper.findCityIdByName(place);
+                            Long cityId = cityMapper.findCityIdByName(place, country);
                             cityNames.put(place, cityId);
                         }
 
@@ -320,5 +395,30 @@ public class DataLoadServiceImpl implements DataLoadService {
         }
 
         return cities;
+    }
+
+    // JSON 단계적 안전 파싱
+    private JsonNode parseDetailJson(String raw) throws IOException {
+        // 1 원본 그대로
+        try { return objectMapper.readTree(raw); } catch (IOException ignore) {}
+
+        // 2 CSV 과정에서 한 번 더 문자열로 감싸진 경우 (예: "{\"a\":\"b\"}")
+        try {
+            String decoded = objectMapper.readValue(raw, String.class);
+            return objectMapper.readTree(decoded);
+        } catch (IOException ignore) {}
+
+        // 3 최소 보정: 과잉/부족 이스케이프 + 제어문자 처리
+        String sanitized = raw
+                .replace("\\\\\"", "\\\"")                // 과이중 백슬래시 복구
+                .replace("\\\\\\\\", "\\\\")
+                .replace("\t", "\\t")                     // Raw 제어문자 → JSON 이스케이프
+                .replace("\r", "\\r")
+                .replace("\n", "\\n")
+                .replaceAll("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]", " ")
+                .replaceAll("\\\\(?=\\d)", "₩")          // \130,000 → ₩130,000 (원화 깨짐 복구)
+                .replaceAll("\\\\(?![\"\\\\/bfnrtu])", "\\\\\\\\"); // 알 수 없는 이스케이프 → '\' 자체
+
+        return objectMapper.readTree(sanitized);
     }
 }

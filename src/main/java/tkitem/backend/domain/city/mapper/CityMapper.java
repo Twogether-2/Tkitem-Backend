@@ -13,5 +13,5 @@ public interface CityMapper {
 
     List<City> findCitiesByName(@Param("names")Set<String> names);
 
-    Long findCityIdByName(String name);
+    Long findCityIdByName(@Param("name") String name, @Param("countryName") String countryName);
 }
