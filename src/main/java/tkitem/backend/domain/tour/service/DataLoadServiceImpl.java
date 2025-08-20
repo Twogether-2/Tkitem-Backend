@@ -105,13 +105,22 @@ public class DataLoadServiceImpl implements DataLoadService {
                 // 도시 이름 수집
                 Map<String, Long> cityNames = collectCityNames(detailJsonNode);
 
+                // 첫 도시, 나라이름 수집
+                JsonNode placeNode = detailJsonNode.path("place");
+                String startCity = "";
+                String startCountry = "";
+                if (placeNode.isArray() && placeNode.size() > 0) {
+                    startCity = placeNode.get(0).get("name").asText("NONE");
+                    startCountry = placeNode.get(0).get("country").get("name").asText("NONE");
+                }
+
                 // Tour 객체 생성 및 삽입
                 Tour tour = createTourFrom(tripCode, detailJsonNode, detailJsonStr);
                 tourMapper.insertTour(tour);
                 Long generatedTourId = tour.getTourId();
 
                 // TourDetailSchedule 리스트 생성 및 삽입
-                List<TourDetailSchedule> schedules = createSchedulesFrom(detailJsonNode, generatedTourId, cityNames);
+                List<TourDetailSchedule> schedules = createSchedulesFrom(detailJsonNode, generatedTourId, cityNames, startCity, startCountry);
                 if (!schedules.isEmpty()) {
                     for (TourDetailSchedule schedule : schedules) {
                         tourMapper.insertTourDetailSchedule(schedule);
@@ -269,7 +278,7 @@ public class DataLoadServiceImpl implements DataLoadService {
                 .build();
     }
 
-    private List<TourDetailSchedule> createSchedulesFrom(JsonNode rootNode, Long tourId, Map<String, Long> cityNames) {
+    private List<TourDetailSchedule> createSchedulesFrom(JsonNode rootNode, Long tourId, Map<String, Long> cityNames, String startCity, String startCountry) {
         List<TourDetailSchedule> schedules = new ArrayList<>();
         JsonNode dailies = rootNode.path("itinerary").path("dailies");
 
@@ -282,8 +291,8 @@ public class DataLoadServiceImpl implements DataLoadService {
 
         if (dailies.isArray()) {
 
-            String place = "";
-            String country = "";
+            String place = startCity;
+            String country = startCountry;
 
             for (JsonNode day : dailies) {
                 int dayNum = day.path("dayNum").asInt();
@@ -324,12 +333,16 @@ public class DataLoadServiceImpl implements DataLoadService {
                                 break;
                         }
 
+                        // 문제상황 :
+                        // city_name = 인천, country_name =  일본  --> 그냥 데이터가 문제
+                        // null, null 이 들어가는 경우 --> json 데이터에서 items 내에 PLACE 보다 MEAL이 먼저 나옴
+
                         if (!cityNames.containsKey(place)) {
-                            Long cityId = getOrCreateCityId(place, country); // [추가]
+                            Long cityId = getOrCreateCityId(place, country);
                             if (cityId != null) {
                                 cityNames.put(place, cityId);
                             } else {
-                                log.warn("도시 생성/조회 실패: {} ({})", place, country); // [추가: 방어 로그]
+                                log.warn("도시 생성/조회 실패: {} ({})", place, country);
                             }
                         }
 
