@@ -5,19 +5,19 @@
 
 <mapper namespace="tkitem.backend.domain.tour.mapper.TourMapper">
     <insert id="insertTour" useGeneratedKeys="true" keyProperty="tourId" keyColumn="tour_id" parameterType="tkitem.backend.domain.tour.vo.Tour">
-        INSERT INTO TOUR(title, provider, trip_code, duration_days, nights, booking_url, source_url, itinerary_json, feature, summary, hotel_rating, img_url, created_at, updated_at)
-        VALUES (#{title}, #{provider}, #{tripCode}, #{durationDays}, #{nights}, #{bookingUrl}, #{sourceUrl}, #{itineraryJson, jdbcType=CLOB}, #{feature}, #{summary}, #{hotelRating}, #{imgUrl}, SYSTIMESTAMP, SYSTIMESTAMP)
+        INSERT INTO TOUR(title, provider, trip_code, duration_days, nights, itinerary_json, feature, summary, hotel_rating, img_url, created_at, updated_at)
+        VALUES (#{title}, #{provider}, #{tripCode}, #{durationDays}, #{nights}, #{itineraryJson, jdbcType=CLOB}, #{feature}, #{summary}, #{hotelRating}, #{imgUrl}, SYSTIMESTAMP, SYSTIMESTAMP)
     </insert>
 
     <select id="findTourByTripCode" resultType="tkitem.backend.domain.tour.vo.Tour" parameterType="String">
-        SELECT tour_id, title, provider, trip_code, duration_days, nights, booking_url, source_url, itinerary_json, feature, summary, hotel_rating, img_url
+        SELECT tour_id, title, provider, trip_code, duration_days, nights, itinerary_json, feature, summary, hotel_rating, img_url
         FROM TOUR
         WHERE trip_code = #{tripCode}
     </select>
 
     <insert id="insertTourPackage" parameterType="tkitem.backend.domain.tour.vo.TourPackage">
-        INSERT INTO TOUR_PACKAGE(tour_id, price, departure_date, return_date, package_date_code, departure_airline, return_airline, created_at, updated_at)
-        VALUES (#{tourId}, #{price}, #{departureDate}, #{returnDate}, #{packageDateCode}, #{departureAirline}, #{returnAirline}, SYSTIMESTAMP, SYSTIMESTAMP)
+        INSERT INTO TOUR_PACKAGE(tour_id, price, departure_date, return_date, package_date_code, departure_airline, return_airline, booking_url, source_url, created_at, updated_at)
+        VALUES (#{tourId}, #{price}, #{departureDate}, #{returnDate}, #{packageDateCode}, #{departureAirline}, #{returnAirline}, #{bookingUrl}, #{sourceUrl}, SYSTIMESTAMP, SYSTIMESTAMP)
     </insert>
 
     <insert id="insertTourDetailSchedule" parameterType="tkitem.backend.domain.tour.vo.TourDetailSchedule">
@@ -29,4 +29,8 @@
         INSERT INTO TOUR_CITY(city_id, tour_id, created_at, updated_at)
         VALUES (#{cityId}, #{tourId}, SYSTIMESTAMP, SYSTIMESTAMP)
     </insert>
+
+    <select id="findPackageDateCodesByTourId" resultType="java.lang.String">
+        SELECT PACKAGE_DATE_CODE FROM TOUR_PACKAGE WHERE TOUR_ID = #{tourId}
+    </select>
 </mapper>

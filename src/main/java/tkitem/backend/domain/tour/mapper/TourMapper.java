@@ -7,6 +7,7 @@ import tkitem.backend.domain.tour.vo.TourDetailSchedule;
 import tkitem.backend.domain.tour.vo.TourPackage;
 
 import java.util.List;
+import java.util.Set;
 
 @Mapper
 public interface TourMapper {
@@ -40,4 +41,6 @@ public interface TourMapper {
      * @param tourCity
      */
     void insertTourCity(TourCity tourCity);
+
+    Set<String> findPackageDateCodesByTourId(Long tourId);
 }

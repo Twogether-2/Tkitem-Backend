@@ -2,16 +2,13 @@ package tkitem.backend.domain.tour.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.opencsv.CSVParser;
-import com.opencsv.CSVParserBuilder;
-import com.opencsv.CSVReader;
-import com.opencsv.CSVReaderBuilder;
-import com.opencsv.exceptions.CsvValidationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.city.mapper.CityMapper;
+import tkitem.backend.domain.city.vo.City;
 import tkitem.backend.domain.tour.mapper.TourMapper;
 import tkitem.backend.domain.tour.vo.Tour;
 import tkitem.backend.domain.tour.vo.TourCity;
@@ -22,6 +19,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -49,169 +47,71 @@ public class DataLoadServiceImpl implements DataLoadService {
     //  2. TOUR 의 hotelRating 을 어떻게 할지
     @Override
     public void loadDataFromCsv(String filePath) throws Exception {
-        log.info("CSV 데이터 적재를 시작합니다. 파일 경로: {}", filePath);
+        log.info("JSON 데이터 적재를 시작합니다. 파일 경로: {}", filePath);
 
-        CSVParser parser = new CSVParserBuilder()
-                .withSeparator(',')     // 필요시 '\t' 로 교체
-                .withQuoteChar('"')
-                .withEscapeChar('\\')   // JSON 이스케이프 유지
-                .build();
-        try (CSVReader reader = new CSVReaderBuilder(new FileReader(filePath))
-                .withCSVParser(parser)
-                .build()) {
-            String[] header = reader.readNext(); // 헤더 스킵
-            if (header == null) {
-                log.warn("CSV 파일이 비어있거나 헤더가 없습니다.");
-                return;
-            }
+        try (FileReader reader = new FileReader(filePath)) {
+            JsonNode rootNode = objectMapper.readTree(reader);
 
-            String currentTripCode = null;
-            List<String[]> currentRows = new ArrayList<>();
-            String[] line;
-            long lineCount = 1; // 헤더 이후부터 라인 수 계산
-            int consecutiveEmptyLines = 0; // 연속된 빈 줄 카운터
-            int processedRowCount = 0; // 테스트용
+            if (rootNode.isArray()) {
+                int processedCount = 0;
+                for (JsonNode tripNode : rootNode) {
+                    // 테스트를 위해 100개 항목만 처리
+//                    if (processedCount >= 30) {
+//                        log.info("30개 항목만 테스트하고 종료합니다.");
+//                        break;
+//                    }
 
-            while (true) {
-                if(processedRowCount >= 100) { // 테스트용
-                    log.info("100개 행만 테스트하고 종료함");
-                    break;
-                }
-                line = reader.readNext();
-                lineCount++;
-
-                if (line == null || line.length == 0 || (line.length == 1 && (line[0] == null || line[0].isEmpty()))) {
-                    consecutiveEmptyLines++;
-                    log.warn("빈 줄 발견 ({}번째 연속). Line: {}", consecutiveEmptyLines, lineCount);
-                    if (consecutiveEmptyLines >= 5) {
-                        log.info("연속된 빈 줄이 5개 이상이므로 데이터 처리를 종료합니다.");
-                        break;
+                    String tripCode = tripNode.path("tripCode").asText(null);
+                    if (!isValidTripCode(tripCode)) {
+                        log.warn("유효하지 않은 tripCode 형식입니다. 건너뜁니다: {}", tripCode);
+                        continue;
                     }
-                    continue;
+
+                    JsonNode detailJsonNode = tripNode.path("detail_json");
+                    if (detailJsonNode.isMissingNode() || detailJsonNode.isEmpty()) {
+                        log.warn("detail_json이 비어있습니다. tripCode: {}. 건너뜁니다.", tripCode);
+                        continue;
+                    }
+
+                    JsonNode tourPackageNode = tripNode.path("tourPackage");
+                    if (!tourPackageNode.isArray() || tourPackageNode.isEmpty()) {
+                        log.warn("tourPackage 배열이 비어있거나 없습니다. tripCode: {}. 건너뜁니다.", tripCode);
+                        continue;
+                    }
+
+                    processTripCodeGroup(tripCode, detailJsonNode, tourPackageNode);
+                    processedCount++;
                 }
-                // 데이터가 있는 라인을 만나면 카운터 초기화
-                consecutiveEmptyLines = 0;
-
-                String tripCode = line[0];
-
-                // tripCode 유효성 검사
-                if (!isValidTripCode(tripCode)) {
-                    log.warn("유효하지 않은 tripCode 형식입니다. (Line: {}) 건너뜁니다: {}", lineCount, tripCode);
-                    continue;
-                }
-
-                // 첫 번째 tripCode 처리
-                if (currentTripCode == null) {
-                    currentTripCode = tripCode;
-                }
-
-                // tripCode가 변경되었을 때, 이전까지 모아둔 데이터를 처리
-                if (!currentTripCode.equals(tripCode)) {
-                    processTripCodeGroup(currentTripCode, currentRows);
-                    // 다음 그룹을 위해 초기화
-                    currentTripCode = tripCode;
-                    currentRows.clear();
-                }
-
-                currentRows.add(line);
-                processedRowCount++; // 실제 데이터 행이 추가될 때마다 카운터 증가 테스트용.
             }
-
-            // 파일의 마지막 그룹 처리
-            if (!currentRows.isEmpty()) {
-                processTripCodeGroup(currentTripCode, currentRows);
-            }
-
-        } catch (IOException | CsvValidationException e) {
-            log.error("CSV 파일을 읽는 중 오류가 발생했습니다.", e);
+        } catch (IOException e) {
+            log.error("JSON 파일을 읽는 중 오류가 발생했습니다.", e);
             throw e;
         }
 
-        log.info("CSV 데이터 적재를 완료했습니다.");
+        log.info("JSON 데이터 적재를 완료했습니다.");
     }
 
     @Transactional
-    public void processTripCodeGroup(String tripCode, List<String[]> rows) {
+    public void processTripCodeGroup(String tripCode, JsonNode detailJsonNode, JsonNode tourPackageNode) {
         try {
-            // 3. 중복 확인
-            // Tour 가 새로운 녀석이면
-            // Tour 새로 등록
-            // TourCity 새로 등록
-            // TourDetailSchedule 새로 등록
-            // TourPackage 새로 등록
+            Tour existingTour = tourMapper.findTourByTripCode(tripCode);
 
-            // TourPackage 만 저장하면 된다.
+            if (existingTour == null) {
+                // 신규 Tour: Tour, TourCity, TourDetailSchedule, 모든 TourPackage 삽입
+                log.info("신규 tripCode='{}' 입니다. 전체 데이터를 삽입합니다.", tripCode);
 
-            log.info("중복 확인을 위해 tripCode='{}'로 tour를 조회합니다.", tripCode);
-            if (tourMapper.findTourByTripCode(tripCode) == null) {
-                // 첫 번째 행의 detail_json을 대표로 사용
-                String detailJsonStr = rows.get(0)[7]; // detail_json은 8번째 컬럼(인덱스 7)
-
-                // [변경 시작] detailJsonStr → JsonNode 파싱 로직 교체 (블록 제거, 바로 try-catch 체인)
-                JsonNode rootNode = null;                 // [변경] 선언과 동시에 null 초기화
-                String work = detailJsonStr;              // [추가]
-
-                // [추가] 0단계: CSV 이스케이프("" → ") 해제 시도
-                if (work != null && work.length() >= 2
-                        && work.charAt(0) == '"' && work.charAt(work.length() - 1) == '"'
-                        && work.contains("\"\"")) {
-                    work = work.substring(1, work.length() - 1).replace("\"\"", "\"");
-                }
-
-                try {
-                    // 1) 원본 그대로
-                    rootNode = objectMapper.readTree(work);
-                    detailJsonStr = work;                 // [추가]
-                } catch (IOException e1) {
-                    // 2) 과이중 백슬래시 복구
-                    String restored = work
-                            .replace("\\\\\"", "\\\"")
-                            .replace("\\\\\\\\", "\\\\");
-                    try {
-                        rootNode = objectMapper.readTree(restored);
-                        detailJsonStr = restored;         // [추가]
-                    } catch (IOException e2) {
-                        // 3) 문제 패턴 보정 (Raw 제어문자/잘못된 이스케이프 등)
-                        String sanitized = restored
-                                .replace("\t", "\\t")
-                                .replace("\r", "\\r")
-                                .replace("\n", "\\n")
-                                .replaceAll("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]", " ")
-                                .replaceAll("\\\\(?=\\d)", "₩")
-                                .replaceAll("\\\\(?![\"\\\\/bfnrtu])", "\\\\\\\\");
-                        rootNode = objectMapper.readTree(sanitized);
-                        detailJsonStr = sanitized;        // [추가]
-                    }
-                }
-
-                // [추가] 최종 방어: 여전히 null이면 예외 (로깅 후 continue 등)
-                if (rootNode == null) {
-                    throw new IOException("detail_json 파싱 실패: tripCode=" + tripCode);
-                }
-                // [변경 끝]
-
+                String detailJsonStr = objectMapper.writeValueAsString(detailJsonNode);
 
                 // 도시 이름 수집
-                // 각 일정 내에서 방문 도시 목록으로도 확인 필요함.
-                Map<String, Long> cityNames = new HashMap<>();
-                JsonNode placesNode = rootNode.get("places");
-                if(placesNode.isArray()){
-                    for(JsonNode place : placesNode){
-                        String cityName = place.get("name").asText();
-                        String countryName = place.get("country").get("name").asText();
-                        log.info("도시 ID 조회를 위해 cityName='{}'으로 city를 조회합니다.", cityName);
-                        Long cityId = cityMapper.findCityIdByName(cityName, countryName);
-                        cityNames.put(cityName, cityId);
-                    }
-                }
+                Map<String, Long> cityNames = collectCityNames(detailJsonNode);
 
                 // Tour 객체 생성 및 삽입
-                Tour tour = createTourFrom(tripCode, rootNode, detailJsonStr);
+                Tour tour = createTourFrom(tripCode, detailJsonNode, detailJsonStr);
                 tourMapper.insertTour(tour);
-                Long generatedTourId = tour.getTourId(); // 생성된 tour_id 가져오기
+                Long generatedTourId = tour.getTourId();
 
                 // TourDetailSchedule 리스트 생성 및 삽입
-                List<TourDetailSchedule> schedules = createSchedulesFrom(rootNode, generatedTourId, cityNames);
+                List<TourDetailSchedule> schedules = createSchedulesFrom(detailJsonNode, generatedTourId, cityNames);
                 if (!schedules.isEmpty()) {
                     for (TourDetailSchedule schedule : schedules) {
                         tourMapper.insertTourDetailSchedule(schedule);
@@ -219,8 +119,6 @@ public class DataLoadServiceImpl implements DataLoadService {
                 }
 
                 // TourCity 리스트 생성 및 삽입
-                // places 로 조회
-                // city 에 city_name 으로 검색해서 city_id 속성들 뽑아와서 저장
                 List<TourCity> tourCityList = createCitiesForm(generatedTourId, cityNames);
                 if (!tourCityList.isEmpty()) {
                     for (TourCity tourCity : tourCityList) {
@@ -229,7 +127,7 @@ public class DataLoadServiceImpl implements DataLoadService {
                 }
 
                 // TourPackage 리스트 생성 및 삽입
-                List<TourPackage> tourPackages = createTourPackagesFrom(rows, generatedTourId);
+                List<TourPackage> tourPackages = createTourPackagesFrom(tourPackageNode, generatedTourId, tripCode);
                 if (!tourPackages.isEmpty()) {
                     for (TourPackage tourPackage : tourPackages) {
                         tourMapper.insertTourPackage(tourPackage);
@@ -238,20 +136,57 @@ public class DataLoadServiceImpl implements DataLoadService {
 
                 log.info("tripCode '{}' 처리 완료 (Tour 1개, Package {}개, Schedule {}개)",
                         tripCode, tourPackages.size(), schedules.size());
-                // 성공적으로 처리된 tripCode를 명확하게 로그로 남김
                 log.info("SUCCESSFULLY PROCESSED tripCode: {}", tripCode);
+
+            } else {
+                // 기존 Tour: 신규 TourPackage만 확인하여 추가
+                log.info("기존 tripCode='{}' 입니다. 신규 TourPackage만 확인하여 추가합니다.", tripCode);
+                Long tourId = existingTour.getTourId();
+
+                // DB에 저장된 travelId(packageDateCode) 목록 조회
+                Set<String> existingPackageDateCodes = new HashSet<>(tourMapper.findPackageDateCodesByTourId(tourId));
+
+                List<TourPackage> newTourPackages = new ArrayList<>();
+                for (JsonNode packageNode : tourPackageNode) {
+                    String travelId = packageNode.path("travelId").asText(null);
+                    if (travelId != null && !existingPackageDateCodes.contains(travelId)) {
+                        newTourPackages.add(createSingleTourPackageFrom(packageNode, tourId, tripCode));
+                    }
+                }
+
+                if (!newTourPackages.isEmpty()) {
+                    for (TourPackage tourPackage : newTourPackages) {
+                        tourMapper.insertTourPackage(tourPackage);
+                    }
+                    log.info("{}개의 신규 TourPackage를 tripCode '{}'에 추가했습니다.", newTourPackages.size(), tripCode);
+                } else {
+                    log.info("tripCode '{}'에 대한 신규 TourPackage가 없습니다.", tripCode);
+                }
             }
-
-            // Tour 가 이미 들어가있으면
-            // TourPackage 를 tourId 로 조회해서 리스트를 가져와서
-            // 중복되지 않는 package_date_code(셀에선 travelId) 인 경우
-            // TourPackage 만 저장하면 된다.
-
-
         } catch (Exception e) {
-            log.error("tripCode '{}' 처리 중 오류가 발생하여 건너뜁니다. 오류: {}", tripCode, e.getMessage());
+            log.error("tripCode '{}' 처리 중 오류가 발생하여 건너뜁니다.", tripCode, e);
             // @Transactional에 의해 이 tripCode에 대한 모든 DB 작업은 롤백됨
         }
+    }
+
+    private Map<String, Long> collectCityNames(JsonNode detailJsonNode) {
+        Map<String, Long> cityNames = new HashMap<>();
+        JsonNode placesNode = detailJsonNode.get("places");
+        if (placesNode != null && placesNode.isArray()) {
+            for (JsonNode place : placesNode) {
+                String cityName = place.get("name").asText();
+                String countryName = place.get("country").get("name").asText();
+                if (cityName != null && !cityName.isEmpty()) {
+                    Long cityId = getOrCreateCityId(cityName, countryName);
+                    if (cityId != null) {
+                        cityNames.put(cityName, cityId);
+                    } else {
+                        log.warn("도시생성, 조회 실패: {} ({})", cityName, countryName);
+                    }
+                }
+            }
+        }
+        return cityNames;
     }
 
 
@@ -279,8 +214,6 @@ public class DataLoadServiceImpl implements DataLoadService {
                 .provider(rootNode.path("tourOperator").path("name").asText())
                 .durationDays(itinerary.path("days").asInt())
                 .nights(itinerary.path("nights").asInt())
-                .bookingUrl("https://tripstore.thehyundaitravel.com/products/" + tripCode + "?travelId=" + rootNode.path("id").asText())
-                .sourceUrl("https://api.tripstore.kr/inventory/travels/" + rootNode.path("id").asText())
                 .itineraryJson(detailJsonStr)
                 .feature(tagsBuilder.toString()) // 완성된 태그 문자열 설정
                 .summary("")
@@ -289,22 +222,51 @@ public class DataLoadServiceImpl implements DataLoadService {
                 .build();
     }
 
-    private List<TourPackage> createTourPackagesFrom(List<String[]> rows, Long tourId) {
+    private List<TourPackage> createTourPackagesFrom(JsonNode tourPackageNode, Long tourId, String tripCode) {
         List<TourPackage> packages = new ArrayList<>();
-        DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-
-        for (String[] row : rows) {
-            packages.add(TourPackage.builder()
-                    .tourId(tourId)
-                    .packageDateCode(row[1]) // travelId
-                    .departureDate(LocalDateTime.parse(row[2], formatter).toLocalDate())
-                    .returnDate(LocalDateTime.parse(row[3], formatter).toLocalDate())
-                    .departureAirline(row[5])
-                    .returnAirline(row[6])
-                    .price(Integer.parseInt(row[4]))
-                    .build());
+        if (tourPackageNode.isArray()) {
+            for (JsonNode packageNode : tourPackageNode) {
+                packages.add(createSingleTourPackageFrom(packageNode, tourId, tripCode));
+            }
         }
         return packages;
+    }
+
+    private TourPackage createSingleTourPackageFrom(JsonNode packageNode, Long tourId, String tripCode) {
+        DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+        String travelId = packageNode.path("travelId").asText();
+        String departureDateTimeStr = packageNode.path("departureDateTime").asText(null);
+        String arrivalDateTimeStr = packageNode.path("arrivalDateTime").asText(null);
+
+        LocalDateTime departureDateTime = null;
+        if (departureDateTimeStr != null && !departureDateTimeStr.isEmpty()) {
+            try {
+                departureDateTime = LocalDateTime.parse(departureDateTimeStr, formatter);
+            } catch (DateTimeParseException e) {
+                log.warn("출발 날짜 형식이 잘못되었습니다: '{}', tripCode: {}", departureDateTimeStr, tripCode);
+            }
+        }
+
+        LocalDateTime arrivalDateTime = null;
+        if (arrivalDateTimeStr != null && !arrivalDateTimeStr.isEmpty()) {
+            try {
+                arrivalDateTime = LocalDateTime.parse(arrivalDateTimeStr, formatter);
+            } catch (DateTimeParseException e) {
+                log.warn("도착 날짜 형식이 잘못되었습니다: '{}', tripCode: {}", arrivalDateTimeStr, tripCode);
+            }
+        }
+
+        return TourPackage.builder()
+                .tourId(tourId)
+                .packageDateCode(travelId)
+                .departureDate(departureDateTime != null ? departureDateTime.toLocalDate() : null)
+                .returnDate(arrivalDateTime != null ? arrivalDateTime.toLocalDate() : null)
+                .departureAirline(packageNode.path("departureAirline").asText(null))
+                .returnAirline(packageNode.path("returnAirline").asText(null))
+                .price(packageNode.path("sellingPrice").asInt())
+                .bookingUrl("https://tripstore.thehyundaitravel.com/products/" + tripCode + "?travelId=" + travelId)
+                .sourceUrl("https://api.tripstore.kr/inventory/travels/" + travelId)
+                .build();
     }
 
     private List<TourDetailSchedule> createSchedulesFrom(JsonNode rootNode, Long tourId, Map<String, Long> cityNames) {
@@ -336,9 +298,9 @@ public class DataLoadServiceImpl implements DataLoadService {
 
                         switch (itemType) {
                             case "PLACE":
-                                description.append(contents.path("country").path("name").asText());
                                 place = contents.path("name").asText();
                                 country = contents.path("country").path("name").asText();
+                                description.append(country);
                                 break;
                             case "MEAL":
                                 description.append(item.path("extra").asText());
@@ -350,21 +312,25 @@ public class DataLoadServiceImpl implements DataLoadService {
                                 break;
                             case "SPOT_ACTIVITY":
                                 description.append(item.path("extra").asText())
-                                        .append(", ")
+                                        .append(!item.path("extra").asText().isEmpty() && !contents.path("description").asText().isEmpty() ? ", " : "")
                                         .append(contents.path("description").asText());
                                 place = contents.path("place").path("name").asText();
                                 country = contents.path("place").path("country").path("name").asText();
                                 break;
                             case "COLLECTION":
                                 description.append(item.path("extra").asText())
-                                        .append(", ")
+                                        .append(!item.path("extra").asText().isEmpty() && !contents.path("description").asText().isEmpty() ? ", " : "")
                                         .append(contents.path("description").asText());
                                 break;
                         }
 
-                        if(!cityNames.containsKey(place)){
-                            Long cityId = cityMapper.findCityIdByName(place, country);
-                            cityNames.put(place, cityId);
+                        if (!cityNames.containsKey(place)) {
+                            Long cityId = getOrCreateCityId(place, country); // [추가]
+                            if (cityId != null) {
+                                cityNames.put(place, cityId);
+                            } else {
+                                log.warn("도시 생성/조회 실패: {} ({})", place, country); // [추가: 방어 로그]
+                            }
                         }
 
                         schedules.add(TourDetailSchedule.builder()
@@ -374,7 +340,7 @@ public class DataLoadServiceImpl implements DataLoadService {
                                 .scheduleDate(dayNum)
                                 .description(description.toString())
                                 .sortOrder(item.path("sort").asInt())
-                                .defaultType(item.path("type").asText())
+                                .defaultType(itemType)
                                 .build());
                     }
                 }
@@ -386,39 +352,32 @@ public class DataLoadServiceImpl implements DataLoadService {
     private List<TourCity> createCitiesForm(Long tourId, Map<String, Long> cityNames) {
         List<TourCity> cities = new ArrayList<>();
 
-        for(Long cityId : cityNames.values()){
-            TourCity tourCity = TourCity.builder()
-                    .cityId(cityId)
-                    .tourId(tourId)
-                    .build();
-            cities.add(tourCity);
+        for (Long cityId : cityNames.values()) {
+            if (cityId != null) { // Null check
+                TourCity tourCity = TourCity.builder()
+                        .cityId(cityId)
+                        .tourId(tourId)
+                        .build();
+                cities.add(tourCity);
+            }
         }
-
         return cities;
     }
 
-    // JSON 단계적 안전 파싱
-    private JsonNode parseDetailJson(String raw) throws IOException {
-        // 1 원본 그대로
-        try { return objectMapper.readTree(raw); } catch (IOException ignore) {}
+    private Long getOrCreateCityId(String cityName, String countryName) {
+        Long id = cityMapper.findCityIdByName(cityName, countryName).orElse(null);
+        if (id != null) return id;
 
-        // 2 CSV 과정에서 한 번 더 문자열로 감싸진 경우 (예: "{\"a\":\"b\"}")
+        City city = City.builder()
+                .cityName(cityName)
+                .countryName(countryName)
+                .build();
+
         try {
-            String decoded = objectMapper.readValue(raw, String.class);
-            return objectMapper.readTree(decoded);
-        } catch (IOException ignore) {}
-
-        // 3 최소 보정: 과잉/부족 이스케이프 + 제어문자 처리
-        String sanitized = raw
-                .replace("\\\\\"", "\\\"")                // 과이중 백슬래시 복구
-                .replace("\\\\\\\\", "\\\\")
-                .replace("\t", "\\t")                     // Raw 제어문자 → JSON 이스케이프
-                .replace("\r", "\\r")
-                .replace("\n", "\\n")
-                .replaceAll("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]", " ")
-                .replaceAll("\\\\(?=\\d)", "₩")          // \130,000 → ₩130,000 (원화 깨짐 복구)
-                .replaceAll("\\\\(?![\"\\\\/bfnrtu])", "\\\\\\\\"); // 알 수 없는 이스케이프 → '\' 자체
-
-        return objectMapper.readTree(sanitized);
+            cityMapper.save(city);              // [추가] 생성 (PK 회수)
+            return city.getCityId();                  // [추가] useGeneratedKeys or RETURNING 로 채워짐
+        } catch (DuplicateKeyException e) {           // [추가] 동시성: 다른 트랜잭션이 먼저 삽입한 경우
+            return cityMapper.findCityIdByName(cityName, countryName).orElse(0L);
+        }
     }
 }

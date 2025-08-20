@@ -19,7 +19,7 @@ public class TourController {
     public ResponseEntity<String> initTour(){
         try{
             // 외부 CSV 파일의 절대 경로를 지정합니다.
-            String csvFilePath = "C:/Users/pch83/git/현대퓨처넷/TKItem/dummy/trip_data.csv";
+            String csvFilePath = "C:\\Users\\pch\\git\\TeamProject\\3st_team\\data\\trip_data.json";
             dataLoadService.loadDataFromCsv(csvFilePath);
             return ResponseEntity.ok("투어 데이터 초기화에 성공했습니다.");
         } catch (Exception e){
