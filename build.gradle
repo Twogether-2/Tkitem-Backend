@@ -42,6 +42,10 @@ dependencies {
     implementation 'com.oracle.database.security:osdt_cert:21.9.0.0'
 
     implementation 'com.opencsv:opencsv:5.7.1'
+
+    implementation 'com.google.ai.client:generativeai:0.9.0'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
 }
 
 tasks.named('test') {

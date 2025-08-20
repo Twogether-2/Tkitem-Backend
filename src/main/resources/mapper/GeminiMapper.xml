@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- 가중치가 클수록 단어 많이 반복 -->
+<mapper namespace="tkitem.backend.domain.gemini.mapper.GeminiMapper">
+    <select id="findAllForEmbedding" resultType="map">
+        WITH TAGS AS (
+            SELECT
+                SCHEDULE_TYPE_ID,
+                LISTAGG(TAG_NAME, ' ') WITHIN GROUP (ORDER BY WEIGHT DESC) AS TAG_TEXT
+            FROM (
+                SELECT
+                    STT.SCHEDULE_TYPE_ID,
+                    STT.WEIGHT,
+                    CASE
+                        WHEN STT.WEIGHT >= 0.90 THEN T.NAME || ' ' || T.NAME || ' ' || T.NAME
+                        WHEN STT.WEIGHT >= 0.75 THEN T.NAME || ' ' || T.NAME
+                        ELSE T.NAME
+                    END AS TAG_NAME
+                FROM SCHEDULE_TYPE_TAG STT
+                    JOIN TAG T ON T.TAG_ID = STT.TAG_ID
+            ) X
+            GROUP BY SCHEDULE_TYPE_ID
+        )
+        SELECT
+            ST.SCHEDULE_TYPE_ID AS ID,
+            ST.NAME AS NAME,
+            ST.NAME_KR AS NAME_KR,
+        TRIM(
+            NVL(ST.NAME, '') || ' ' ||
+            NVL(ST.NAME_KR, '') || ' ' ||
+            NVL(TS.TAG_TEXT, '')
+        ) AS ALLTEXT
+        FROM SCHEDULE_TYPE ST
+            LEFT JOIN TAGS TS ON TS.SCHEDULE_TYPE_ID = ST.SCHEDULE_TYPE_ID
+        ORDER BY ST.SCHEDULE_TYPE_ID
+    </select>
+</mapper>
