@@ -6,6 +6,17 @@ spring:
     driver-class-name: oracle.jdbc.OracleDriver
     username: ${ORACLE_DB_USERNAME}
     password: ${ORACLE_DB_PASSWORD}
+  ai:
+    openai:
+      api-key: ${OPEN_AI_API_KEY}
+      embedding:
+        options:
+          model: text-embedding-3-small   # 비용↓, 1536차원
+
+app:
+  classify:
+    batch-size: 500          # 1회 처리량 (조절)
+    ambiguity-margin: 0.06   # top1-top2 마진 미만이면 '애매'
 
   servlet:
     multipart:
@@ -60,6 +71,3 @@ kakao:
 #  endpoint:
 #    health:
 #      show-details: always
-
-#openai:
-#  api-key: ${OPEN_AI_API_KEY}
