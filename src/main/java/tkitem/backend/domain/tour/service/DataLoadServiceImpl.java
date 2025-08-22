@@ -379,18 +379,57 @@ public class DataLoadServiceImpl implements DataLoadService {
 
     private Long getOrCreateCityId(String cityName, String countryName) {
         Long id = cityMapper.findCityIdByName(cityName, countryName).orElse(null);
-        if (id != null) return id;
+        if (id != null) {
+            return id;
+        }
+
+        // id == null, new city creation logic
+        System.out.println("\n========================================================");
+        log.info("새로운 도시를 데이터베이스에 추가해야 합니다.");
+            log.info("데이터 값: 도시명='{}', 국가명='{}'", cityName, countryName);
+        System.out.println("--------------------------------------------------------");
+        System.out.println("선택하세요:");
+        System.out.println("  1: 위 값으로 도시를 생성합니다.");
+        System.out.println("  2: 새로운 값을 직접 입력하여 도시를 생성합니다.");
+        System.out.print("입력 (1 또는 2): ");
+
+        Scanner scanner = new Scanner(System.in);
+        String choice = scanner.nextLine();
+
+        String finalCityName = cityName;
+        String finalCountryName = countryName;
+
+        if ("2".equals(choice)) {
+            System.out.print("새로운 도시명을 입력하세요: ");
+            finalCityName = scanner.nextLine();
+            System.out.print("새로운 국가명을 입력하세요: ");
+            finalCountryName = scanner.nextLine();
+            System.out.println("========================================================");
+
+            // 사용자가 직접 입력한 값으로 도시가 이미 존재하는지 다시 확인
+            Long manuallyEnteredCityId = cityMapper.findCityIdByName(finalCityName, finalCountryName).orElse(null);
+            if (manuallyEnteredCityId != null) {
+                log.info("입력한 도시는 이미 존재합니다. 기존 ID를 사용합니다: {}", manuallyEnteredCityId);
+                return manuallyEnteredCityId;
+            }
+        } else {
+            log.info("전달받은 값으로 생성을 진행합니다.");
+            System.out.println("========================================================");
+        }
 
         City city = City.builder()
-                .cityName(cityName)
-                .countryName(countryName)
+                .cityName(finalCityName)
+                .countryName(finalCountryName)
                 .build();
 
         try {
-            cityMapper.save(city);              // [추가] 생성 (PK 회수)
-            return city.getCityId();                  // [추가] useGeneratedKeys or RETURNING 로 채워짐
-        } catch (DuplicateKeyException e) {           // [추가] 동시성: 다른 트랜잭션이 먼저 삽입한 경우
-            return cityMapper.findCityIdByName(cityName, countryName).orElse(0L);
+            cityMapper.save(city);
+            log.info("새로운 도시 생성 완료: '{}' ({}), ID: {}", city.getCityName(), city.getCountryName(), city.getCityId());
+            return city.getCityId();
+        } catch (DuplicateKeyException e) {
+            log.warn("도시 생성 중복 예외 발생. 다른 트랜잭션에서 생성되었을 수 있습니다. 기존 도시 ID를 조회합니다: {} ({})", finalCityName, finalCountryName);
+            return cityMapper.findCityIdByName(finalCityName, finalCountryName)
+                    .orElse(null); // 실패 시 null 반환
         }
     }
 }
