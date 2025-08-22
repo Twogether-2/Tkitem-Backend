@@ -44,7 +44,6 @@ class ImageServiceTest {
         imageService = new ImageServiceImpl(amazonS3);
         // Inject @Value fields on the service under test
         ReflectionTestUtils.setField(imageService, "bucket", BUCKET);
-        ReflectionTestUtils.setField(imageService, "region", REGION);
     }
 
     @Test
@@ -110,7 +109,7 @@ class ImageServiceTest {
         // when / then
         assertThatThrownBy(() -> imageService.upload(file))
                 .isInstanceOf(AmazonS3Exception.class)
-                .hasMessageContaining("Failed to upload multiple files");
+                .hasMessageContaining("Failed to upload file");
     }
 
     @Test
@@ -144,6 +143,6 @@ class ImageServiceTest {
         // when / then
         assertThatThrownBy(() -> imageService.delete(imgUrl))
                 .isInstanceOf(AmazonS3Exception.class)
-                .hasMessageContaining("Failed to delete multiple files");
+                .hasMessageContaining("Failed to delete file");
     }
 }

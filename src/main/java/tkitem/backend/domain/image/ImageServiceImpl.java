@@ -25,8 +25,9 @@ public class ImageServiceImpl implements ImageService {
 
 	@Value("${cloud.aws.s3.bucket}")
 	private String bucket;
-	@Value(("${cloud.aws.region.static}"))
-	private String region;
+
+	@Value("${cloud.aws.cdn.url}")
+	private String cdnUrl; // Optional: if empty, fallback to S3 URL
 
 	private final AmazonS3 amazonS3;
 
@@ -47,12 +48,16 @@ public class ImageServiceImpl implements ImageService {
 				amazonS3.putObject(bucket, s3FileName, inputStream, objMeta);
 			}
 
-			// Url 가져와서 반환
+			// Url 가져와서 반환 (CDN 우선)
 			log.info("S3 upload file name = {}", s3FileName);
+			if (cdnUrl != null && !cdnUrl.isBlank()) {
+				String normalizedCdn = cdnUrl.endsWith("/") ? cdnUrl.substring(0, cdnUrl.length() - 1) : cdnUrl;
+				return normalizedCdn + "/" + s3FileName;
+			}
 			return amazonS3.getUrl(bucket, s3FileName).toString();
 		}
 		catch (AmazonS3Exception e) {
-			throw new AmazonS3Exception("Failed to upload multiple files", e);
+			throw new AmazonS3Exception("Failed to upload file", e);
 		}
 	}
 
@@ -77,7 +82,12 @@ public class ImageServiceImpl implements ImageService {
 
 				// Url 가져와서 반환
 				log.info("S3 upload file name = {}", s3FileName);
-				fileList.add(amazonS3.getUrl(bucket, s3FileName).toString());
+				if (cdnUrl != null && !cdnUrl.isBlank()) {
+					String normalizedCdn = cdnUrl.endsWith("/") ? cdnUrl.substring(0, cdnUrl.length() - 1) : cdnUrl;
+					fileList.add(normalizedCdn + "/" + s3FileName);
+				} else {
+					fileList.add(amazonS3.getUrl(bucket, s3FileName).toString());
+				}
 			}
 		}
 		catch (AmazonS3Exception e) {
@@ -86,17 +96,47 @@ public class ImageServiceImpl implements ImageService {
 		return fileList;
 	}
 
+	private String extractKeyFromUrl(String imgUrl) {
+		if (imgUrl == null || imgUrl.isBlank()) return null;
+		// 1) CDN이 설정되어 있고 URL이 CDN으로 시작하면 해당 부분을 제거
+		if (cdnUrl != null && !cdnUrl.isBlank()) {
+			String normalizedCdn = cdnUrl.endsWith("/") ? cdnUrl.substring(0, cdnUrl.length() - 1) : cdnUrl;
+			if (imgUrl.startsWith(normalizedCdn + "/")) {
+				return imgUrl.substring((normalizedCdn + "/").length());
+			}
+		}
+		// 2) 일반적인 Amazon S3 URL 파싱
+		int idx = imgUrl.indexOf(".amazonaws.com/");
+		if (idx > -1) {
+			String afterHost = imgUrl.substring(idx + ".amazonaws.com/".length());
+			// 경로 스타일: s3.<region>.amazonaws.com/<bucket>/<key>
+			// 가상 호스트 스타일: <bucket>.s3.<region>.amazonaws.com/<key>
+			if (afterHost.startsWith(bucket + "/")) {
+				return afterHost.substring((bucket + "/").length());
+			}
+			return afterHost; // already the key in virtual-hosted style
+		}
+		// 3) 대체 방법: 마지막으로 등장한 버킷 이름 뒤의 문자열을 추출
+		String marker = "/" + bucket + "/";
+		int midx = imgUrl.indexOf(marker);
+		if (midx > -1) {
+			return imgUrl.substring(midx + marker.length());
+		}
+		// 4) 최후의 수단: 마지막 '/' 뒤의 문자열을 추출
+		int lastSlash = imgUrl.lastIndexOf('/');
+		return (lastSlash > -1 && lastSlash + 1 < imgUrl.length()) ? imgUrl.substring(lastSlash + 1) : imgUrl;
+	}
+
 	@Override
 	public void delete(String imgUrl) {
 		try {
-			String bucketUrl = "https://s3."+region+".amazonaws.com/"+bucket;
-			log.info("delete departmentImgUrl = {}", imgUrl);
-			String fileName = imgUrl.substring(bucketUrl.length() + 1);
-			DeleteObjectRequest request = new DeleteObjectRequest(bucket, fileName);
+			String key = extractKeyFromUrl(imgUrl);
+			log.info("Deleting S3 object. bucket={}, key={}, originalUrl={}", bucket, key, imgUrl);
+			DeleteObjectRequest request = new DeleteObjectRequest(bucket, key);
 			amazonS3.deleteObject(request);
 		}
 		catch (AmazonS3Exception e) {
-			throw new AmazonS3Exception("Failed to delete multiple files", e);
+			throw new AmazonS3Exception("Failed to delete file", e);
 		}
 	}
 }
