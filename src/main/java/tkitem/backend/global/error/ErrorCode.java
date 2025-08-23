@@ -1,6 +1,7 @@
 package tkitem.backend.global.error;
 
 import lombok.Getter;
+import org.springframework.http.HttpStatus;
 
 @Getter
 public enum ErrorCode {
@@ -20,6 +21,12 @@ public enum ErrorCode {
     /* MEMBER ERROR */
     MEMBER_NOT_FOUND(404, "MEMBER001", "Member Not Found"),
     DUPLICATED_MEMBER(400, "MEMBER002", "Duplicated Member"),
+
+    /* ORDER ERROR */
+    ORDER_NOT_FOUND(404, "ORDER001", "Order Not Found"),
+
+    /* PAYMENT ERROR */
+    PAYMENT_AMOUNT_MISMATCH(400, "PAYMENT001", "Payment Amount Mismatch"),
 
     /* TOSS PAYMENTS ERROR */
     TOSS_CLIENT_ERROR(400, "TOSS001", "Invalid Payment Request"),

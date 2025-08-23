@@ -22,4 +22,13 @@ public interface OrderMapper {
 
     // 주문 아이템 목록
     List<OrderItemDetail> findOrderItems(@Param("orderId") Long orderId);
+
+    // 결제 완료 처리
+    void updateOrderPaid(@Param("merchantOrderId") String merchantOrderId,
+                         @Param("paidAmount") Integer paidAmount,
+                         @Param("paymentKey") String paymentKey);
+
+    // 주문 아이템 상태 변경
+    void updateOrderItemsStatus(@Param("orderId") Long orderId,
+                                @Param("status") String status);
 }
