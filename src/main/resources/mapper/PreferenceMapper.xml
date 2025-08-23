@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="tkitem.backend.domain.preference.mapper.PreferenceMapper">
+    <!-- 취향 테이블에 삽입 -->
+    <insert id="insertPreference" parameterType="tkitem.backend.domain.preference.vo.Preference">
+        <selectKey keyProperty="preferenceId" resultType="long" order="BEFORE">
+            SELECT PREFERENCE_SEQ.NEXTVAL FROM DUAL
+        </selectKey>
+        INSERT INTO PREFERENCE (
+            PREFERENCE_ID,
+            MEMBER_ID,
+            BRIGHTNESS,
+            BOLDNESS,
+            FIT,
+            COLOR,
+            FIRST_LOOK,
+            SECOND_LOOK,
+            CREATED_AT,
+            CREATED_BY
+        ) VALUES (
+            #{preferenceId},
+            #{memberId},
+            #{brightness},
+            #{boldness},
+            #{fit},
+            #{color},
+            #{firstLook},
+            #{secondLook},
+            SYSDATE,
+            #{memberId}
+        )
+    </insert>
+
+    <!-- memberId로 가장 최근 취향 조회 -->
+    <select id="selectPreferenceByMemberId" resultType="tkitem.backend.domain.preference.vo.Preference">
+        SELECT
+            PREFERENCE_ID   AS preferenceId,
+            MEMBER_ID       AS memberId,
+            BRIGHTNESS      AS brightness,
+            BOLDNESS        AS boldness,
+            FIT             AS fit,
+            COLOR           AS color,
+            FIRST_LOOK      AS firstLook,
+            SECOND_LOOK     AS secondLook
+        FROM PREFERENCE
+        WHERE MEMBER_ID = #{memberId}
+        ORDER BY CREATED_AT DESC
+        FETCH FIRST 1 ROW ONLY
+    </select>
+
+    <!-- fashionTypeId 로 패션 유형 조회 -->
+    <select id="selectFashionTypeById" resultType="tkitem.backend.domain.preference.vo.FashionType">
+        SELECT
+            FASHION_TYPE_ID AS fashionTypeId,
+            NAME            AS fashionTypeName,
+            DESCRIPTION     AS description,
+            IMG_URL         AS imgUrl
+        FROM FASHION_TYPE
+        WHERE FASHION_TYPE_ID = #{fashionTypeId}
+    </select>
+</mapper>

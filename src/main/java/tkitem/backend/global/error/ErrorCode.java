@@ -19,7 +19,8 @@ public enum ErrorCode {
 
     /* MEMBER ERROR */
     MEMBER_NOT_FOUND(404, "MEMBER001", "Member Not Found"),
-    DUPLICATED_MEMBER(400, "MEMBER002", "Duplicated Member");
+    DUPLICATED_MEMBER(400, "MEMBER002", "Duplicated Member"),
+    INVALID_MEMBER_INFO(500, "MEMBER003", "Invalid Member Info");
 
 
     private final int status;
