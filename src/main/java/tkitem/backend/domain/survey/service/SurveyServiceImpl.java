@@ -14,6 +14,8 @@ import tkitem.backend.domain.survey.mapper.SurveyMapper;
 import tkitem.backend.domain.survey.vo.Age;
 import tkitem.backend.domain.survey.vo.Survey;
 import tkitem.backend.domain.survey.vo.SurveyQuestion;
+import tkitem.backend.global.error.ErrorCode;
+import tkitem.backend.global.error.exception.BusinessException;
 
 @Slf4j
 @Service
@@ -29,6 +31,14 @@ public class SurveyServiceImpl implements SurveyService{
 
 		// 회원 연령대 매칭
 		// 생일 문자열로 나이 계산(만 나이 기준)
+		if(member == null || member.getBirthday() == null || member.getBirthday().isBlank()){
+			throw new BusinessException(ErrorCode.INVALID_MEMBER_INFO);
+		}
+
+		if(member.getGender() == null){
+			throw new BusinessException(ErrorCode.INVALID_MEMBER_INFO);
+		}
+
 		LocalDate birthDate = LocalDate.parse(member.getBirthday());
 		int age = Period.between(birthDate, LocalDate.now()).getYears();
 		String ageType = age < 45 ? Age.YOUNG.name() : Age.OLD.name();

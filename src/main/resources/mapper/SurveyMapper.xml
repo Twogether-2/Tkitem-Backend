@@ -33,6 +33,31 @@
             AND SI.GENDER = #{gender}
         ORDER BY DBMS_RANDOM.VALUE
     </select>
+
+    <select id="selectSurveyQValues" resultType="tkitem.backend.domain.survey.vo.SurveyQ">
+        WITH AGG AS (
+        SELECT
+        SUM(CASE WHEN B_WEIGHT &gt; 0 THEN B_WEIGHT ELSE 0 END) AS B_POS,
+        SUM(CASE WHEN B_WEIGHT &lt; 0 THEN -B_WEIGHT ELSE 0 END) AS B_NEG,
+        SUM(CASE WHEN M_WEIGHT &gt; 0 THEN M_WEIGHT ELSE 0 END) AS M_POS,
+        SUM(CASE WHEN M_WEIGHT &lt; 0 THEN -M_WEIGHT ELSE 0 END) AS M_NEG,
+        SUM(CASE WHEN F_WEIGHT &gt; 0 THEN F_WEIGHT ELSE 0 END) AS F_POS,
+        SUM(CASE WHEN F_WEIGHT &lt; 0 THEN -F_WEIGHT ELSE 0 END) AS F_NEG,
+        SUM(CASE WHEN V_WEIGHT &gt; 0 THEN V_WEIGHT ELSE 0 END) AS V_POS,
+        SUM(CASE WHEN V_WEIGHT &lt; 0 THEN -V_WEIGHT ELSE 0 END) AS V_NEG
+        FROM SURVEY_QUESTION
+        WHERE SURVEY_ID IN
+        <foreach collection="surveyIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        )
+        SELECT
+        GREATEST(B_POS, B_NEG) AS bQ,
+        GREATEST(M_POS, M_NEG) AS mQ,
+        GREATEST(F_POS, F_NEG) AS fQ,
+        GREATEST(V_POS, V_NEG) AS vQ
+        FROM AGG
+    </select>
 </mapper>
 
 
