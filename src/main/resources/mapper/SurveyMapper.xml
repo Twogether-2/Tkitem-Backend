@@ -12,7 +12,7 @@
             TYPE
         FROM SURVEY
         ORDER BY DBMS_RANDOM.VALUE
-        FETCH FIRST 9 ROWS ONLY;
+        FETCH FIRST 9 ROWS ONLY
     </select>
 
     <select id="selectSurveyQuestionBySurveyId" resultType="tkitem.backend.domain.survey.vo.SurveyQuestion">
