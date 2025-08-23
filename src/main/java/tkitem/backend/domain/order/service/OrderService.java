@@ -1,0 +1,9 @@
+package tkitem.backend.domain.order.service;
+
+import tkitem.backend.domain.order.dto.request.OrderCreateRequest;
+import tkitem.backend.domain.order.dto.response.OrderCreateResponse;
+
+public interface OrderService {
+
+    OrderCreateResponse createOrder(Long memberId, OrderCreateRequest request);
+}

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="tkitem.backend.domain.order.mapper.OrderMapper">
+
+    <!-- 주문 마스터 insert -->
+    <insert id="insertOrder">
+        INSERT INTO ORDERS (ORDER_ID, MEMBER_ID, MERCHANT_ORDER_ID, STATUS, CREATED_AT)
+        VALUES (ORDERS_SEQ.NEXTVAL, #{memberId}, #{merchantOrderId}, #{status}, SYSTIMESTAMP)
+    </insert>
+
+    <!-- merchantOrderId로 PK 조회 -->
+    <select id="findOrderIdByMerchantOrderId" resultType="long">
+        SELECT ORDER_ID FROM ORDERS WHERE MERCHANT_ORDER_ID = #{merchantOrderId}
+    </select>
+
+    <!-- 총 금액 합계 -->
+    <select id="sumOrderAmount" resultType="int">
+        SELECT NVL(SUM(p.PRICE * oi.QUANTITY), 0)
+        FROM ORDER_ITEM oi
+        JOIN PRODUCT p ON p.PRODUCT_ID = oi.PRODUCT_ID
+        WHERE oi.ORDER_ID = #{orderId}
+    </select>
+
+    <!-- 주문 아이템 목록 -->
+    <select id="findOrderItems" resultType="tkitem.backend.domain.order.dto.OrderItemDetail">
+        SELECT
+        oi.ORDER_ITEM_ID as orderItemId,
+        oi.PRODUCT_ID as productId,
+        p.NAME as productName,
+        p.PRICE as price,
+        oi.QUANTITY as quantity,
+        oi.STATUS as status
+        FROM ORDER_ITEM oi
+        JOIN PRODUCT p ON p.PRODUCT_ID = oi.PRODUCT_ID
+        WHERE oi.ORDER_ID = #{orderId}
+        ORDER BY oi.ORDER_ITEM_ID
+    </select>
+</mapper>
