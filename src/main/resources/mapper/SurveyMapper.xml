@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="tkitem.backend.domain.survey.mapper.SurveyMapper">
+    <select id="selectRandomSurveys" resultType="tkitem.backend.domain.survey.vo.Survey">
+        SELECT
+            SURVEY_ID AS surveyId,
+            TITLE,
+            PICK_LIMIT AS pickLimit,
+            TYPE
+        FROM SURVEY
+        ORDER BY DBMS_RANDOM.VALUE
+        FETCH FIRST 9 ROWS ONLY;
+    </select>
+
+    <select id="selectSurveyQuestionBySurveyId" resultType="tkitem.backend.domain.survey.vo.SurveyQuestion">
+        SELECT
+            SQ.TEXT,
+            SQ.B_WEIGHT AS bWeight,
+            SQ.M_WEIGHT AS mWeight,
+            SQ.F_WEIGHT AS fWeight,
+            SQ.V_WEIGHT AS vWeight,
+            SQ.LOOK,
+            SQ.LOOK_WEIGHT AS lookWeight,
+            SI.URL AS imageUrl
+        FROM SURVEY_QUESTION SQ
+        LEFT JOIN SURVEY_IMAGE SI ON SQ.SURVEY_QUESTION_ID = SI.SURVEY_QUESTION_ID
+        WHERE
+            SQ.SURVEY_ID = #{surveyId}
+            AND SI.AGE = #{age}
+            AND SI.GENDER = #{gender}
+        ORDER BY DBMS_RANDOM.VALUE
+    </select>
+</mapper>
+
+
