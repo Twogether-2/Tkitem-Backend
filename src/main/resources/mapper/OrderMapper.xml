@@ -49,6 +49,14 @@
         WHERE MERCHANT_ORDER_ID = #{merchantOrderId}
     </update>
 
+    <!-- 주문 상태 변경 -->
+    <update id="updateOrderStatus">
+        UPDATE ORDERS
+        SET STATUS = #{status},
+        UPDATED_AT = SYSTIMESTAMP
+        WHERE ORDER_ID = #{orderId}
+    </update>
+
     <!-- 주문 아이템 상태 변경 -->
     <update id="updateOrderItemsStatus">
         UPDATE ORDER_ITEM
@@ -56,4 +64,13 @@
         UPDATED_AT = SYSTIMESTAMP
         WHERE ORDER_ID = #{orderId}
     </update>
+
+    <!-- 결제 키로 주문 ID 조회 -->
+    <select id="findOrderIdByPaymentKey" resultType="long">
+        SELECT ORDER_ID
+        FROM ORDERS
+        WHERE PAYMENT_KEY = #{paymentKey}
+    </select>
+
+
 </mapper>

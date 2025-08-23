@@ -28,7 +28,14 @@ public interface OrderMapper {
                          @Param("paidAmount") Integer paidAmount,
                          @Param("paymentKey") String paymentKey);
 
+    // 주문 상태 변경
+    void updateOrderStatus(@Param("orderId") Long orderId,
+                           @Param("status") String status);
+
     // 주문 아이템 상태 변경
     void updateOrderItemsStatus(@Param("orderId") Long orderId,
                                 @Param("status") String status);
+
+    // 결제 키로 주문 ID 조회
+    Long findOrderIdByPaymentKey(@Param("paymentKey") String paymentKey);
 }

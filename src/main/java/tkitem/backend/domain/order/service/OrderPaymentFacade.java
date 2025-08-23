@@ -11,13 +11,13 @@ import tkitem.backend.infra.toss.TossPaymentsClient;
 import tkitem.backend.infra.toss.TossPaymentsResponse;
 
 @RequiredArgsConstructor
+@Transactional
 @Service
 public class OrderPaymentFacade {
 
     private final OrderService orderService;
     private final TossPaymentsClient tossClient;
 
-    @Transactional
     public PaymentConfirmResponse confirm(PaymentConfirmRequest request) {
         final String merchantOrderId = request.getOrderId();
         final String paymentKey = request.getPaymentKey();
@@ -33,5 +33,10 @@ public class OrderPaymentFacade {
 
         return new PaymentConfirmResponse(response.getPaymentKey(), response.getOrderId(),
                 response.getTotalAmount(), response.getApprovedAt(), response.getMethod());
+    }
+
+    public void cancel(String paymentKey, String reason) {
+        tossClient.cancel(paymentKey, reason);
+        orderService.markCanceledByPaymentKey(paymentKey);
     }
 }

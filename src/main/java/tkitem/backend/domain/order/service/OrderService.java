@@ -9,4 +9,6 @@ public interface OrderService {
     Long getIdByMerchantOrderId(String merchantOrderId);
     int calculateAmount(Long orderId);
     void markPaid(Long orderId, String merchantOrderId, String paymentKey, int paidAmount);
+
+    void markCanceledByPaymentKey(String paymentKey);
 }

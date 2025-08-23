@@ -60,4 +60,12 @@ public class OrderServiceImpl implements OrderService {
         orderMapper.updateOrderPaid(merchantOrderId, paidAmount, paymentKey);
         orderMapper.updateOrderItemsStatus(orderId, OrderStatus.PAID.name());
     }
+
+    @Override
+    public void markCanceledByPaymentKey(String paymentKey) {
+        Long orderId = orderMapper.findOrderIdByPaymentKey(paymentKey);
+        if (orderId == null) throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
+        orderMapper.updateOrderStatus(orderId, OrderStatus.CANCELED.name());
+        orderMapper.updateOrderItemsStatus(orderId, OrderStatus.CANCELED.name());
+    }
 }
