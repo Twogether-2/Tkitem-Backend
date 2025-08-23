@@ -19,7 +19,11 @@ public enum ErrorCode {
 
     /* MEMBER ERROR */
     MEMBER_NOT_FOUND(404, "MEMBER001", "Member Not Found"),
-    DUPLICATED_MEMBER(400, "MEMBER002", "Duplicated Member");
+    DUPLICATED_MEMBER(400, "MEMBER002", "Duplicated Member"),
+
+    /* TOSS PAYMENTS ERROR */
+    TOSS_CLIENT_ERROR(400, "TOSS001", "Invalid Payment Request"),
+    TOSS_SERVER_ERROR(500, "TOSS002", "Toss Server Error");
 
 
     private final int status;
