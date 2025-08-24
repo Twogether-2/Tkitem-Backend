@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="tkitem.backend.domain.scheduleType.mapper.TourDetailScheduleMapper">
+
+<!--  TODO : schedule_date 가 1일차, 2일차 데이터라 date 변환이 안됨, 도시/나라정보는 city 테이블에서 매핑해야함.  -->
+    <select id="selectBatchForIndexing" resultType="tkitem.backend.domain.scheduleType.dto.TourDetailScheduleRowDto">
+        SELECT
+            TO_CHAR(tds.tour_detail_schedule_id) as tourDetailScheduleId,
+            TO_ChAR(tds.tour_id) as tourId,
+            schedule_date AS scheduleDate,
+            tds.country_name as countryName,
+            tds.city_name as cityName,
+            tds.Title as title,
+            tds.Description as description
+        FROM TOUR_DETAIL_SCHEDULE tds
+        ORDER BY tds.tour_detail_schedule_id
+        OFFSET #{offset} ROWS FETCH NEXT #{limit} ROWS ONLY
+    </select>
+</mapper>

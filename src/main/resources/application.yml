@@ -46,6 +46,9 @@ jwt:
 kakao:
   api-key: ${KAKAO_API_KEY}
 
+elasticsearch:
+  host: ${ELASTICSEARCH_HOST}
+
 #cloud:
 #  aws:
 #    s3:
