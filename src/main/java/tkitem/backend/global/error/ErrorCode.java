@@ -1,6 +1,7 @@
 package tkitem.backend.global.error;
 
 import lombok.Getter;
+import org.springframework.http.HttpStatus;
 
 @Getter
 public enum ErrorCode {
@@ -20,7 +21,11 @@ public enum ErrorCode {
     /* MEMBER ERROR */
     MEMBER_NOT_FOUND(404, "MEMBER001", "Member Not Found"),
     DUPLICATED_MEMBER(400, "MEMBER002", "Duplicated Member"),
-    INVALID_MEMBER_INFO(500, "MEMBER003", "Invalid Member Info");
+    INVALID_MEMBER_INFO(500, "MEMBER003", "Invalid Member Info"),
+
+    /* CART ERROR */
+    CART_INVALID_QUANTITY(400, "CART001", "Item Quantity Must Be At Least 1"),
+    CART_CONCURRENCY_CONFLICT(409, "CART002", "Concurrency Conflict");
 
 
     private final int status;

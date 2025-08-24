@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="tkitem.backend.domain.cart.mapper.CartItemMapper">
+
+    <update id="upsertPendingItem">
+        MERGE /*+ NO_PARALLEL */ INTO CART_ITEM ci
+        USING (
+            SELECT
+                #{cartId}    AS cart_id,
+                #{productId} AS product_id,
+                #{tripId, jdbcType=NUMERIC} AS trip_id
+            FROM dual
+        ) src
+        ON (
+                ci.cart_id = src.cart_id
+            AND ci.product_id = src.product_id
+            AND NVL(ci.trip_id, -1) = NVL(src.trip_id, -1)
+            AND ci.status = 'PENDING'
+        )
+        WHEN MATCHED THEN
+            UPDATE SET
+                ci.quantity   = ci.quantity + #{quantity},
+                ci.updated_at = SYSTIMESTAMP,
+                ci.updated_by = #{actorId}
+        WHEN NOT MATCHED THEN
+            INSERT (cart_item_id, cart_id, product_id, trip_id, quantity, status, created_by)
+            VALUES (cart_item_seq.NEXTVAL, #{cartId}, #{productId}, #{tripId, jdbcType=NUMERIC},
+                    #{quantity}, 'PENDING', #{actorId})
+    </update>
+
+    <select id="selectPendingItem" resultType="tkitem.backend.domain.cart.dto.CartItemRowDto">
+        SELECT cart_item_id AS cartItemId,
+               product_id   AS productId,
+               quantity
+        FROM CART_ITEM
+        WHERE cart_id    = #{cartId}
+          AND product_id = #{productId}
+          AND NVL(trip_id, -1) = NVL(#{tripId, jdbcType=NUMERIC}, -1)
+          AND status = 'PENDING'
+    </select>
+
+</mapper>
