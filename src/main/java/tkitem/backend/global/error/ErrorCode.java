@@ -27,7 +27,14 @@ public enum ErrorCode {
     CART_INVALID_QUANTITY(400, "CART001", "Invalid Cart Item Quantity"),
     CART_CONCURRENCY_CONFLICT(409, "CART002", "Concurrency Conflict"),
     CART_NOT_FOUND(404, "CART003", "Cart Not Found"),
-    CART_ITEM_NOT_FOUND(404, "CART004", "Cart Item Not Found");
+    CART_ITEM_NOT_FOUND(404, "CART004", "Cart Item Not Found"),
+
+    /* TRIP / CHECKLIST */
+    TRIP_NOT_FOUND(404, "TRIP001", "Trip Not Found"),
+    TRIP_PACKAGE_REQUIRED(400, "TRIP002", "Trip Package Required"),
+    CHECKLIST_AI_FAILED(500, "CHECKLIST001", "Checklist AI Generation Failed"),
+    ;
+
 
     private final int status;
     private final String code;
