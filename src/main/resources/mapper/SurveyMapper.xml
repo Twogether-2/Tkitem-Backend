@@ -17,6 +17,7 @@
 
     <select id="selectSurveyQuestionBySurveyId" resultType="tkitem.backend.domain.survey.vo.SurveyQuestion">
         SELECT
+            SQ.SURVEY_QUESTION_ID as surveyQuestionId,
             SQ.TEXT,
             SQ.B_WEIGHT AS bWeight,
             SQ.M_WEIGHT AS mWeight,
@@ -26,11 +27,12 @@
             SQ.LOOK_WEIGHT AS lookWeight,
             SI.URL AS imageUrl
         FROM SURVEY_QUESTION SQ
-        LEFT JOIN SURVEY_IMAGE SI ON SQ.SURVEY_QUESTION_ID = SI.SURVEY_QUESTION_ID
+        LEFT OUTER JOIN SURVEY_IMAGE SI
+            ON SQ.SURVEY_QUESTION_ID = SI.SURVEY_QUESTION_ID
+           AND SI.AGE = #{age}
+           AND SI.GENDER = #{gender}
         WHERE
             SQ.SURVEY_ID = #{surveyId}
-            AND SI.AGE = #{age}
-            AND SI.GENDER = #{gender}
         ORDER BY DBMS_RANDOM.VALUE
     </select>
 

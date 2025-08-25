@@ -6,6 +6,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class SurveyQuestion {
+	private Long surveyQuestionId;
 	private String text;
 	private int bWeight;
 	private int mWeight;
