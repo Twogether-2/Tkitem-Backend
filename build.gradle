@@ -22,13 +22,13 @@ configurations {
 repositories {
     mavenCentral()
     google()
-    maven {url 'https://maven.google.com'}
-    maven { url "https://repo.spring.io/milestone" }
+    maven { url = uri("https://repo.spring.io/milestone") }
+    maven { url = uri("https://jitpack.io") }
 }
 
 dependencyManagement {
     imports {
-        mavenBom "org.springframework.ai:spring-ai-bom:1.0.1" // [추가]
+        mavenBom "org.springframework.ai:spring-ai-bom:1.0.1"
     }
 }
 
@@ -57,6 +57,7 @@ dependencies {
 
     // ES Java API Client
     implementation 'co.elastic.clients:elasticsearch-java:8.14.0'
+    implementation "org.elasticsearch.client:elasticsearch-rest-client:8.14.0"
     implementation 'org.apache.httpcomponents.client5:httpclient5:5.2.1'
     implementation 'jakarta.json:jakarta.json-api:2.1.2'
     implementation 'org.glassfish:jakarta.json:2.0.1'
