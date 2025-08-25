@@ -61,4 +61,40 @@
         ORDER BY NVL(ci.trip_id, -1), ci.cart_item_id
     </select>
 
+    <update id="updateCartItemQuantity">
+        UPDATE CART_ITEM ci
+        SET ci.quantity   = #{quantity},
+            ci.updated_at = SYSTIMESTAMP,
+            ci.updated_by = #{updatedBy}
+        WHERE ci.cart_item_id = #{cartItemId}
+          AND ci.status = 'PENDING'
+          AND ci.cart_id = (
+            SELECT c.cart_id FROM CART c
+            WHERE c.member_id = #{memberId}
+        )
+    </update>
+
+    <update id="deleteCartItem">
+        UPDATE CART_ITEM ci
+        SET ci.status     = 'REMOVED',
+            ci.updated_at = SYSTIMESTAMP,
+            ci.updated_by = #{updatedBy}
+        WHERE ci.cart_item_id = #{cartItemId}
+          AND ci.status = 'PENDING'
+          AND ci.cart_id = (
+            SELECT c.cart_id FROM CART c
+            WHERE c.member_id = #{memberId}
+        )
+    </update>
+
+    <select id="findCartItemSnapshot" resultType="tkitem.backend.domain.cart.dto.response.CartItemUpdateResponse">
+        SELECT
+            ci.cart_item_id  AS cartItemId,
+            ci.product_id    AS productId,
+            ci.status        AS status,
+            CASE WHEN ci.status = 'REMOVED' THEN 0 ELSE ci.quantity END AS quantity
+        FROM CART_ITEM ci
+        WHERE ci.cart_item_id = #{cartItemId}
+          AND ci.cart_id = (SELECT c.cart_id FROM CART c WHERE c.member_id = #{memberId})
+    </select>
 </mapper>

@@ -4,13 +4,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.cart.dto.*;
+import tkitem.backend.domain.cart.dto.request.CartItemQuantityUpdateRequest;
 import tkitem.backend.domain.cart.dto.request.CartItemsCreateRequest;
+import tkitem.backend.domain.cart.dto.response.CartItemUpdateResponse;
 import tkitem.backend.domain.cart.dto.response.CartItemsCreateResponse;
 import tkitem.backend.domain.cart.dto.response.CartListResponse;
 import tkitem.backend.domain.cart.mapper.CartItemMapper;
 import tkitem.backend.domain.cart.mapper.CartMapper;
 import tkitem.backend.global.error.ErrorCode;
 import tkitem.backend.global.error.exception.BusinessException;
+import tkitem.backend.global.error.exception.EntityNotFoundException;
 import tkitem.backend.global.error.exception.InvalidValueException;
 
 import java.util.*;
@@ -58,11 +61,8 @@ public class CartServiceImpl implements CartService {
             Integer quantity = e.getValue();
 
             cartItemMapper.upsertPendingCartItem(cartId, productId, request.getTripId(), quantity, memberId);
-
-            CartItemRowDto row = cartItemMapper.findPendingItem(cartId, productId, request.getTripId());
-            if (row == null) {
-                throw new BusinessException("Row Not Found After MERGE", ErrorCode.CART_CONCURRENCY_CONFLICT);
-            }
+            CartItemRowDto row = cartItemMapper.findPendingItem(cartId, productId, request.getTripId())
+                    .orElseThrow(() -> new BusinessException("Row Not Found After MERGE", ErrorCode.CART_CONCURRENCY_CONFLICT));
 
             result.add(new CartItemsCreateResponse(row.getCartItemId(), productId, quantity, row.getQuantity()));
         }
@@ -119,6 +119,30 @@ public class CartServiceImpl implements CartService {
                 .forEach(e -> sections.add(buildSection(e.getKey(), defaultTitle(e.getKey()), e.getValue())));
 
         return new CartListResponse(sections);
+    }
+
+    @Override
+    public CartItemUpdateResponse changeQuantity(Long memberId, Long cartItemId, CartItemQuantityUpdateRequest request) {
+        Integer quantity = request.getQuantity();
+        if (quantity == null || quantity < 0) {
+            throw new InvalidValueException(ErrorCode.CART_INVALID_QUANTITY.getMessage(), ErrorCode.CART_INVALID_QUANTITY);
+        }
+
+        int affected;
+        if (quantity == 0) { // 0 -> 소프트 삭제
+            affected = cartItemMapper.deleteCartItem(memberId, cartItemId, memberId);
+        } else { // 절댓값으로 변경
+            affected = cartItemMapper.updateCartItemQuantity(memberId, cartItemId, quantity, memberId);
+        }
+        if (affected == 0) {
+            throw new EntityNotFoundException(cartItemId + " is Not Found", ErrorCode.CART_ITEM_NOT_FOUND);
+        }
+
+        // 결과 스냅샷 반환
+        CartItemUpdateResponse response = cartItemMapper.findCartItemSnapshot(memberId, cartItemId)
+                .orElseThrow(() -> new EntityNotFoundException(cartItemId + " is Not Found", ErrorCode.CART_ITEM_NOT_FOUND));
+
+        return response;
     }
 
     private CartItemDto toItem(CartItemRowWithTripDto r) {

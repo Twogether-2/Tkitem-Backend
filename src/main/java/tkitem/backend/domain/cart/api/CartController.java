@@ -1,11 +1,13 @@
 package tkitem.backend.domain.cart.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import tkitem.backend.domain.cart.dto.request.CartItemQuantityUpdateRequest;
 import tkitem.backend.domain.cart.dto.request.CartItemsCreateRequest;
 import tkitem.backend.domain.cart.dto.response.CartItemsCreateResponse;
 import tkitem.backend.domain.cart.dto.response.CartListResponse;
@@ -23,8 +25,9 @@ public class CartController {
 
     @PostMapping("/items")
     @Operation(summary = "장바구니 상품 추가", description = "사용자의 장바구니에 상품을 추가합니다. (동일 상품 + 동일 여행 섹션이 PENDING 상태로 이미 있으면 수량만 증가합니다)")
-    public ResponseEntity<?> addItems(@AuthenticationPrincipal Member member,
-                                      @RequestBody @Validated CartItemsCreateRequest request) {
+    public ResponseEntity<?> addItems(
+            @AuthenticationPrincipal Member member,
+            @RequestBody @Validated CartItemsCreateRequest request) {
         List<CartItemsCreateResponse> response = cartService.addItems(member.getMemberId(), request);
         return ResponseEntity.ok(response);
     }
@@ -42,4 +45,14 @@ public class CartController {
         }
         return ResponseEntity.ok(cartService.getCart(member.getMemberId(), hasTripParam, tripIdOrNull));
     }
+
+    @Operation(summary = "장바구니 아이템 수량 변경", description = "장바구니 아이템의 수량을 변경합니다.")
+    @PatchMapping("/items/{cartItemId}/quantity")
+    public ResponseEntity<?> updateQuantity(
+            @AuthenticationPrincipal Member member,
+            @PathVariable Long cartItemId,
+            @RequestBody @Valid CartItemQuantityUpdateRequest request) {
+        return ResponseEntity.ok(cartService.changeQuantity(member.getMemberId(), cartItemId, request));
+    }
+
 }

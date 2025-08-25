@@ -24,9 +24,10 @@ public enum ErrorCode {
     INVALID_MEMBER_INFO(500, "MEMBER003", "Invalid Member Info"),
 
     /* CART ERROR */
-    CART_INVALID_QUANTITY(400, "CART001", "Item Quantity Must Be At Least 1"),
-    CART_CONCURRENCY_CONFLICT(409, "CART002", "Concurrency Conflict");
-
+    CART_INVALID_QUANTITY(400, "CART001", "Invalid Cart Item Quantity"),
+    CART_CONCURRENCY_CONFLICT(409, "CART002", "Concurrency Conflict"),
+    CART_NOT_FOUND(404, "CART003", "Cart Not Found"),
+    CART_ITEM_NOT_FOUND(404, "CART004", "Cart Item Not Found");
 
     private final int status;
     private final String code;
