@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="tkitem.backend.domain.cart.mapper.CartMapper">
+
+    <select id="findCartIdByMemberId" resultType="long">
+        SELECT cart_id
+        FROM CART
+        WHERE member_id = #{memberId}
+    </select>
+
+    <insert id="insertCart" parameterType="tkitem.backend.domain.cart.dto.CartInsertDto">
+        <selectKey keyProperty="cartId" resultType="long" order="BEFORE">
+            SELECT CART_SEQ.NEXTVAL FROM dual
+        </selectKey>
+        INSERT INTO CART (cart_id, member_id, created_by)
+        VALUES (#{cartId}, #{memberId}, #{createdBy})
+    </insert>
+
+</mapper>

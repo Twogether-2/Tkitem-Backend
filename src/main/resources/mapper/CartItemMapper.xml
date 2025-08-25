@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="tkitem.backend.domain.cart.mapper.CartItemMapper">
+
+    <update id="upsertPendingCartItem">
+        MERGE /*+ NO_PARALLEL */ INTO CART_ITEM ci
+        USING (
+            SELECT
+                #{cartId}    AS cart_id,
+                #{productId} AS product_id,
+                #{tripId, jdbcType=NUMERIC} AS trip_id
+            FROM dual
+        ) src
+        ON (
+                ci.cart_id = src.cart_id
+            AND ci.product_id = src.product_id
+            AND NVL(ci.trip_id, -1) = NVL(src.trip_id, -1)
+            AND ci.status = 'PENDING'
+        )
+        WHEN MATCHED THEN
+            UPDATE SET
+                ci.quantity   = ci.quantity + #{quantity},
+                ci.updated_at = SYSTIMESTAMP,
+                ci.updated_by = #{actorId}
+        WHEN NOT MATCHED THEN
+            INSERT (cart_item_id, cart_id, product_id, trip_id, quantity, status, created_by)
+            VALUES (cart_item_seq.NEXTVAL, #{cartId}, #{productId}, #{tripId, jdbcType=NUMERIC},
+                    #{quantity}, 'PENDING', #{actorId})
+    </update>
+
+    <select id="findPendingItem" resultType="tkitem.backend.domain.cart.dto.CartItemRowDto">
+        SELECT cart_item_id AS cartItemId,
+               product_id   AS productId,
+               quantity
+        FROM CART_ITEM
+        WHERE cart_id    = #{cartId}
+          AND product_id = #{productId}
+          AND NVL(trip_id, -1) = NVL(#{tripId, jdbcType=NUMERIC}, -1)
+          AND status = 'PENDING'
+    </select>
+
+    <select id="findPendingItemsWithProduct"
+            resultType="tkitem.backend.domain.cart.dto.CartItemRowWithTripDto">
+        SELECT
+        ci.trip_id        AS tripId,
+        ci.cart_item_id   AS cartItemId,
+        ci.product_id     AS productId,
+        p.name            AS productName,
+        p.img_url         AS imgUrl,
+        p.price           AS price,
+        ci.quantity       AS quantity
+        FROM CART_ITEM ci
+        JOIN PRODUCT p ON p.product_id = ci.product_id
+        WHERE ci.cart_id = #{cartId}
+        AND ci.status  = 'PENDING'
+        <if test="filterByTrip">
+            AND NVL(ci.trip_id, -1) = NVL(#{tripId, jdbcType=NUMERIC}, -1)
+        </if>
+        ORDER BY NVL(ci.trip_id, -1), ci.cart_item_id
+    </select>
+
+    <update id="updateCartItemQuantity">
+        UPDATE CART_ITEM ci
+        SET ci.quantity   = #{quantity},
+            ci.updated_at = SYSTIMESTAMP,
+            ci.updated_by = #{updatedBy}
+        WHERE ci.cart_item_id = #{cartItemId}
+          AND ci.status = 'PENDING'
+          AND ci.cart_id = (
+            SELECT c.cart_id FROM CART c
+            WHERE c.member_id = #{memberId}
+        )
+    </update>
+
+    <update id="deleteCartItem">
+        UPDATE CART_ITEM ci
+        SET ci.status     = 'REMOVED',
+            ci.updated_at = SYSTIMESTAMP,
+            ci.updated_by = #{updatedBy}
+        WHERE ci.cart_item_id = #{cartItemId}
+          AND ci.status = 'PENDING'
+          AND ci.cart_id = (
+            SELECT c.cart_id FROM CART c
+            WHERE c.member_id = #{memberId}
+        )
+    </update>
+
+    <select id="findCartItemSnapshot" resultType="tkitem.backend.domain.cart.dto.response.CartItemUpdateResponse">
+        SELECT
+            ci.cart_item_id  AS cartItemId,
+            ci.product_id    AS productId,
+            ci.status        AS status,
+            CASE WHEN ci.status = 'REMOVED' THEN 0 ELSE ci.quantity END AS quantity
+        FROM CART_ITEM ci
+        WHERE ci.cart_item_id = #{cartItemId}
+          AND ci.cart_id = (SELECT c.cart_id FROM CART c WHERE c.member_id = #{memberId})
+    </select>
+</mapper>
