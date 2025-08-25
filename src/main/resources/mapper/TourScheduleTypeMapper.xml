@@ -11,17 +11,17 @@
     <update id="upsertTourScheduleType">
         MERGE INTO TOUR_SCHEDULE_TYPE t
         USING (SELECT
-        #{tdsId} AS tour_detail_schedule_id,
-        #{typeId} AS schedule_type_id,
-        #{score}  AS score
-        FROM dual) s
+                #{tdsId} AS tour_detail_schedule_id,
+                #{typeId} AS schedule_type_id,
+                #{score}  AS score
+            FROM dual) s
         ON (t.tour_detail_schedule_id = s.tour_detail_schedule_id
-        AND t.schedule_type_id    = s.schedule_type_id)
+        AND t.schedule_type_id = s.schedule_type_id)
         WHEN MATCHED THEN
-        UPDATE SET t.score = s.score, t.updated_at = SYSTIMESTAMP
+            UPDATE SET t.score = s.score, t.updated_at = SYSTIMESTAMP
         WHEN NOT MATCHED THEN
-        INSERT (tour_schedule_type_id, tour_detail_schedule_id, schedule_type_id, score, created_at)
-        VALUES (TOUR_SCHEDULE_TYPE_SEQ.NEXTVAL, s.tour_detail_schedule_id, s.schedule_type_id, s.score, SYSTIMESTAMP)
+            INSERT (tour_detail_schedule_id, schedule_type_id, score, created_at, updated_at)
+        VALUES (s.tour_detail_schedule_id, s.schedule_type_id, s.score, SYSTIMESTAMP, SYSTIMESTAMP)
     </update>
 
 </mapper>

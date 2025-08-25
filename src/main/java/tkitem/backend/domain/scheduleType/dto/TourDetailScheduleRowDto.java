@@ -10,9 +10,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class TourDetailScheduleRowDto {
-    private String tourDetailScheduleId;
-    private String tourId;
-    private String scheduleDate;
+    private Long tourDetailScheduleId;
+    private Long tourId;
+    private Integer scheduleDate;
     private String countryName;
     private String cityName;
     private String title;

@@ -16,5 +16,4 @@ public interface TourDetailScheduleMapper {
      * @return
      */
     List<TourDetailScheduleRowDto> selectBatchForIndexing(@Param("offset") int offset, @Param("limit") int limit);
-    int markIndexed(@Param("ids") List<String> ids); // 처리 플래그
 }
