@@ -4,7 +4,7 @@
 
 <mapper namespace="tkitem.backend.domain.cart.mapper.CartItemMapper">
 
-    <update id="upsertPendingItem">
+    <update id="upsertPendingCartItem">
         MERGE /*+ NO_PARALLEL */ INTO CART_ITEM ci
         USING (
             SELECT
@@ -30,7 +30,7 @@
                     #{quantity}, 'PENDING', #{actorId})
     </update>
 
-    <select id="selectPendingItem" resultType="tkitem.backend.domain.cart.dto.CartItemRowDto">
+    <select id="findPendingItem" resultType="tkitem.backend.domain.cart.dto.CartItemRowDto">
         SELECT cart_item_id AS cartItemId,
                product_id   AS productId,
                quantity
@@ -39,6 +39,26 @@
           AND product_id = #{productId}
           AND NVL(trip_id, -1) = NVL(#{tripId, jdbcType=NUMERIC}, -1)
           AND status = 'PENDING'
+    </select>
+
+    <select id="findPendingItemsWithProduct"
+            resultType="tkitem.backend.domain.cart.dto.CartItemRowWithTripDto">
+        SELECT
+        ci.trip_id        AS tripId,
+        ci.cart_item_id   AS cartItemId,
+        ci.product_id     AS productId,
+        p.name            AS productName,
+        p.img_url         AS imgUrl,
+        p.price           AS price,
+        ci.quantity       AS quantity
+        FROM CART_ITEM ci
+        JOIN PRODUCT p ON p.product_id = ci.product_id
+        WHERE ci.cart_id = #{cartId}
+        AND ci.status  = 'PENDING'
+        <if test="filterByTrip">
+            AND NVL(ci.trip_id, -1) = NVL(#{tripId, jdbcType=NUMERIC}, -1)
+        </if>
+        ORDER BY NVL(ci.trip_id, -1), ci.cart_item_id
     </select>
 
 </mapper>
