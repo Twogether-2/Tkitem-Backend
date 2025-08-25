@@ -13,4 +13,5 @@ public interface CartService {
     List<CartItemsCreateResponse> addItems(Long memberId, CartItemsCreateRequest req);
     CartListResponse getCart(Long memberId, boolean hasTripParam, Long tripIdOrNull);
     CartItemUpdateResponse changeQuantity(Long memberId, Long cartItemId, CartItemQuantityUpdateRequest request);
+    CartItemUpdateResponse deleteCartItem(Long memberId, Long cartItemId);
 }

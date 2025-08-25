@@ -9,6 +9,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import tkitem.backend.domain.cart.dto.request.CartItemQuantityUpdateRequest;
 import tkitem.backend.domain.cart.dto.request.CartItemsCreateRequest;
+import tkitem.backend.domain.cart.dto.response.CartItemUpdateResponse;
 import tkitem.backend.domain.cart.dto.response.CartItemsCreateResponse;
 import tkitem.backend.domain.cart.dto.response.CartListResponse;
 import tkitem.backend.domain.cart.service.CartService;
@@ -48,11 +49,19 @@ public class CartController {
 
     @Operation(summary = "장바구니 아이템 수량 변경", description = "장바구니 아이템의 수량을 변경합니다.")
     @PatchMapping("/items/{cartItemId}/quantity")
-    public ResponseEntity<?> updateQuantity(
+    public ResponseEntity<CartItemUpdateResponse> updateQuantity(
             @AuthenticationPrincipal Member member,
             @PathVariable Long cartItemId,
             @RequestBody @Valid CartItemQuantityUpdateRequest request) {
         return ResponseEntity.ok(cartService.changeQuantity(member.getMemberId(), cartItemId, request));
+    }
+
+    @Operation(summary = "장바구니 아이템 삭제", description = "해당 장바구니 아이템의 상태를 REMOVED로 전환합니다.")
+    @DeleteMapping("/items/{cartItemId}")
+    public ResponseEntity<CartItemUpdateResponse> deleteCartItem(
+            @AuthenticationPrincipal Member member,
+            @PathVariable Long cartItemId) {
+        return ResponseEntity.ok(cartService.deleteCartItem(member.getMemberId(), cartItemId));
     }
 
 }

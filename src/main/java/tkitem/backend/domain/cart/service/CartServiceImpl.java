@@ -145,6 +145,19 @@ public class CartServiceImpl implements CartService {
         return response;
     }
 
+    @Override
+    public CartItemUpdateResponse deleteCartItem(Long memberId, Long cartItemId) {
+        int affected = cartItemMapper.deleteCartItem(memberId, cartItemId, memberId);
+        if (affected == 0) {
+            throw new EntityNotFoundException(cartItemId + " is Not Found", ErrorCode.CART_ITEM_NOT_FOUND);
+        }
+
+        CartItemUpdateResponse response = cartItemMapper.findCartItemSnapshot(memberId, cartItemId)
+                .orElseThrow(() -> new EntityNotFoundException(cartItemId + " is Not Found", ErrorCode.CART_ITEM_NOT_FOUND));
+
+        return response;
+    }
+
     private CartItemDto toItem(CartItemRowWithTripDto r) {
         CartItemDto d = new CartItemDto(r.getCartItemId(), r.getProductId(),
                 r.getProductName(), r.getImgUrl(), r.getPrice(), r.getQuantity());

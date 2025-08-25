@@ -40,5 +40,5 @@ public interface CartItemMapper {
                        @Param("updatedBy") Long updatedBy);
 
     Optional<CartItemUpdateResponse> findCartItemSnapshot(@Param("memberId") Long memberId,
-                                                  @Param("cartItemId") Long cartItemId);
+                                                          @Param("cartItemId") Long cartItemId);
 }
