@@ -64,6 +64,9 @@ redis:
   host: ${REDIS_HOST}
   port: ${REDIS_PORT}
 
+toss:
+  secret-key: ${TOSS_SECRET_KEY}
+
 #management:
 #  endpoints:
 #    web:

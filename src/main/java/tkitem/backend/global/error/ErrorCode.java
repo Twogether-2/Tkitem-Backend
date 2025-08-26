@@ -23,6 +23,17 @@ public enum ErrorCode {
     DUPLICATED_MEMBER(400, "MEMBER002", "Duplicated Member"),
     INVALID_MEMBER_INFO(500, "MEMBER003", "Invalid Member Info"),
 
+    /* ORDER ERROR */
+    ORDER_NOT_FOUND(404, "ORDER001", "Order Not Found"),
+
+    /* PAYMENT ERROR */
+    PAYMENT_AMOUNT_MISMATCH(400, "PAYMENT001", "Payment Amount Mismatch"),
+    PAYMENT_NOT_FOUND(404, "PAYMENT002", "Payment Not Found"),
+
+    /* TOSS PAYMENTS ERROR */
+    TOSS_CLIENT_ERROR(400, "TOSS001", "Invalid Payment Request"),
+    TOSS_SERVER_ERROR(500, "TOSS002", "Toss Server Error"),
+
     /* CART ERROR */
     CART_INVALID_QUANTITY(400, "CART001", "Invalid Cart Item Quantity"),
     CART_CONCURRENCY_CONFLICT(409, "CART002", "Concurrency Conflict"),
@@ -32,9 +43,7 @@ public enum ErrorCode {
     /* TRIP / CHECKLIST */
     TRIP_NOT_FOUND(404, "TRIP001", "Trip Not Found"),
     TRIP_PACKAGE_REQUIRED(400, "TRIP002", "Trip Package Required"),
-    CHECKLIST_AI_FAILED(500, "CHECKLIST001", "Checklist AI Generation Failed"),
-    ;
-
+    CHECKLIST_AI_FAILED(500, "CHECKLIST001", "Checklist AI Generation Failed");
 
     private final int status;
     private final String code;
