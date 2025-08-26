@@ -16,11 +16,10 @@ import java.time.Duration;
 public class OpenAiHttpConfig {
 
     @Bean
-    RestClientCustomizer openAiClientNoProxy() { // [추가]
+    RestClientCustomizer openAiClientNoProxy() {
         return builder -> {
             var cm = PoolingHttpClientConnectionManagerBuilder.create().build();
 
-            // [추가] 타임아웃은 RequestConfig에 설정
             var rc = RequestConfig.custom()
                     .setConnectTimeout(Timeout.ofSeconds(5))            // TCP 연결
                     .setConnectionRequestTimeout(Timeout.ofSeconds(5))  // 커넥션풀에서 가져오기
@@ -29,16 +28,16 @@ public class OpenAiHttpConfig {
 
             var http = HttpClients.custom()
                     .setConnectionManager(cm)
-                    .setDefaultRequestConfig(rc)            // [추가]
-                    .disableAutomaticRetries()              // [추가] 재시도 끔(원인 파악 쉬움)
+                    .setDefaultRequestConfig(rc)
+                    .disableAutomaticRetries()
                     .evictExpiredConnections()
                     .evictIdleConnections(TimeValue.ofSeconds(30))
                     .build();
 
-            // [변경] 팩토리 생성자에 httpClient 주입
+            // 팩토리 생성자에 httpClient 주입
             var f = new HttpComponentsClientHttpRequestFactory(http);
-            f.setConnectTimeout(Duration.ofSeconds(5));            // (선택) 중복 설정 가능
-            f.setConnectionRequestTimeout(Duration.ofSeconds(5));  // (선택)
+            f.setConnectTimeout(Duration.ofSeconds(5));
+            f.setConnectionRequestTimeout(Duration.ofSeconds(5));
 
             builder.requestFactory(f);
         };

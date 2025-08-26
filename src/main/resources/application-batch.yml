@@ -1,5 +1,0 @@
-gemini:
-  api-key: ${GEMINI_API_KEY}
-  embedding-model: gemini-embedding-001   # 임베딩 모델명
-  timeout-ms: 60000  # 타임아웃
-  max-qps: 20  # 초당 요청 제한(대량 처리 시 안정성)
