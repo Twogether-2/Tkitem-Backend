@@ -14,12 +14,12 @@ public class RuleClassifier {
             Map.entry("GUIDE", keyword("가이드", "guide")),
             Map.entry("HOTEL", keyword("호텔", "체크인", "체크아웃", "check-in", "check-out")),
             Map.entry("HOTEL_STAY", keyword("투숙", "숙박", "stay")),
-            Map.entry("SIGHTSEEING", keyword("관광", "시내관광")), // 얘 애매함
-            Map.entry("LANDMARK", keyword("랜드마크", "타워", "성당")),
+            Map.entry("SIGHTSEEING", keyword("관광", "시내관광", "전통", "거리")), // 얘 애매함
+            Map.entry("LANDMARK", keyword("랜드마크", "타워", "성당", "유네스코")),
             Map.entry("MUSEUM_HERITAGE", keyword("박물관", "유적", "사원", "성당", "미술관", "극장")),
             Map.entry("PARK_NATURE", keyword("공원", "자연", "정원", "산책", "숲", "산", "초원", "산림")),
             Map.entry("ACTIVITY", keyword("체험", "짚라인", "번지", "다이빙", "스노클", "스노클링", "수영", "스키", "보드")),
-            Map.entry("HIKING_TREKKING", keyword("트레킹", "트래킹", "등산", "등반", "산")),
+            Map.entry("HIKING_TREKKING", keyword("트레킹", "트래킹", "등산", "등반", "산", "마운틴")),
             Map.entry("SHOW", keyword("쇼", "공연", "극장", "오페라", "뮤지컬", "연극")),
             Map.entry("SPA_MASSAGE", keyword("스파", "마사지", "안마", "foot massage", "spa")),
             Map.entry("SHOPPING", keyword("쇼핑", "면세점", "마트", "백화점", "시장", "market", "shopping")),

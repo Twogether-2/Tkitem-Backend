@@ -38,7 +38,7 @@ public class TourTypePipelineService {
         int offset = 0;
         List<TourDetailScheduleRowDto> pending = new ArrayList<>();
         long lastProcessedId = -1; // 체크포인트(로그로만 남겨도 OK)
-        int forTest = 1000;
+        int forTest = 10;
         int countTest = 0;
 
         while (countTest < forTest) {
@@ -139,7 +139,7 @@ public class TourTypePipelineService {
         int opCount = 0; // 실제 update 개수 count
 
         for (var r : pending) {
-            Long tdsId = Long.valueOf(r.getTourDetailScheduleId());
+            Long tdsId = r.getTourDetailScheduleId();
             GenerativeLabelService.Result res = results.get(tdsId);
             if (res == null) continue;
 
@@ -154,11 +154,14 @@ public class TourTypePipelineService {
             br.operations(op -> op.update(u -> u
                     .index(ES_INDEX)
                     .id(String.valueOf(r.getTourDetailScheduleId()))
-                    .action(a -> a.doc(Map.of(
-                            "schedule_type", res.typeName(),
-                            "schedule_type_score", res.score()
-                    ))
-                            .docAsUpsert(false) // 신규 upsert 는 하지 않음
+                    .action(a -> {
+                        assert res.typeName() != null;
+                        return a.doc(Map.of(
+                                "schedule_type", res.typeName(),
+                                "schedule_type_score", res.score()
+                        ))
+                                .docAsUpsert(false);
+                    } // 신규 upsert 는 하지 않음
                 )
             ));
             opCount++;
