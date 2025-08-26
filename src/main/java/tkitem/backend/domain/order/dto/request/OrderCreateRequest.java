@@ -21,5 +21,6 @@ public class OrderCreateRequest {
 
         private Long productId;
         private Integer quantity;
+        private Long tripId;
     }
 }

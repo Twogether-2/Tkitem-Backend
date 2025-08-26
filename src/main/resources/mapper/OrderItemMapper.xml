@@ -5,7 +5,12 @@
 
 <mapper namespace="tkitem.backend.domain.order.mapper.OrderItemMapper">
   <insert id="insertOrderItem">
-    INSERT INTO ORDER_ITEM (ORDER_ITEM_ID, ORDER_ID, PRODUCT_ID, QUANTITY, STATUS, CREATED_AT)
-    VALUES (ORDER_ITEM_SEQ.NEXTVAL, #{orderId}, #{productId}, #{quantity}, #{status}, SYSTIMESTAMP)
+    INSERT INTO ORDER_ITEM (
+    ORDER_ITEM_ID, ORDER_ID, PRODUCT_ID, TRIP_ID, QUANTITY, UNIT_PRICE, CURRENCY,
+    PRODUCT_NAME_SNAPSHOT, PRODUCT_IMG_SNAPSHOT, STATUS, CREATED_AT
+    ) VALUES (
+    ORDER_ITEM_SEQ.NEXTVAL, #{orderId}, #{productId}, #{tripId, jdbcType=NUMERIC}, #{quantity}, #{unitPrice}, #{currency},
+    #{productNameSnapshot}, #{productImgSnapshot}, #{status}, SYSTIMESTAMP
+    )
   </insert>
 </mapper>

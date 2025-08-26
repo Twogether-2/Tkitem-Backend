@@ -5,72 +5,72 @@
 
 <mapper namespace="tkitem.backend.domain.order.mapper.OrderMapper">
 
-    <!-- 주문 마스터 insert -->
     <insert id="insertOrder">
-        INSERT INTO ORDERS (ORDER_ID, MEMBER_ID, MERCHANT_ORDER_ID, STATUS, CREATED_AT)
-        VALUES (ORDERS_SEQ.NEXTVAL, #{memberId}, #{merchantOrderId}, #{status}, SYSTIMESTAMP)
+        INSERT INTO ORDERS (ORDER_ID, MEMBER_ID, STATUS, CREATED_AT)
+        VALUES (ORDERS_SEQ.NEXTVAL, #{memberId}, #{status}, SYSTIMESTAMP)
     </insert>
 
-    <!-- merchantOrderId로 PK 조회 -->
-    <select id="findOrderIdByMerchantOrderId" resultType="long">
-        SELECT ORDER_ID FROM ORDERS WHERE MERCHANT_ORDER_ID = #{merchantOrderId}
+    <select id="currOrderId" resultType="long">
+        SELECT ORDERS_SEQ.CURRVAL FROM DUAL
     </select>
 
-    <!-- 총 금액 합계 -->
+    <update id="updateOrderPaid">
+        UPDATE ORDERS
+        SET PAID_AMOUNT = #{paidAmount},
+        STATUS = #{status},
+        UPDATED_AT = SYSTIMESTAMP
+        WHERE ORDER_ID = #{orderId}
+    </update>
+
+    <update id="updateOrderStatus">
+        UPDATE ORDERS
+        SET STATUS = #{status}, UPDATED_AT = SYSTIMESTAMP
+        WHERE ORDER_ID = #{orderId}
+    </update>
+
+    <update id="updateOrderItemsStatus">
+        UPDATE ORDER_ITEM SET STATUS = #{status}, UPDATED_AT = SYSTIMESTAMP
+        WHERE ORDER_ID = #{orderId}
+    </update>
+
     <select id="sumOrderAmount" resultType="int">
-        SELECT NVL(SUM(p.PRICE * oi.QUANTITY), 0)
+        SELECT NVL(SUM(oi.UNIT_PRICE * oi.QUANTITY), 0)
         FROM ORDER_ITEM oi
-        JOIN PRODUCT p ON p.PRODUCT_ID = oi.PRODUCT_ID
         WHERE oi.ORDER_ID = #{orderId}
     </select>
 
-    <!-- 주문 아이템 목록 -->
+    <select id="findOrdersByMemberId" resultType="tkitem.backend.domain.order.dto.response.OrderSummaryResponse">
+        SELECT
+        o.ORDER_ID as orderId,
+        o.STATUS as status,
+        o.PAID_AMOUNT as paidAmount,
+        TO_CHAR(o.CREATED_AT, 'YYYY-MM-DD"T"HH24:MI:SS') as createdAt
+        FROM ORDERS o
+        WHERE o.MEMBER_ID = #{memberId}
+        ORDER BY o.ORDER_ID DESC
+    </select>
+
+    <select id="findOrderDetail" resultType="tkitem.backend.domain.order.dto.response.OrderDetailResponse">
+        SELECT
+        o.ORDER_ID as orderId,
+        o.STATUS as status,
+        o.PAID_AMOUNT as paidAmount,
+        TO_CHAR(o.CREATED_AT, 'YYYY-MM-DD"T"HH24:MI:SS') as createdAt
+        FROM ORDERS o
+        WHERE o.ORDER_ID = #{orderId}
+    </select>
+
     <select id="findOrderItems" resultType="tkitem.backend.domain.order.dto.OrderItemDetail">
         SELECT
         oi.ORDER_ITEM_ID as orderItemId,
         oi.PRODUCT_ID as productId,
-        p.NAME as productName,
-        p.PRICE as price,
+        oi.PRODUCT_NAME_SNAPSHOT as productName,
+        oi.UNIT_PRICE as price,
         oi.QUANTITY as quantity,
         oi.STATUS as status
         FROM ORDER_ITEM oi
-        JOIN PRODUCT p ON p.PRODUCT_ID = oi.PRODUCT_ID
-        WHERE oi.ORDER_ID = #{orderId}
+        WHERE oi.Order_ID = #{orderId}
         ORDER BY oi.ORDER_ITEM_ID
     </select>
-
-    <!-- 결제 완료 처리 -->
-    <update id="updateOrderPaid">
-        UPDATE ORDERS
-        SET PAID_AMOUNT = #{paidAmount},
-        PAYMENT_KEY = #{paymentKey},
-        STATUS = 'PAID',
-        UPDATED_AT = SYSTIMESTAMP
-        WHERE MERCHANT_ORDER_ID = #{merchantOrderId}
-    </update>
-
-    <!-- 주문 상태 변경 -->
-    <update id="updateOrderStatus">
-        UPDATE ORDERS
-        SET STATUS = #{status},
-        UPDATED_AT = SYSTIMESTAMP
-        WHERE ORDER_ID = #{orderId}
-    </update>
-
-    <!-- 주문 아이템 상태 변경 -->
-    <update id="updateOrderItemsStatus">
-        UPDATE ORDER_ITEM
-        SET STATUS = #{status},
-        UPDATED_AT = SYSTIMESTAMP
-        WHERE ORDER_ID = #{orderId}
-    </update>
-
-    <!-- 결제 키로 주문 ID 조회 -->
-    <select id="findOrderIdByPaymentKey" resultType="long">
-        SELECT ORDER_ID
-        FROM ORDERS
-        WHERE PAYMENT_KEY = #{paymentKey}
-    </select>
-
 
 </mapper>

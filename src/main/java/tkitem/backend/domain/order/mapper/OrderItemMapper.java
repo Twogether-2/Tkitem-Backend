@@ -7,6 +7,11 @@ import org.apache.ibatis.annotations.Param;
 public interface OrderItemMapper {
     void insertOrderItem(@Param("orderId") Long orderId,
                          @Param("productId") Long productId,
+                         @Param("tripId") Long tripId,
                          @Param("quantity") Integer quantity,
+                         @Param("unitPrice") Integer unitPrice,
+                         @Param("currency") String currency,
+                         @Param("productNameSnapshot") String productNameSnapshot,
+                         @Param("productImgSnapshot") String productImgSnapshot,
                          @Param("status") String status);
 }

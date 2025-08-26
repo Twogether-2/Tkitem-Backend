@@ -28,6 +28,7 @@ public enum ErrorCode {
 
     /* PAYMENT ERROR */
     PAYMENT_AMOUNT_MISMATCH(400, "PAYMENT001", "Payment Amount Mismatch"),
+    PAYMENT_NOT_FOUND(404, "PAYMENT002", "Payment Not Found"),
 
     /* TOSS PAYMENTS ERROR */
     TOSS_CLIENT_ERROR(400, "TOSS001", "Invalid Payment Request"),
