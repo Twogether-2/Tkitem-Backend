@@ -27,11 +27,10 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
-      - name: Inject env.properties
+      - name: Inject env file (tests only)
         run: |
-          cd ./src/main/resources
-          touch ./env.properties
-          echo "${{ secrets.ENV_VARS }}" > ./env.properties
+          mkdir -p ./src/test/resources
+          echo "${{ secrets.ENV_VARS }}" > ./src/test/resources/local.env
       - name: Gradlew chmod
         run: chmod +x ./gradlew
       - name: Run tests
@@ -55,11 +54,6 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
-      - name: Inject env.properties
-        run: |
-          cd ./src/main/resources
-          touch ./env.properties
-          echo "${{ secrets.ENV_VARS }}" > ./env.properties
       - name: Gradlew chmod
         run: chmod +x ./gradlew
       - name: BootJar
@@ -75,13 +69,15 @@ jobs:
         run: echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_ID }}" --password-stdin
       - name: Build & Push :latest
         run: |
-          docker build --pull -f Dockerfile -t "$IMAGE:latest" .
-          docker push "$IMAGE:latest"
+          docker build -f Dockerfile -t ${{ secrets.DOCKERHUB_ID }}/${{ secrets.DOCKERHUB_REPO }} .
+          docker push ${{ secrets.DOCKERHUB_ID }}/${{ secrets.DOCKERHUB_REPO }}
 
   deploy:
     name: Deploy to EC2
     needs: docker-push
     runs-on: ubuntu-latest
+    env:
+      ENV_VARS: ${{ secrets.ENV_VARS }}
     steps:
       - name: SSH deploy
         uses: appleboy/ssh-action@master
@@ -89,8 +85,13 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_PRIVATE_KEY }}
+          envs: ENV_VARS
           script: |
             cd /home/ubuntu
+            # GitHub secrets → EC2 환경변수 → 파일로 저장
+            echo "$ENV_VARS" > /home/ubuntu/local.env
+            chmod 600 /home/ubuntu/local.env
+
             sudo chmod +x deploy.sh
-            sudo docker pull $IMAGE:latest
+            sudo docker pull ${{ secrets.DOCKERHUB_ID }}/${{ secrets.DOCKERHUB_REPO }}
             ./deploy.sh
