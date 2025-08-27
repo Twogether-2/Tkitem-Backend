@@ -19,7 +19,10 @@
 
     <!--체크리스트 자동 세팅-->
     <update id="generateAiCheckList" statementType="CALLABLE">
-        { call P_CHECKLIST_AI_INSERT( #{tripId, mode=IN, jdbcType=NUMERIC} ) }
+        { call P_CHECKLIST_AI_REBUILD(
+                #{tripId, mode=IN, jdbcType=NUMERIC},
+                #{memberId, mode=IN, jdbcType=NUMERIC}
+        ) }
     </update>
 
     <!--활성 체크리스트 조회-->
