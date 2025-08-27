@@ -1,6 +1,7 @@
 package tkitem.backend.domain.scheduleType.service;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.KnnSearchResponse;
@@ -35,17 +36,50 @@ public class ScheduleEsService {
     }
 
     /**
-     * ES 의 _knn_search 로 임베딩 유사도 Top-K 문서 찾아 반환
+     * 인덱스 존재 확인 유틸 메서드
+     * @throws IOException
+     */
+    public void ensureIndexExistsOrThrow() throws IOException {
+        boolean exists = esClient.indices().exists(b -> b.index(INDEX)).value();
+        if (!exists) {
+            throw new IllegalStateException("Elasticsearch index not found: " + INDEX);
+        }
+    }
+
+    /**
+     * KNN + 필터 오버로드
      * @param queryVector
      * @param k
      * @param candidates
+     * @param countryName
+     * @param cityName
+     * @param tourId
      * @return
      * @throws Exception
      */
-    public KnnSearchResponse<Map> knn(float[] queryVector, int k, int candidates) throws Exception{
+    public KnnSearchResponse<Map> knnWithFilter(
+            float[] queryVector, int k, int candidates,
+            String countryName, String cityName, Long tourId
+    ) throws Exception {
 
         List<Float> qv = new ArrayList<>(queryVector.length);
         for (float v : queryVector) qv.add(v);
+
+        // 지역 필터 설정
+        List<Query> filters = new ArrayList<>();
+        if (countryName != null && !countryName.isBlank()) {
+            filters.add(Query.of(q -> q.term(t -> t.field("country_name").value(countryName))));
+        }
+        if (cityName != null && !cityName.isBlank()) {
+            filters.add(Query.of(q -> q.term(t -> t.field("city_name").value(cityName))));
+        }
+        if (tourId != null) {
+            filters.add(Query.of(q -> q.term(t -> t.field("tour_id").value(tourId))));
+        }
+
+        // 예산 필터 설정 필요
+
+        // 여행 일정 필터 설정 필요
 
         KnnSearchResponse<Map> resp = esClient.knnSearch(r -> r
                         .index(INDEX)
@@ -55,10 +89,12 @@ public class ScheduleEsService {
                                 .k(k)
                                 .numCandidates(candidates)
                         )
+                        .filter(filters) // [추가] 선택 필터 적용
                         .source(src -> src.filter(f -> f
-                                .includes("tour_detail_schedule_id","tour_id","title","city_name","schedule_date")))
+                                .includes("tour_detail_schedule_id","tour_id","title","city_name","country_name","schedule_date")))
                 , Map.class);
 
         return resp;
     }
+
 }

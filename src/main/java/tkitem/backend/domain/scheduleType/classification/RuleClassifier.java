@@ -10,7 +10,7 @@ public class RuleClassifier {
 
     private final Map<String, List<Pattern>> dict = Map.ofEntries(
             Map.entry("FLIGHT", keyword("항공","비행기","탑승","항공사","공항","flight","airline")),
-            Map.entry("TRANSFER", keyword("이동", "버스", "차량", "기차", "오토바이", "배", "보트", "유람선", "transfer", "shuttle")),
+            Map.entry("TRANSFER", keyword("이동", "버스", "차량", "기차", "오토바이", "보트", "유람선", "툭툭", "transfer", "shuttle")),
             Map.entry("GUIDE", keyword("가이드", "guide")),
             Map.entry("HOTEL", keyword("호텔", "체크인", "체크아웃", "check-in", "check-out")),
             Map.entry("HOTEL_STAY", keyword("투숙", "숙박", "stay")),
@@ -31,7 +31,6 @@ public class RuleClassifier {
 
     );
 
-    private static Map.Entry<String, List<Pattern>> entry(String k, List<Pattern> v){ return Map.entry(k, v); }
     private static List<Pattern> keyword(String... words){
         List<Pattern> ps = new ArrayList<>();
         for(String w : words) ps.add(Pattern.compile(w, Pattern.CASE_INSENSITIVE));
@@ -81,5 +80,14 @@ public class RuleClassifier {
                             }
                         },
                         (a,b)->{});
+    }
+
+    public Map<String, List<Pattern>> getPatternDict() {
+        return this.dict;
+    }
+
+    public static String normalize(String s){
+        if(s == null || s.isEmpty()) return "";
+        return s.toLowerCase().replaceAll("\\s+"," ").trim();
     }
 }

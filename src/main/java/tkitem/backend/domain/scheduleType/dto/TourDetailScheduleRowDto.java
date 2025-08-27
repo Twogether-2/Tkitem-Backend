@@ -15,6 +15,7 @@ public class TourDetailScheduleRowDto {
     private Integer scheduleDate;
     private String countryName;
     private String cityName;
+    private Integer sortOrder;
     private String title;
     private String description;
 }

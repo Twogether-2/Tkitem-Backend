@@ -16,9 +16,8 @@ public class ScheduleEsDocumentDto {
     private Integer scheduleDate;
     private String countryName;
     private String cityName;
+    private Integer sortOrder;
     private String title;
     private String description;
     private float[] embedding;
-    private String scheduleType;
-    private Double scheduleTypeScore;
 }
