@@ -25,26 +25,38 @@
         ) }
     </update>
 
-    <!--활성 체크리스트 조회-->
-    <select id="selectActiveByTrip" parameterType="long"
+    <!--체크리스트 조회-->
+    <select id="selectChecklistByTrip"
             resultType="tkitem.backend.domain.checklist.vo.ChecklistItemVo">
         SELECT
-            c.checklist_item_id        AS checklistItemId,
-            c.trip_id                  AS tripId,
-            c.product_category_sub_id  AS productCategorySubId,
-            c.item_name                AS itemName,
-            c.schedule_date            AS scheduleDate,
-            c.score                    AS score,
-            c.tier                     AS tier,
-            c.notes                    AS notes,
-            c.source                   AS source,
-            c.is_checked               AS isChecked,
-            c.is_purchased             AS isPurchased,
-            c.created_at               AS createdAt,
-            c.updated_at               AS updatedAt
+        c.checklist_item_id        AS checklistItemId,
+        c.trip_id                  AS tripId,
+        c.product_category_sub_id  AS productCategorySubId,
+        c.item_name                AS itemName,
+        c.schedule_date            AS scheduleDate,
+        c.score                    AS score,
+        c.tier                     AS tier,
+        c.notes                    AS notes,
+        c.source                   AS source,
+        c.is_checked               AS isChecked,
+        c.is_purchased             AS isPurchased,
+        c.created_at               AS createdAt,
+        c.updated_at               AS updatedAt
         FROM CHECKLIST_ITEM c
         WHERE c.trip_id = #{tripId}
-          AND c.is_deleted = 'F'
-        ORDER BY NVL(c.schedule_date, 0), c.score DESC, c.item_name
+        AND c.is_deleted = 'F'
+        <choose>
+            <!-- day=0 → 공통(NULL) -->
+            <when test="day != null and day == 0">
+                AND c.schedule_date IS NULL
+            </when>
+            <!-- day>=1 → 해당 일자 -->
+            <when test="day != null and day &gt;= 1">
+                AND c.schedule_date = #{day}
+            </when>
+            <!-- else: day 미지정 → 전체 -->
+        </choose>
+        ORDER BY createdAt ASC, productCategorySubId ASC
     </select>
+
 </mapper>

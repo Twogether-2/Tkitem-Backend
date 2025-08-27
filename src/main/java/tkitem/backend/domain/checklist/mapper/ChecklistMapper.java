@@ -18,6 +18,6 @@ public interface ChecklistMapper {
     //체크리스트 자동 세팅
     void generateAiCheckList(@Param("tripId") Long tripId, @Param("memberId") Long memberId);
 
-    //활성 체크리스트 조회
-    List<ChecklistItemVo> selectActiveByTrip(@Param("tripId") Long tripId);
+    //체크리스트 조회
+    List<ChecklistItemVo> selectChecklistByTrip(@Param("tripId") Long tripId, @Param("day") Integer day);
 }
