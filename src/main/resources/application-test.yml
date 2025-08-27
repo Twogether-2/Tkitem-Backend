@@ -2,7 +2,7 @@ spring:
   application:
     name: Tkitem-Backend
   config:
-    import: optional:classpath:local.env
+    import: optional:classpath:env.properties
   datasource:
     url: jdbc:h2:mem:testdb;MODE=Oracle;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
@@ -57,15 +57,14 @@ redis:
   host: ${REDIS_HOST}
   port: ${REDIS_PORT}
 
-#management:
-#  endpoints:
-#    web:
-#      exposure:
-#        include: health
-#
-#  endpoint:
-#    health:
-#      show-details: always
+toss:
+  secret-key: ${TOSS_SECRET_KEY}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
 
 #openai:
 #  api-key: ${OPEN_AI_API_KEY}

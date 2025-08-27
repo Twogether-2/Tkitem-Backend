@@ -30,9 +30,7 @@ jobs:
       - name: Inject env file (tests only)
         run: |
           mkdir -p ./src/test/resources
-          echo "${{ secrets.ENV_VARS }}" > ./src/test/resources/local.env
-          echo "== local.env =="
-          cat ./src/test/resources/local.env
+          echo "${{ secrets.ENV_VARS }}" > ./src/test/resources/env.properties
       - name: Gradlew chmod
         run: chmod +x ./gradlew
       - name: Run tests
@@ -91,8 +89,8 @@ jobs:
           script: |
             cd /home/ubuntu
             # GitHub secrets → EC2 환경변수 → 파일로 저장
-            echo "$ENV_VARS" > /home/ubuntu/local.env
-            chmod 600 /home/ubuntu/local.env
+            echo "$ENV_VARS" > /home/ubuntu/env.properties
+            chmod 600 /home/ubuntu/env.properties
 
             sudo chmod +x deploy.sh
             sudo docker pull ${{ secrets.DOCKERHUB_ID }}/${{ secrets.DOCKERHUB_REPO }}

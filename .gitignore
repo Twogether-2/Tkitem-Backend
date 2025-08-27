@@ -40,6 +40,8 @@ out/
 src/main/resources/local.env
 .env
 *.env
+src/main/resources/*.properties
+env.properties
 application.properties
 src/main/resources/wallet/
 src/main/resources/wallet/**
