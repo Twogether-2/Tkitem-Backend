@@ -97,12 +97,17 @@ jobs:
           key: ${{ secrets.EC2_PRIVATE_KEY }}
           envs: ENV_VARS
           script: |
+            set -euo pipefail
             cd /home/ubuntu
             # GitHub secrets → EC2 환경변수 → 파일로 저장
             echo "$ENV_VARS" > /home/ubuntu/env.properties
             sudo chmod 600 /home/ubuntu/env.properties
 
-            sudo chmod +x deploy.sh
-            echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_ID }}" --password-stdin
-            sudo docker pull ${{ secrets.DOCKERHUB_ID }}/${{ secrets.DOCKERHUB_REPO }}
-            ./deploy.sh
+            # Docker Hub 로그인은 sudo 컨텍스트에서 수행 (root의 /root/.docker/config.json 생성)
+            echo "${{ secrets.DOCKERHUB_PASSWORD }}" | sudo docker login -u "${{ secrets.DOCKERHUB_ID }}" --password-stdin
+
+            # 최신 이미지 풀
+            sudo docker pull "${{ secrets.DOCKERHUB_ID }}/${{ secrets.DOCKERHUB_REPO }}:latest"
+
+            # 배포 스크립트가 docker/compose를 호출하므로 sudo로 실행
+            sudo -E ./deploy.sh
