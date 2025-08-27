@@ -1,0 +1,69 @@
+spring:
+  application:
+    name: Tkitem-Backend
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=Oracle;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+server:
+  port: 8080
+  address: 0.0.0.0
+
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+swagger:
+  server-url: ${SWAGGER_SERVER}
+
+jwt:
+  secret: ${JWT_SECRET}
+  access:
+    expiration: ${JWT_ACCESS_EXPIRATION}
+  refresh:
+    expiration: ${JWT_REFRESH_EXPIRATION}
+
+kakao:
+  api-key: ${KAKAO_API_KEY}
+
+cloud:
+  aws:
+    s3:
+      bucket: ${AWS_S3_BUCKET}
+    stack:
+      auto: false
+    region:
+      static: ${AWS_REGION}
+    credentials:
+      access-key: ${AWS_ACCESS_KEY}
+      secret-key: ${AWS_SECRET_KEY}
+
+redis:
+  enabled: true
+  host: ${REDIS_HOST}
+  port: ${REDIS_PORT}
+
+#management:
+#  endpoints:
+#    web:
+#      exposure:
+#        include: health
+#
+#  endpoint:
+#    health:
+#      show-details: always
+
+#openai:
+#  api-key: ${OPEN_AI_API_KEY}
