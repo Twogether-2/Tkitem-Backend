@@ -1,6 +1,8 @@
 spring:
   application:
     name: Tkitem-Backend
+  config:
+    import: optional:classpath:local.env
   datasource:
     url: ${ORACLE_DB_URL}
     driver-class-name: oracle.jdbc.OracleDriver
