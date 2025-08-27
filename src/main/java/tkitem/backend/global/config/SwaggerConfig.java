@@ -25,7 +25,7 @@ public class SwaggerConfig {
         .info(new Info()
             .title("Tkitem API")
             .version("v0.0.1")
-            .description("MokGolla API 명세서입니다."))
+            .description("Tiktem API 명세서입니다."))
         .servers(List.of(new Server().url(serverUrl).description("스웨거 서버")))
         .components(new Components()
             .addSecuritySchemes("Authorization", customSecurityScheme()))
