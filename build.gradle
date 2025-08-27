@@ -49,6 +49,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     // WebFlux
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    // health check
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
     // Test용 H2 데이터베이스
     implementation 'com.h2database:h2' // H2 데이터베이스 의존성 추가 (테스트용)
