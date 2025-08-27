@@ -31,11 +31,8 @@ jobs:
         run: |
           mkdir -p ./src/test/resources
           echo "${{ secrets.ENV_VARS }}" > ./src/test/resources/local.env
-      - name: Debug local.env
-        run: |
-          ls -al ./src/test/resources || true
-          echo "------ local.env content ------"
-          sed -n '1,120p' ./src/test/resources/local.env || true
+          echo "== local.env =="
+          cat ./src/test/resources/local.env
       - name: Gradlew chmod
         run: chmod +x ./gradlew
       - name: Run tests
