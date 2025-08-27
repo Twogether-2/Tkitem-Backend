@@ -7,12 +7,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.scheduleType.classification.RuleClassifier;
-import tkitem.backend.domain.scheduleType.dto.ScheduleEsDocumentDto;
 import tkitem.backend.domain.scheduleType.dto.TourDetailScheduleRowDto;
 import tkitem.backend.domain.scheduleType.mapper.TourDetailScheduleMapper;
 import tkitem.backend.domain.scheduleType.mapper.TourScheduleTypeMapper;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -35,6 +35,8 @@ public class TourTypePipelineService {
     // 한번만 돌리는 메인 엔트리
     @Transactional
     public void runOnce(int batchSize) throws Exception {
+        esService.ensureIndexExistsOrThrow();
+
         int offset = 0;
         List<TourDetailScheduleRowDto> pending = new ArrayList<>();
         long lastProcessedId = -1; // 체크포인트(로그로만 남겨도 OK)
@@ -43,21 +45,24 @@ public class TourTypePipelineService {
 
         while (countTest < forTest) {
             // 1) DB 배치 조회
-            var rows = tdsMapper.selectBatchForIndexing(offset, batchSize);
+            List<TourDetailScheduleRowDto> rows = tdsMapper.selectBatchForIndexing(offset, batchSize);
             if (rows == null || rows.isEmpty()) break;
 
             // 2) ES Bulk 색인 (임베딩 포함)
             BulkRequest.Builder bulk = new BulkRequest.Builder();
             for (var r : rows) {
-                String text = ((r.getTitle()==null?"":r.getTitle()) + " " +
-                        (r.getDescription()==null?"":r.getDescription())).trim();
-                float[] vec = embeddingService.embed(text);
+
+                String title = r.getTitle() == null ? "" : r.getTitle();
+                String desc = r.getDescription() == null ? "" : r.getDescription();
+                String combined = (title + " " +desc).replaceAll("\\s+", " ").trim();
+                float[] vec = embeddingService.embed(combined);
 
                 // ES 문서 전송 (대상 인덱스/별칭은 설정값)
-                ScheduleEsDocumentDto d = toEsDoc(r, vec);
+                Map<String, Object> d = toEsDoc(r, title, desc, combined, vec);
+
                 bulk.operations(op -> op.index(idx -> idx
                         .index(ES_INDEX)
-                        .id(String.valueOf(d.getTourDetailScheduleId()))
+                        .id(String.valueOf(r.getTourDetailScheduleId()))
                         .document(d)
                 ));
 
@@ -73,18 +78,7 @@ public class TourTypePipelineService {
                         // 4) 확신 충분 → DB UPSERT + ES 업데이트 예약
                         Long typeId = tstMapper.findScheduleTypeIdByName(top.top1Type);
                         if (typeId != null) {
-                            tstMapper.upsertTourScheduleType(Long.valueOf(r.getTourDetailScheduleId()), typeId, top1);
-                            // ES 도큐먼트에 분류값도 저장하고 싶으면 업데이트 문서 준비
-                            bulk.operations(op -> op.update(u -> u
-                                    .index(ES_INDEX)
-                                    .id(String.valueOf(r.getTourDetailScheduleId()))
-                                    .action(a -> a.doc(Map.of(
-                                            "schedule_type", top.top1Type,
-                                            "schedule_type_score", top1
-                                    ))
-                                            .docAsUpsert(false) // upSert 불필요 하면 명시
-                                )
-                            ));
+                            tstMapper.upsertTourScheduleType(r.getTourDetailScheduleId(), typeId, top1);
                         }
                     } else {
                         pending.add(r); // 생성형 분류로 넘길 대기 목록
@@ -103,40 +97,40 @@ public class TourTypePipelineService {
             }
 
             offset += rows.size();
-            // [로그] lastProcessedId 로 진행 상황 남기기
             countTest += rows.size();
+            log.info("Indexed+scored batch: {} (lastId={})", rows.size(), lastProcessedId);
         }
 
         // 6) 남은 pending 최종 플러시
         if (!pending.isEmpty()) flushPendingWithGen(pending);
+        log.info("pipeline completed");
     }
 
     // ES 문서 변환
-    private ScheduleEsDocumentDto toEsDoc(TourDetailScheduleRowDto r, float[] vec){
-        ScheduleEsDocumentDto d = ScheduleEsDocumentDto.builder()
-                .tourDetailScheduleId(r.getTourDetailScheduleId())
-                .tourId(r.getTourId())
-                .scheduleDate(r.getScheduleDate())
-                .countryName(r.getCountryName())
-                .cityName(r.getCityName())
-                .title(r.getTitle())
-                .description(r.getDescription())
-                .embedding(vec)
-                .build();
-        return d;
+    private Map<String, Object> toEsDoc(TourDetailScheduleRowDto r, String title, String desc, String combined, float[] vec){
+
+        Map<String, Object> doc = new HashMap<>();
+        doc.put("tour_detail_schedule_id", r.getTourDetailScheduleId());
+        doc.put("tour_id", r.getTourId());
+        doc.put("schedule_date", r.getScheduleDate());
+        doc.put("sort_order", r.getSortOrder());
+        doc.put("country_name", r.getCountryName());
+        doc.put("city_name", r.getCityName());
+        doc.put("title", title);
+        doc.put("description", desc);
+        doc.put("combined_text", combined);
+        doc.put("embedding", vec);
+
+        return doc;
     }
 
-    // 생성형 분류 → DB/ES 반영
+    // 생성형 분류(KNN/라벨 임베딩) → DB 반영
     private void flushPendingWithGen(List<TourDetailScheduleRowDto> pending) throws Exception {
 
         if (pending == null || pending.isEmpty()) return;
 
         // 1) LLM 보조 분류 (배치 호출)
         Map<Long, GenerativeLabelService.Result> results = genSvc.classifyBatch(pending);
-
-        // 2) DB UPSERT + ES Bulk Update
-        BulkRequest.Builder br = new BulkRequest.Builder();
-        int opCount = 0; // 실제 update 개수 count
 
         for (var r : pending) {
             Long tdsId = r.getTourDetailScheduleId();
@@ -151,32 +145,6 @@ public class TourTypePipelineService {
 
             tstMapper.upsertTourScheduleType(tdsId, typeId, res.score());
 
-            br.operations(op -> op.update(u -> u
-                    .index(ES_INDEX)
-                    .id(String.valueOf(r.getTourDetailScheduleId()))
-                    .action(a -> {
-                        assert res.typeName() != null;
-                        return a.doc(Map.of(
-                                "schedule_type", res.typeName(),
-                                "schedule_type_score", res.score()
-                        ))
-                                .docAsUpsert(false);
-                    } // 신규 upsert 는 하지 않음
-                )
-            ));
-            opCount++;
-        }
-
-        // 실제 업데이트가 있을 때에만 bulk 실행
-        if (opCount > 0) {
-            BulkResponse resp = esService.bulk(br.build());
-            if (resp.errors()) {
-                resp.items().stream()
-                        .filter(it -> it.error() != null)
-                        .limit(5)
-                        .forEach(it -> log.error("Bulk fail: op={} id={} reason={}",
-                                it.operationType(), it.id(), it.error().reason()));
-            }
         }
     }
 

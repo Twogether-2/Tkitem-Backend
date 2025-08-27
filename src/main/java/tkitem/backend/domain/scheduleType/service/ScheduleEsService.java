@@ -81,20 +81,33 @@ public class ScheduleEsService {
 
         // 여행 일정 필터 설정 필요
 
-        KnnSearchResponse<Map> resp = esClient.knnSearch(r -> r
-                        .index(INDEX)
-                        .knn(kn -> kn
-                                .field("embedding")
-                                .queryVector(qv)
-                                .k(k)
-                                .numCandidates(candidates)
-                        )
-                        .filter(filters) // [추가] 선택 필터 적용
-                        .source(src -> src.filter(f -> f
-                                .includes("tour_detail_schedule_id","tour_id","title","city_name","country_name","schedule_date")))
-                , Map.class);
+        int effK = Math.max(1, k);
+        int effCandidates = Math.max(effK, candidates);
+
+        KnnSearchResponse<Map> resp = esClient.knnSearch(r -> {
+            var req = r.index(INDEX)
+                    .knn(kn -> kn
+                                    .field("embedding")
+                                    .queryVector(qv)
+                                    .k(k)
+                                    .numCandidates(candidates)
+                            )
+                            .source(src -> src.filter(f -> f
+                                    .includes(
+                                            "tour_detail_schedule_id",
+                                            "tour_id",
+                                            "title",
+                                            "city_name",
+                                            "country_name",
+                                            "schedule_date",
+                                            "sort_order")));
+            if(!filters.isEmpty()) {
+                req = req.filter(filters);
+            }
+            return req;
+        }
+        , Map.class);
 
         return resp;
     }
-
 }

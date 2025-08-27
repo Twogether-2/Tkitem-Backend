@@ -1,5 +1,7 @@
 package tkitem.backend.domain.scheduleType.service;
 
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import tkitem.backend.domain.scheduleType.dto.TourDetailScheduleRowDto;
@@ -11,9 +13,15 @@ import java.util.Set;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class GenerativeLabelService {
 
     public record Result(String typeName, double score) {}
+
+    private final EmbeddingService embeddingService;
+    private final ElasticsearchClient esClient;
+
+    private static final String LABEL_INDEX = "schedule_type_labels_v1";
 
     // LLM 호출/프롬프트 작성/스로틀링(동시성·쿼터) 처리
     public Map<Long, Result> classifyBatch(List<TourDetailScheduleRowDto> rows){

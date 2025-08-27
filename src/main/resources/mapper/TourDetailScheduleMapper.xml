@@ -13,6 +13,7 @@
             schedule_date AS scheduleDate,
             c.country_name as countryName,
             c.city_name as cityName,
+            tds.sort_order as sortOrder
             tds.Title as title,
             tds.Description as description
         FROM TOUR_DETAIL_SCHEDULE tds left outer join CITY c on tds.city_id = c.city_id
