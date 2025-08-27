@@ -58,6 +58,11 @@ jobs:
         run: chmod +x ./gradlew
       - name: BootJar
         run: ./gradlew bootJar --no-daemon
+      - name: Upload jar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: build/libs/*.jar
 
   docker-push:
     name: Docker Build & Push (latest)
@@ -65,6 +70,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Download jar artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-jar
+          path: build/libs
       - name: Docker login
         run: echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_ID }}" --password-stdin
       - name: Build & Push :latest
@@ -90,7 +100,7 @@ jobs:
             cd /home/ubuntu
             # GitHub secrets → EC2 환경변수 → 파일로 저장
             echo "$ENV_VARS" > /home/ubuntu/env.properties
-            chmod 600 /home/ubuntu/env.properties
+            sudo chmod 600 /home/ubuntu/env.properties
 
             sudo chmod +x deploy.sh
             sudo docker pull ${{ secrets.DOCKERHUB_ID }}/${{ secrets.DOCKERHUB_REPO }}
