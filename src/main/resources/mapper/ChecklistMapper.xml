@@ -56,7 +56,68 @@
             </when>
             <!-- else: day 미지정 → 전체 -->
         </choose>
+
+        <if test="checked != null">
+            AND c.is_checked =
+            <choose>
+                <when test="checked"> 'T' </when>
+                <otherwise> 'F' </otherwise>
+            </choose>
+        </if>
         ORDER BY createdAt ASC, productCategorySubId ASC
     </select>
+
+    <!-- 카테고리 존재 개수 -->
+    <select id="countProductCategorySubs" parameterType="list" resultType="int">
+        SELECT COUNT(1)
+        FROM PRODUCT_CATEGORY_SUB
+        WHERE product_category_sub_id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </select>
+
+    <!-- 체크리스트 수기 등록 -->
+    <insert id="createChecklist">
+        INSERT ALL
+        <foreach collection="ids" item="subId">
+            INTO CHECKLIST_ITEM (
+            trip_id,
+            product_category_sub_id,
+            item_name,
+            schedule_date,
+            score,
+            tier,
+            notes,
+            source,
+            is_checked,
+            is_purchased,
+            is_deleted,
+            created_at,
+            created_by,
+            updated_at,
+            updated_by
+            ) VALUES (
+            #{tripId},
+            #{subId},
+            (SELECT SUBSTR(name, 1, 120)
+            FROM PRODUCT_CATEGORY_SUB
+            WHERE product_category_sub_id = #{subId}),
+            #{scheduleDate, jdbcType=NUMERIC},
+            NULL,
+            NULL,
+            NULL,
+            'USER',
+            'F',
+            'F',
+            'F',
+            SYSTIMESTAMP,
+            #{memberId},
+            NULL,
+            NULL
+            )
+        </foreach>
+        SELECT 1 FROM DUAL
+    </insert>
 
 </mapper>

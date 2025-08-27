@@ -36,18 +36,39 @@ public class ChecklistServiceImpl implements ChecklistService {
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.CHECKLIST_AI_FAILED);
         }
-        List<ChecklistItemVo> items = checklistMapper.selectChecklistByTrip(tripId, null);
+        List<ChecklistItemVo> items = checklistMapper.selectChecklistByTrip(tripId, null, null);
         return new ChecklistAiResponseDto(tripId, items.size());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day) {
+    public ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day, Boolean checked) {
         if (tripId == null || tripId <= 0) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         if (checklistMapper.existsTrip(tripId) == 0) throw new BusinessException(ErrorCode.TRIP_NOT_FOUND);
         if (day != null && day < 0) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
 
-        List<ChecklistItemVo> items = checklistMapper.selectChecklistByTrip(tripId, day);
+        List<ChecklistItemVo> items = checklistMapper.selectChecklistByTrip(tripId, day, checked);
         return ChecklistListResponseDto.of(tripId, items);
+    }
+
+    @Override
+    @Transactional
+    public void createChecklist(Long tripId, Long memberId, List<Long> productCategorySubIds, Integer scheduleDate) {
+        if (tripId == null || tripId <= 0 || memberId == null || memberId <= 0)
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        if (productCategorySubIds == null || productCategorySubIds.isEmpty())
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        if (scheduleDate != null && scheduleDate < 0)
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        if (checklistMapper.existsTrip(tripId) == 0)
+            throw new BusinessException(ErrorCode.TRIP_NOT_FOUND);
+
+        int ok = checklistMapper.countProductCategorySubs(productCategorySubIds);
+        if (ok != productCategorySubIds.size())
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+
+        Integer normalizedDay = (scheduleDate != null && scheduleDate == 0) ? null : scheduleDate;
+
+        checklistMapper.createChecklist(tripId, memberId, normalizedDay, productCategorySubIds);
     }
 }

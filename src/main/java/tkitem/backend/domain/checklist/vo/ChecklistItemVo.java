@@ -16,7 +16,7 @@ public class ChecklistItemVo {
     private Long productCategorySubId;
     private String itemName;
     private Integer scheduleDate;     // NULL이면 TRIP 공통
-    private BigDecimal score;         // NUMBER(9,6) → BigDecimal 추천
+    private BigDecimal score;
     private String tier;
     private String notes;
     private String source;            // 'AI' | 'USER'

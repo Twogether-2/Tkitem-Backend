@@ -1,10 +1,15 @@
 package tkitem.backend.domain.checklist.service;
 
+import jakarta.validation.constraints.NotNull;
 import tkitem.backend.domain.checklist.dto.response.ChecklistAiResponseDto;
 import tkitem.backend.domain.checklist.dto.response.ChecklistListResponseDto;
+
+import java.util.List;
 
 public interface ChecklistService {
     ChecklistAiResponseDto generateAiChecklist(Long tripId,Long memberId);
 
-    ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day);
+    ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day, Boolean checked);
+
+    void createChecklist(Long tripId, Long memberId, @NotNull List<Long> productCategorySubIds, Integer scheduleDate);
 }
