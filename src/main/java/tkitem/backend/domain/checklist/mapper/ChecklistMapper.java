@@ -16,8 +16,16 @@ public interface ChecklistMapper {
     int existsTripWithPackage(@Param("tripId") Long tripId);
 
     //체크리스트 자동 세팅
-    void generateAiCheckList(@Param("tripId") Long tripId);
+    void generateAiCheckList(@Param("tripId") Long tripId, @Param("memberId") Long memberId);
 
-    //활성 체크리스트 조회
-    List<ChecklistItemVo> selectActiveByTrip(@Param("tripId") Long tripId);
+    //체크리스트 조회
+    List<ChecklistItemVo> selectChecklistByTrip(@Param("tripId") Long tripId, @Param("day") Integer day, @Param("checked") Boolean checked);
+
+    //카테고리 존재 개수
+    int countProductCategorySubs(@Param("ids") List<Long> productCategorySubIds);
+
+    //체크리스트 수기 등록
+    void createChecklist(@Param("tripId") Long tripId, @Param("memberId") Long memberId,
+                         @Param("scheduleDate") Integer normalizedDay,
+                         @Param("ids") List<Long> productCategorySubIds);
 }

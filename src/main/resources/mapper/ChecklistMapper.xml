@@ -19,29 +19,105 @@
 
     <!--체크리스트 자동 세팅-->
     <update id="generateAiCheckList" statementType="CALLABLE">
-        { call P_CHECKLIST_AI_INSERT( #{tripId, mode=IN, jdbcType=NUMERIC} ) }
+        { call P_CHECKLIST_AI_REBUILD(
+                #{tripId, mode=IN, jdbcType=NUMERIC},
+                #{memberId, mode=IN, jdbcType=NUMERIC}
+        ) }
     </update>
 
-    <!--활성 체크리스트 조회-->
-    <select id="selectActiveByTrip" parameterType="long"
+    <!--체크리스트 조회-->
+    <select id="selectChecklistByTrip"
             resultType="tkitem.backend.domain.checklist.vo.ChecklistItemVo">
         SELECT
-            c.checklist_item_id        AS checklistItemId,
-            c.trip_id                  AS tripId,
-            c.product_category_sub_id  AS productCategorySubId,
-            c.item_name                AS itemName,
-            c.schedule_date            AS scheduleDate,
-            c.score                    AS score,
-            c.tier                     AS tier,
-            c.notes                    AS notes,
-            c.source                   AS source,
-            c.is_checked               AS isChecked,
-            c.is_purchased             AS isPurchased,
-            c.created_at               AS createdAt,
-            c.updated_at               AS updatedAt
+        c.checklist_item_id        AS checklistItemId,
+        c.trip_id                  AS tripId,
+        c.product_category_sub_id  AS productCategorySubId,
+        c.item_name                AS itemName,
+        c.schedule_date            AS scheduleDate,
+        c.score                    AS score,
+        c.tier                     AS tier,
+        c.notes                    AS notes,
+        c.source                   AS source,
+        c.is_checked               AS isChecked,
+        c.is_purchased             AS isPurchased,
+        c.created_at               AS createdAt,
+        c.updated_at               AS updatedAt
         FROM CHECKLIST_ITEM c
         WHERE c.trip_id = #{tripId}
-          AND c.is_deleted = 'F'
-        ORDER BY NVL(c.schedule_date, 0), c.score DESC, c.item_name
+        AND c.is_deleted = 'F'
+        <choose>
+            <!-- day=0 → 공통(NULL) -->
+            <when test="day != null and day == 0">
+                AND c.schedule_date IS NULL
+            </when>
+            <!-- day>=1 → 해당 일자 -->
+            <when test="day != null and day &gt;= 1">
+                AND c.schedule_date = #{day}
+            </when>
+            <!-- else: day 미지정 → 전체 -->
+        </choose>
+
+        <if test="checked != null">
+            AND c.is_checked =
+            <choose>
+                <when test="checked"> 'T' </when>
+                <otherwise> 'F' </otherwise>
+            </choose>
+        </if>
+        ORDER BY createdAt ASC, productCategorySubId ASC
     </select>
+
+    <!-- 카테고리 존재 개수 -->
+    <select id="countProductCategorySubs" parameterType="list" resultType="int">
+        SELECT COUNT(1)
+        FROM PRODUCT_CATEGORY_SUB
+        WHERE product_category_sub_id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </select>
+
+    <!-- 체크리스트 수기 등록 -->
+    <insert id="createChecklist">
+        INSERT ALL
+        <foreach collection="ids" item="subId">
+            INTO CHECKLIST_ITEM (
+            trip_id,
+            product_category_sub_id,
+            item_name,
+            schedule_date,
+            score,
+            tier,
+            notes,
+            source,
+            is_checked,
+            is_purchased,
+            is_deleted,
+            created_at,
+            created_by,
+            updated_at,
+            updated_by
+            ) VALUES (
+            #{tripId},
+            #{subId},
+            (SELECT SUBSTR(name, 1, 120)
+            FROM PRODUCT_CATEGORY_SUB
+            WHERE product_category_sub_id = #{subId}),
+            #{scheduleDate, jdbcType=NUMERIC},
+            NULL,
+            NULL,
+            NULL,
+            'USER',
+            'F',
+            'F',
+            'F',
+            SYSTIMESTAMP,
+            #{memberId},
+            NULL,
+            NULL
+            )
+        </foreach>
+        SELECT 1 FROM DUAL
+    </insert>
+
 </mapper>
