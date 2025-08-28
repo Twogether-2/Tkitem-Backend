@@ -67,4 +67,26 @@ public class ChecklistController {
         return ResponseEntity.ok("추가 성공");
     }
 
+    @DeleteMapping("/item/{checklistItemId}")
+    @Operation(summary = "체크리스트 단건 삭제", description = "checklist_item_id 기준 soft delete (is_deleted='T')")
+    public ResponseEntity<String> deleteChecklistItem(
+            @PathVariable Long checklistItemId,
+            @AuthenticationPrincipal Member member
+    ) {
+        checklistService.deleteChecklistItem(checklistItemId, member.getMemberId());
+        return ResponseEntity.ok("삭제되었습니다.");
+    }
+
+    @DeleteMapping("/{tripId}")
+    @Operation(summary = "체크리스트 초기화(일괄 삭제)",
+            description = "해당 trip의 is_deleted='F' 항목을 모두 'T'로 변경")
+    public ResponseEntity<String> deleteAllActiveByTrip(
+            @PathVariable Long tripId,
+            @AuthenticationPrincipal Member member
+    ) {
+        int count = checklistService.deleteAllActiveByTrip(tripId, member.getMemberId());
+        return ResponseEntity.ok(count + "건 삭제되었습니다.");
+    }
+
+
 }

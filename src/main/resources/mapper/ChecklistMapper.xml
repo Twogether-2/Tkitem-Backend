@@ -120,4 +120,23 @@
         SELECT 1 FROM DUAL
     </insert>
 
+    <!-- 체크리스트 단건 삭제 -->
+    <update id="softDeleteById">
+        UPDATE CHECKLIST_ITEM
+        SET is_deleted = 'T',
+            updated_by = #{memberId}
+        WHERE checklist_item_id = #{checklistItemId}
+          AND is_deleted = 'F'
+    </update>
+
+    <!-- 체크리스트 전체 삭제(초기화) -->
+    <update id="softDeleteAllActiveByTrip">
+        UPDATE CHECKLIST_ITEM
+        SET is_deleted = 'T',
+            updated_by = #{memberId}
+        WHERE trip_id = #{tripId}
+          AND is_deleted = 'F'
+    </update>
+
+
 </mapper>

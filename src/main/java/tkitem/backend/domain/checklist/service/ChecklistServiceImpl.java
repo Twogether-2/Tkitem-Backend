@@ -71,4 +71,28 @@ public class ChecklistServiceImpl implements ChecklistService {
 
         checklistMapper.createChecklist(tripId, memberId, normalizedDay, productCategorySubIds);
     }
+
+    @Override
+    @Transactional
+    public void deleteChecklistItem(Long checklistItemId, Long memberId) {
+        if (checklistItemId == null || checklistItemId <= 0 || memberId == null || memberId <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        int updated = checklistMapper.softDeleteById(checklistItemId, memberId);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+    }
+
+    @Override
+    @Transactional
+    public int deleteAllActiveByTrip(Long tripId, Long memberId) {
+        if (tripId == null || tripId <= 0 || memberId == null || memberId <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        if (checklistMapper.existsTrip(tripId) == 0) {
+            throw new BusinessException(ErrorCode.TRIP_NOT_FOUND);
+        }
+        return checklistMapper.softDeleteAllActiveByTrip(tripId, memberId);
+    }
 }
