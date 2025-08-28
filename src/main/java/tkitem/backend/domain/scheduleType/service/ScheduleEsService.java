@@ -22,6 +22,12 @@ public class ScheduleEsService {
     private static final String INDEX = "tour_detail_schedule_v1";
     private final ElasticsearchClient esClient;
 
+    /**
+     * tour_detail_schedule_v1 에 대량 색인 진행
+     * @param request
+     * @return
+     * @throws IOException
+     */
     public BulkResponse bulk(BulkRequest request) throws IOException {
         BulkResponse resp = esClient.bulk(request);
         if (resp.errors()) {

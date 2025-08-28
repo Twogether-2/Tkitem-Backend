@@ -1,5 +1,8 @@
 package tkitem.backend.domain.scheduleType.service;
 
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch.core.SearchRequest;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,37 +23,58 @@ public class GenerativeLabelService {
 
     private final ChatModel chatModel;
     private final ObjectMapper objectMapper;
+    private final EmbeddingService embeddingService;
+    private final ElasticsearchClient esClient;
 
     private final String OPENAI_MODEL = "gpt-4o-mini";
+    private static final String LABEL_INDEX = "schedule_type_labels_v1";
 
     /**
      * LLM 호출/프롬프트 작성/스로틀링(동시성·쿼터) 처리
      * @param rows
      * @return
      */
-    public Map<Long, Result> classifyBatch(List<TourDetailScheduleRowDto> rows){
-        Map<Long, Result> out = new HashMap<>();
+    public Map<Long, List<Result>> classifyBatchByLLM(List<TourDetailScheduleRowDto> rows){
+        Map<Long, List<Result>> out = new HashMap<>();
+        if(rows == null || rows.isEmpty()) return out;
+
         for (TourDetailScheduleRowDto r : rows) {
             try {
-                String text = safe(r.getTitle()) + " " + safe(r.getDescription());
-                Result res = classifyOne(text); // LLM 호출
-                if (res != null) {
+                String text = (safe(r.getTitle()) + " " + safe(r.getDescription())).replaceAll("\\s+"," ").trim();
+                List<Result> res = classifyTopKByLLM(text); // LLM 호출
+                if (res != null && !res.isEmpty()) {
                     out.put(r.getTourDetailScheduleId(), res);
                 }
             } catch (Exception e) {
-                log.warn(e.getMessage());
+                log.warn("classifyBatchTopK failed: tdsId={} err={}", r.getTourDetailScheduleId(), e.toString());
             }
         }
         return out;
     }
 
     /**
-     * 단건 분류: LLM JSON 응답 기반으로 분류 (실패 시 ETC)
-     * @param text
+     *
+     * @param rows
      * @return
-     * @throws Exception
      */
-    private Result classifyOne(String text) throws Exception {
+    public Map<Long, List<Result>> classifyBatchByKNN(List<TourDetailScheduleRowDto> rows){
+        Map<Long, List<Result>> out = new HashMap<>();
+        if(rows == null || rows.isEmpty()) return out;
+
+        for(TourDetailScheduleRowDto r : rows){
+            try{
+                String text = (safe(r.getTitle()) + " " + safe(r.getDescription())).replaceAll("\\s+"," ").trim();
+                List<Result> topK = classifyTopKByKNN(text);
+                if(topK != null && !topK.isEmpty()) out.put(r.getTourDetailScheduleId(), topK);
+            } catch (Exception e) {
+                log.warn("classifyBatchByKnn failed: tdsId={} err={}", r.getTourDetailScheduleId(), e.toString());
+            }
+        }
+        return out;
+    }
+
+    // 단건 분류: LLM JSON 응답 기반으로 분류 (실패 시 ETC). 0~3개까지 분류됨
+    private List<Result> classifyTopKByLLM(String text) throws Exception {
 
         String cleaned = (text == null ? "" : text).replaceAll("\\s+", " ").trim();
 
@@ -91,10 +115,51 @@ public class GenerativeLabelService {
 
         // JSON 파싱 → 라벨/점수
         List<Result> topK = parseJson(json);
-        assert topK != null;
-        if (topK.isEmpty()) return new Result("ETC", 0.0);
-        return topK.getFirst();
+        return (topK == null) ? java.util.Collections.emptyList() : topK;
     }
+
+    // 단건 KNN Top-3 출력 : 라벨 인덱스에서 임베딩 KNN -> 코사인 유사도 정렬 상위 최대 3개까지 return
+    public List<Result> classifyTopKByKNN(String text) throws Exception{
+        String cleaned = (text == null ? "" : text).replaceAll("\\s+", " ").trim();
+
+        // 1. 임베딩 생성
+        float[] qv = embeddingService.embed(cleaned);
+        List<Float> q = new ArrayList<>(qv.length);
+        for(float v : qv) q.add(v);
+
+        // 2. ES KNN 검색(라벨 인덱스)
+        SearchRequest request = new SearchRequest.Builder()
+                .index(LABEL_INDEX)
+                .knn(kn -> kn
+                        .field("embedding")
+                        .queryVector(q)
+                        .k(5)
+                        .numCandidates(10))
+                .source(s -> s.filter(f->f.includes("label", "embedding")))
+                .build();
+
+        SearchResponse<Map> resp = esClient.search(request, Map.class);
+
+        // 3. 코사인으로 재정렬 -> 상위 3개
+        List<Result> out = new ArrayList<>();
+        if(resp.hits() != null && resp.hits().hits() != null){
+            for(var h : resp.hits().hits()){
+                Map<String, Object> src = h.source();
+                if(src == null) continue;
+                String label = String.valueOf(src.getOrDefault("label", "ETC"));
+                if(!ALLOWED_TYPES.contains(label)) continue;
+                float[] ev = toFloatArray(src.get("embedding"));
+                double cos = cosine(qv, ev);
+                out.add(new Result(label, Math.max(0.0, Math.min(1.0, cos))));
+            }
+        }
+
+        out.sort((a, b) -> Double.compare(b.score(), a.score()));
+        LinkedHashMap<String, Result> dedup = new LinkedHashMap<>();
+        for(Result r : out) dedup.putIfAbsent(r.typeName(), r);
+        return new ArrayList<>(dedup.values()).subList(0, Math.min(3, dedup.size()));
+    }
+
 
     // 허용 타입
     private static final Set<String> ALLOWED_TYPES = Set.of(
@@ -107,11 +172,7 @@ public class GenerativeLabelService {
         return s==null? "" : s;
     }
 
-    /**
-     * LLM 파싱 헬퍼
-     * @param json
-     * @return
-     */
+    // LLM 파싱 헬퍼
     private List<Result> parseJson(String json) {
         List<Result> out = new ArrayList<>();
         try {
@@ -143,5 +204,23 @@ public class GenerativeLabelService {
         LinkedHashMap<String, Result> dedup = new LinkedHashMap<>();
         for (Result r : out) dedup.putIfAbsent(r.typeName(), r);
         return new ArrayList<>(dedup.values());
+    }
+
+    // 코사인 유사도 계산. Σ(a*b)/(√(Σ(a^2))*√(Σ(b^2)))
+    private static double cosine(float[] a, float[] b) {
+        double dot=0, na=0, nb=0;
+        for (int i=0;i<a.length;i++){ dot+=a[i]*b[i]; na+=a[i]*a[i]; nb+=b[i]*b[i]; }
+        if (na==0 || nb==0) return 0;
+        return dot / (Math.sqrt(na)*Math.sqrt(nb));
+    }
+
+    // ES _source → float[] 변환 유틸
+    private static float[] toFloatArray(Object o){
+        if (o instanceof List<?> list) {
+            float[] f = new float[list.size()];
+            for (int i=0;i<list.size();i++) f[i] = ((Number)list.get(i)).floatValue();
+            return f;
+        }
+        return new float[0];
     }
 }
