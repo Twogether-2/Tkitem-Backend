@@ -148,7 +148,12 @@ public class TourTypePipelineService {
         }
     }
 
-    // 코사인 유사도
+    /**
+     * 코사인 유사도 계산. Σ(a*b)/(√(Σ(a^2))*√(Σ(b^2)))
+     * @param a
+     * @param b
+     * @return double 코사인유사도 계산값
+     */
     private static double cosine(float[] a, float[] b) {
         double dot=0, na=0, nb=0;
         for (int i=0;i<a.length;i++){ dot+=a[i]*b[i]; na+=a[i]*a[i]; nb+=b[i]*b[i]; }
