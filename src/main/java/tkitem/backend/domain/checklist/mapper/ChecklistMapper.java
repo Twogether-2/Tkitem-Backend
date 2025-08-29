@@ -34,4 +34,9 @@ public interface ChecklistMapper {
 
     //체크리스트 전체 삭제(초기화)
     int softDeleteAllActiveByTrip(Long tripId, Long memberId);
+
+    //체크리스트 체크(활성/비활성)
+    int setCheckedById(@Param("checklistItemId") Long checklistItemId,
+                       @Param("checked") boolean checked,
+                       @Param("memberId") Long memberId);
 }

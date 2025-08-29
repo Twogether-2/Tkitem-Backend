@@ -138,5 +138,16 @@
           AND is_deleted = 'F'
     </update>
 
-
+    <!-- 체크리스트 체크(활성/비활성) -->
+    <update id="setCheckedById">
+        UPDATE CHECKLIST_ITEM
+        SET is_checked =
+        <choose>
+            <when test="checked"> 'T' </when>
+            <otherwise> 'F' </otherwise>
+        </choose>,
+        updated_by = #{memberId}
+        WHERE checklist_item_id = #{checklistItemId}
+        AND is_deleted = 'F'
+    </update>
 </mapper>

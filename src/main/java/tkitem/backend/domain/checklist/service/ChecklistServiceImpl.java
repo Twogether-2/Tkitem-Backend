@@ -95,4 +95,16 @@ public class ChecklistServiceImpl implements ChecklistService {
         }
         return checklistMapper.softDeleteAllActiveByTrip(tripId, memberId);
     }
+
+    @Override
+    @Transactional
+    public void setChecked(Long checklistItemId, boolean checked, Long memberId) {
+        if (checklistItemId == null || checklistItemId <= 0 || memberId == null || memberId <= 0)
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+
+        int updated = checklistMapper.setCheckedById(checklistItemId, checked, memberId);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+    }
 }

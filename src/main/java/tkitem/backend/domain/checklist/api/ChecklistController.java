@@ -88,5 +88,17 @@ public class ChecklistController {
         return ResponseEntity.ok(count + "건 삭제되었습니다.");
     }
 
+    @PatchMapping("/item/{checklistItemId}/checked")
+    @Operation(summary="체크/체크해제(단건)",
+            description="value=true면 체크, false면 체크해제")
+    public ResponseEntity<String> setChecked(
+            @PathVariable Long checklistItemId,
+            @RequestParam boolean value,
+            @AuthenticationPrincipal Member member
+    ) {
+        checklistService.setChecked(checklistItemId, value, member.getMemberId());
+        return ResponseEntity.ok(value ? "체크되었습니다." : "체크 해제되었습니다.");
+    }
+
 
 }
