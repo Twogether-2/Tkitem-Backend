@@ -14,6 +14,9 @@ import tkitem.backend.domain.scheduleType.dto.TourDetailScheduleRowDto;
 
 import java.util.*;
 
+/**
+ * ES KNN Top-N 재정렬, LLM Top-3 폐쇄 라벨 보완
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -30,7 +33,7 @@ public class GenerativeLabelService {
     private static final String LABEL_INDEX = "schedule_type_labels_v1";
 
     /**
-     * LLM 호출/프롬프트 작성/스로틀링(동시성·쿼터) 처리
+     * 코사인 유사도 분류가 애매할 때 LLM 호출/프롬프트 작성/스로틀링(동시성·쿼터) 처리
      * @param rows
      * @return
      */
@@ -53,7 +56,7 @@ public class GenerativeLabelService {
     }
 
     /**
-     *
+     * 1차 필터링 값이 애매할 시 임베딩 유사도 기반 분류
      * @param rows
      * @return
      */
@@ -92,7 +95,7 @@ public class GenerativeLabelService {
               ]
               규칙:
               - 최대 3개, confidence 내림차순
-              - 분류가 불가한 경우 label : etc, confidence: 0.00 으로 분류
+              - 분류가 불가한 경우 label : ETC, confidence: 0.00 으로 분류
               - confidence는 0.0~1.0
               - 여분 텍스트/설명 금지
         """.formatted(String.join(",", ALLOWED_TYPES));
@@ -165,7 +168,7 @@ public class GenerativeLabelService {
     private static final Set<String> ALLOWED_TYPES = Set.of(
             "FLIGHT","TRANSFER","GUIDE","HOTEL","HOTEL_STAY","SIGHTSEEING","LANDMARK",
             "MUSEUM_HERITAGE","PARK_NATURE","ACTIVITY","HIKING_TREKKING","SHOW",
-            "SPA_MASSAGE","SHOPPING","MEAL","CAFE","FREE_TIME","ETC","SWIM_SNORKELING"
+            "SPA_MASSAGE","SHOPPING","MEAL","CAFE","FREE_TIME","SNORKELING", "SWIM", "REST", "ETC"
     );
 
     private String safe(String s){

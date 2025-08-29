@@ -23,7 +23,7 @@ public class TourTypePipelineService {
     private final TourDetailScheduleMapper tdsMapper;
     private final ScheduleEsService esService;
     private final EmbeddingService embeddingService;
-    private final RuleClassifier rule = new RuleClassifier();
+    private final RuleClassifier rule;
     private final TourScheduleTypeMapper tstMapper;
     private final GenerativeLabelService genSvc;
 
@@ -76,8 +76,14 @@ public class TourTypePipelineService {
                         .document(d)
                 ));
 
+                // defaultType 기반 분류 제어: PLACE는 분류 생략
+                String dt = r.getDefaultType();
+                if (dt != null && dt.equalsIgnoreCase("PLACE")) {
+                    continue; // 분류 생략(TST 미적재), 다음 레코드로
+                }
+
                 // 3) 룰 1차 분류 → 확신 낮으면 pending
-                var scores = rule.score(r.getTitle(), r.getDescription(), null);
+                var scores = rule.score(r.getTitle(), r.getDescription(), r.getDefaultType());
                 var top = rule.top2(scores);
                 if (top.top1Type != null) {
                     double top1 = top.top1Score;

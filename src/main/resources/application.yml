@@ -22,6 +22,9 @@ logging:
     org.apache.hc.client5.http: WARN
     org.apache.hc.client5.http.wire: OFF  # [주의] 매우 상세, 진단 끝나면 끄기
 
+rule:
+  classifier:
+    path: classpath:dummy/rule_keywords.json
 
 app:
   classify:

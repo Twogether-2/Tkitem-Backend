@@ -18,4 +18,5 @@ public class TourDetailScheduleRowDto {
     private Integer sortOrder;
     private String title;
     private String description;
+    private String defaultType;
 }
