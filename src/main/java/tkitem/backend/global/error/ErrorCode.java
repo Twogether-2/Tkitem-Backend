@@ -43,7 +43,13 @@ public enum ErrorCode {
     /* TRIP / CHECKLIST */
     TRIP_NOT_FOUND(404, "TRIP001", "Trip Not Found"),
     TRIP_PACKAGE_REQUIRED(400, "TRIP002", "Trip Package Required"),
-    CHECKLIST_AI_FAILED(500, "CHECKLIST001", "Checklist AI Generation Failed");
+    CHECKLIST_AI_FAILED(500, "CHECKLIST001", "Checklist AI Generation Failed"),
+
+    /* PRODUCT */
+    INVALID_THEME_KEY(400, "PRODUCT001", "Invalid themeKey"),
+    CATEGORY_IDS_REQUIRED(400, "PRODUCT002", "categoryIds must not be empty"),
+    INVALID_CURSOR(400, "PRODUCT003", "Invalid cursor"),
+    PRODUCT_QUERY_FAILED(500, "PRODUCT004", "Product query failed");
 
     private final int status;
     private final String code;
