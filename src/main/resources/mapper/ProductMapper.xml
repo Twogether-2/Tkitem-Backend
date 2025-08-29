@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="tkitem.backend.domain.product.mapper.ProductMapper">
+
+    <!-- 테마별: 일일 고정 랜덤(씨드=KST yyyyMMdd), 커서는 합성키(Long) -->
+    <select id="selectProductsByTheme" resultType="tkitem.backend.domain.product.vo.ProductVo">
+        SELECT *
+        FROM (
+        SELECT
+        p.product_id  AS productId,
+        p.category_id AS categoryId,
+        p.brand_name  AS brandName,
+        p.avg_review  AS avgReview,
+        p.name        AS name,
+        p.price       AS price,
+        p.code        AS code,
+        p.url         AS url,
+        p.img_url     AS imgUrl,
+        (ORA_HASH(#{seed} || ':' || p.product_id) * 1000000000 + p.product_id) AS cursorKey
+        FROM PRODUCT p
+        JOIN PRODUCT_CATEGORY_SUB s
+        ON s.product_category_sub_id = p.category_id
+        WHERE s.is_product = 'T'
+        <if test="names != null and names.size() > 0">
+            AND s.name IN
+            <foreach collection="names" item="n" open="(" separator="," close=")">
+                #{n}
+            </foreach>
+        </if>
+        ) t
+        <where>
+            <if test="cursor != null">
+                t.cursorKey &gt; #{cursor}
+            </if>
+        </where>
+        ORDER BY t.cursorKey ASC
+        FETCH FIRST #{limit} ROWS ONLY
+    </select>
+
+    <!-- 마지막 productId → 합성 커서키(Long) 계산 -->
+    <select id="computeThemeCursorKey" resultType="long">
+        SELECT (ORA_HASH(#{seed} || ':' || #{productId}) * 1000000000 + #{productId})
+        FROM dual
+    </select>
+
+    <!-- 카테고리: 최신순 + 커서=product_id -->
+    <select id="selectProductsByCategoryIds" resultType="tkitem.backend.domain.product.vo.ProductVo">
+        SELECT
+        p.product_id  AS productId,
+        p.category_id AS categoryId,
+        p.brand_name  AS brandName,
+        p.avg_review  AS avgReview,
+        p.name        AS name,
+        p.price       AS price,
+        p.code        AS code,
+        p.url         AS url,
+        p.img_url     AS imgUrl
+        FROM PRODUCT p
+        WHERE 1=1
+        <if test="categoryIds != null and categoryIds.size() > 0">
+            AND p.category_id IN
+            <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
+                #{cid}
+            </foreach>
+        </if>
+        <if test="cursor != null">
+            AND p.product_id &lt; #{cursor}
+        </if>
+        ORDER BY p.product_id DESC
+        FETCH FIRST #{limit} ROWS ONLY
+    </select>
+
+</mapper>
