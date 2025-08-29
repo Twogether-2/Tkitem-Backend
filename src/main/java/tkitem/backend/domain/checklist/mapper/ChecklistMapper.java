@@ -28,4 +28,15 @@ public interface ChecklistMapper {
     void createChecklist(@Param("tripId") Long tripId, @Param("memberId") Long memberId,
                          @Param("scheduleDate") Integer normalizedDay,
                          @Param("ids") List<Long> productCategorySubIds);
+
+    //체크리스트 단건 삭제
+    int softDeleteById(Long checklistItemId, Long memberId);
+
+    //체크리스트 전체 삭제(초기화)
+    int softDeleteAllActiveByTrip(Long tripId, Long memberId);
+
+    //체크리스트 체크(활성/비활성)
+    int setCheckedById(@Param("checklistItemId") Long checklistItemId,
+                       @Param("checked") boolean checked,
+                       @Param("memberId") Long memberId);
 }

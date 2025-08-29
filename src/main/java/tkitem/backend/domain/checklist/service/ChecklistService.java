@@ -12,4 +12,10 @@ public interface ChecklistService {
     ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day, Boolean checked);
 
     void createChecklist(Long tripId, Long memberId, @NotNull List<Long> productCategorySubIds, Integer scheduleDate);
+
+    void deleteChecklistItem(Long checklistItemId, Long memberId);
+
+    int deleteAllActiveByTrip(Long tripId, Long memberId);
+
+    void setChecked(Long checklistItemId, boolean value, Long memberId);
 }
