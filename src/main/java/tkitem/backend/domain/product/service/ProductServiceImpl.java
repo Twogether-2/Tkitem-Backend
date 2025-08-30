@@ -85,6 +85,21 @@ public class ProductServiceImpl implements ProductService {
         return new SubCategoryListResponseDto(mainId, mainName, items);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public SubCategoryListResponseDto getSubCategoriesByParent(Long parentId) {
+        if (parentId == null || parentId <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        if (productMapper.existsCategoryParent(parentId) == 0) {
+            throw new BusinessException(ErrorCode.CATEGORY_PARENT_NOT_FOUND);
+        }
+
+        String ParentName = productMapper.selectSubNameById(parentId);
+        var items = productMapper.selectSubCategoriesByParentId(parentId);
+        return new SubCategoryListResponseDto(parentId, ParentName, items);
+    }
+
 
     private int normalizeSize(Integer size) {
         if (size == null || size <= 0) return DEFAULT_SIZE;

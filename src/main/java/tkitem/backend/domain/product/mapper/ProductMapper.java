@@ -42,4 +42,13 @@ public interface ProductMapper {
             @Param("mainId") Long mainId,
             @Param("isProduct") String isProduct
     );
+
+    // 부모 서브 존재 여부
+    int existsCategoryParent(@Param("parentId") Long parentId);
+
+    // 서브 이름
+    String selectSubNameById(@Param("subId") Long subId);
+
+    // parent_sub_id 로 자식 서브카테고리 목록
+    List<SubCategoryResponseDto> selectSubCategoriesByParentId(@Param("parentId") Long parentId);
 }

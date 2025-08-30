@@ -100,6 +100,31 @@
         ORDER BY s.product_category_sub_id
     </select>
 
+    <!-- 부모 서브 존재 여부 -->
+    <select id="existsCategoryParent" parameterType="long" resultType="int">
+        SELECT COUNT(1)
+        FROM PRODUCT_CATEGORY_SUB
+        WHERE product_category_sub_id = #{parentId}
+    </select>
+
+    <!-- 서브 이름 -->
+    <select id="selectSubNameById" parameterType="long" resultType="string">
+        SELECT name
+        FROM PRODUCT_CATEGORY_SUB
+        WHERE product_category_sub_id = #{subId}
+    </select>
+
+    <!-- parent_sub_id 로 자식 서브카테고리 목록 -->
+    <select id="selectSubCategoriesByParentId"
+            resultType="tkitem.backend.domain.product.dto.response.SubCategoryResponseDto">
+        SELECT
+        s.product_category_sub_id AS id,
+        s.name                    AS name,
+        s.is_product              AS isProduct
+        FROM PRODUCT_CATEGORY_SUB s
+        WHERE s.parent_sub_id = #{parentId}
+        ORDER BY s.product_category_sub_id
+    </select>
 
 
 </mapper>
