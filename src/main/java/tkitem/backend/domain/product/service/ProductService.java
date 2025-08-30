@@ -13,4 +13,6 @@ public interface ProductService {
     ProductListResponseDto<ProductVo> getProductsByCategoryIds(List<Long> ids, Long cursor, Integer size);
 
     SubCategoryListResponseDto getSubCategoriesByMain(Long mainId, String isProduct);
+
+    SubCategoryListResponseDto getSubCategoriesByParent(Long parentId);
 }

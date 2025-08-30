@@ -67,4 +67,15 @@ public class ProductController {
     ) {
         return productService.getSubCategoriesByMain(mainId, isProduct);
     }
+
+    @GetMapping("/categories/sub-children")
+    @Operation(
+            summary = "소분류 카테고리(의류) 조회",
+            description = "의류(parent) id에 따른 소분류 카테고리 조회"
+    )
+    public SubCategoryListResponseDto getSubCategoriesByParent(
+            @RequestParam Long parentId
+    ) {
+        return productService.getSubCategoriesByParent(parentId);
+    }
 }
