@@ -23,6 +23,13 @@ spring:
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}          # 필수: 환경변수로 주입
+      base-url: https://api.openai.com    # 기본값이라 생략 가능
+      chat:
+        options:
+          model: gpt-4o              # 또는 gpt-4o
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml

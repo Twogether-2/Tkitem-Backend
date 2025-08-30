@@ -21,6 +21,8 @@ configurations {
 
 repositories {
     mavenCentral()
+    maven { url 'https://repo.spring.io/milestone' }
+    maven { url 'https://repo.spring.io/snapshot' }
 }
 
 dependencies {
@@ -51,6 +53,12 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
     // health check
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // AI
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+    implementation platform("org.springframework.ai:spring-ai-bom:1.0.1-SNAPSHOT")
+    implementation 'org.springframework.ai:spring-ai-openai'
+    // Jackson (JSON 파싱)
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
 
     // Test용 H2 데이터베이스
     implementation 'com.h2database:h2' // H2 데이터베이스 의존성 추가 (테스트용)
