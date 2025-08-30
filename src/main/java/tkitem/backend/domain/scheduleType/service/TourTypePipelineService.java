@@ -33,13 +33,7 @@ public class TourTypePipelineService {
     private static final String ES_INDEX = "tour_detail_schedule_v1";
 
     // TODO :
-    //  1. TDS 분류 시 DEFAULT_TYPE 을 보고 게산을 다르게 매겨야 함.
-    //  MEAL 은 식사고,
-    //  PLACE 는 단순 지역명이라 빼도되고,
-    //  ACCOMMODATION 은 호텔이라 description 에 평점이 있고,
-    //  COLLECTION 은 TOUR 중 대표 여행이라는 의미
     //  2. 함께가는 사람에 대한 분류도 고민할거리다.
-    //  3. 적은 데이터로 분류 테스트 필요
 
     // 한번만 돌리는 메인 엔트리
     @Transactional
@@ -53,15 +47,20 @@ public class TourTypePipelineService {
         int forTest = 10;
         int countTest = 0;
 
+        // 분류 통계 카운터
+        int ruleTried = 0, ruleSuccess = 0;
+        int knnNeeded = 0, knnSuccess = 0;
+        int llmNeeded = 0, llmSuccess = 0;
+
         while (countTest < forTest) {
             // 1) DB 배치 조회
             List<TourDetailScheduleRowDto> rows = tdsMapper.selectBatchForIndexing(offset, batchSize);
             if (rows == null || rows.isEmpty()) break;
 
-            // 2) ES Bulk 색인 (임베딩 포함)
             BulkRequest.Builder bulk = new BulkRequest.Builder();
             for (var r : rows) {
 
+                // 2) 임베딩 생성 + ES 문서 추가
                 String title = r.getTitle() == null ? "" : r.getTitle();
                 String desc = r.getDescription() == null ? "" : r.getDescription();
                 String combined = (title + " " +desc).replaceAll("\\s+", " ").trim();
@@ -86,6 +85,7 @@ public class TourTypePipelineService {
                 var scores = rule.score(r.getTitle(), r.getDescription(), r.getDefaultType());
                 var top = rule.top2(scores);
                 if (top.top1Type != null) {
+                    ruleTried++;
                     double top1 = top.top1Score;
                     double top2 = top.top2Type==null? 0.0 : top.top2Score;
                     double margin = top1 - top2;
@@ -95,16 +95,16 @@ public class TourTypePipelineService {
                         Long typeId = tstMapper.findScheduleTypeIdByName(top.top1Type);
                         if (typeId != null) {
                             tstMapper.upsertTourScheduleType(r.getTourDetailScheduleId(), typeId, top1);
+                            ruleSuccess++;
                         }
                     } else {
                         knnTargets.add(r); // 생성형 분류로 넘길 대기 목록
+                        knnNeeded++;
                     }
                 }
 
                 lastProcessedId = r.getTourDetailScheduleId(); // 체크포인트 갱신
             }
-
-            BulkResponse resp = esService.bulk(bulk.build()); // 대량 색인/업데이트 실행
 
             // 4) KNN Top-3 저장 -> 미달 항목은 LLM 보완 대상으로 이동
             if(!knnTargets.isEmpty()){
@@ -128,6 +128,9 @@ public class TourTypePipelineService {
                     // top1 미달 또는 KNN 결과 없음 → LLM 보완
                     if (list.isEmpty() || list.get(0).score() < MIN_SCORE) {
                         llmPending.add(r);
+                        llmNeeded++;
+                    } else {
+                        knnSuccess++;
                     }
                 }
                 knnTargets.clear();
@@ -135,17 +138,38 @@ public class TourTypePipelineService {
 
             // 5) pending 임계치 도달 시 즉시 생성형 분류 → DB/ES 반영
             if (llmPending.size() >= PENDING_FLUSH) {
-                flushPendingWithGen(llmPending);
+                int added = flushPendingWithGen(llmPending);
+                llmSuccess += added;
                 llmPending.clear();
             }
 
+            BulkResponse resp = esService.bulk(bulk.build()); // 대량 색인/업데이트 실행
+
             offset += rows.size();
             countTest += rows.size();
-            log.info("Indexed+scored batch: {} (lastId={})", rows.size(), lastProcessedId);
+            log.info("[BATCH] rows={}, lastId={}", rows.size(), lastProcessedId);
+            log.info("[RULE] tried={} success={} rate={}%"
+                    , ruleTried, ruleSuccess
+                    , ruleTried == 0 ? 0.0 : Math.round((ruleSuccess * 10000.0 / ruleTried)) / 100.0);
+            log.info("[KNN ] needed={} success={} rate={}%"
+                    , knnNeeded, knnSuccess
+                    , knnNeeded == 0 ? 0.0 : Math.round((knnSuccess * 10000.0 / knnNeeded)) / 100.0);
+            log.info("[LLM ] needed={} success={} (flushed on threshold)"
+                    , llmNeeded, llmSuccess);
         }
 
         // 6) 남은 llmPending 최종 플러시
         if (!llmPending.isEmpty()) flushPendingWithGen(llmPending);
+
+        log.info("[SUMMARY] RULE: tried={} success={} rate={}%",
+                ruleTried, ruleSuccess,
+                ruleTried == 0 ? 0.0 : Math.round((ruleSuccess * 10000.0 / ruleTried)) / 100.0);
+        log.info("[SUMMARY] KNN : needed={} success={} rate={}%",
+                knnNeeded, knnSuccess,
+                knnNeeded == 0 ? 0.0 : Math.round((knnSuccess * 10000.0 / knnNeeded)) / 100.0);
+        log.info("[SUMMARY] LLM : needed={} success={}",
+                llmNeeded, llmSuccess);
+
         log.info("pipeline completed");
     }
 
@@ -168,12 +192,14 @@ public class TourTypePipelineService {
     }
 
     // KNN 분류 -> 부족 시 LLM 분류 -> 라벨 임베딩 → DB 반영
-    private void flushPendingWithGen(List<TourDetailScheduleRowDto> pending) throws Exception {
+    private int flushPendingWithGen(List<TourDetailScheduleRowDto> pending) throws Exception {
 
-        if (pending == null || pending.isEmpty()) return;
+        if (pending == null || pending.isEmpty()) return 0;
 
         // LLM 보조 분류 (배치 호출)
         Map<Long, List<GenerativeLabelService.Result>> results = genSvc.classifyBatchByLLM(pending);
+
+        int successCount = 0;
 
         for (var r : pending) {
             Long tdsId = r.getTourDetailScheduleId();
@@ -190,7 +216,10 @@ public class TourTypePipelineService {
                 tstMapper.upsertTourScheduleType(tdsId, typeId, res.score());
                 if (++saved >= 3) break;
             }
+            if (saved > 0) successCount++;
         }
+        return successCount;
     }
+
 
 }

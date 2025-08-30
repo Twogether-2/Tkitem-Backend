@@ -27,7 +27,7 @@
             c1.city_name as cityName,
             tds.sort_order as sortOrder,
             tds.Title as title,
-            tds.Description as description
+            tds.Description as description,
             tds.default_type as defaultType
         FROM TOUR_DETAIL_SCHEDULE tds
             LEFT JOIN CITY c1 ON tds.city_id = c1.city_id
@@ -45,6 +45,6 @@
             WHERE tc.tour_id = tds.tour_id
                 AND LOWER(c2.country_name) = '베트남'
         )
-        ORDER BY tds.tour_detail_schedule_id;
+        ORDER BY tds.tour_detail_schedule_id
     </select>
 </mapper>

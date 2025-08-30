@@ -101,9 +101,7 @@
   {"label":"ACTIVITY","word":"스노클","wTitle":1.0,"wDesc":1.0},
   {"label":"ACTIVITY","word":"스노쿨","wTitle":1.0,"wDesc":1.0},
   {"label":"ACTIVITY","word":"수영","wTitle":1.0,"wDesc":1.0},
-  {"label":"ACTIVITY","word":"","wTitle":1.0,"wDesc":1.0},
-
-  //            Map.entry("ACTIVITY", keyword("체험", "짚라인", "번지", "다이빙", "스노클", "스노클링", "수영", "스키", "보드")),
+  {"label":"ACTIVITY","word":"골프","wTitle":1.0,"wDesc":1.0},
 
   {"label":"HIKING_TREKKING","word":"트레킹","wTitle":1.0,"wDesc":1.0},
   {"label":"HIKING_TREKKING","word":"트래킹","wTitle":1.0,"wDesc":1.0},

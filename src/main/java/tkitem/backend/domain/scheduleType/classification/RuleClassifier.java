@@ -91,7 +91,7 @@ public class RuleClassifier {
             boolean blocked = false;
             for (var kw : e.getValue()) {
                 double sKw = 0.0;
-                if(kw.isAnd()) { // 단일 키워드 조합이면
+                if(!kw.isAnd()) { // 단일 키워드 조합이면
                     boolean hitT = kw.p.matcher(t).find();
                     boolean hitD = kw.p.matcher(d).find();
                     if ((hitT && kw.wTitle == 0.0) || (hitD && kw.wDesc == 0.0)) {
