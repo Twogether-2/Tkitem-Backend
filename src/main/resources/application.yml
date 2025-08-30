@@ -1,11 +1,15 @@
 spring:
   application:
     name: Tkitem-Backend
+  config:
+    import: optional:classpath:env.properties
   datasource:
     url: ${ORACLE_DB_URL}
     driver-class-name: oracle.jdbc.OracleDriver
     username: ${ORACLE_DB_USERNAME}
     password: ${ORACLE_DB_PASSWORD}
+    hikari:
+      connectionInitSql: "ALTER SESSION DISABLE PARALLEL DML"
   ai:
     retry:
       enabled: false
@@ -35,10 +39,14 @@ app:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
-server:
-  port: 8080
-  address: 0.0.0.0
-
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${EMAIL_USERNAME}
+    password: ${EMAIL_PASSWORD}   # Gmail은 앱 비밀번호 필요
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
@@ -62,25 +70,25 @@ kakao:
 elastic:
   endpoint: ${ELASTICSEARCH_HOST}
   apiKey: ${ELASTIC_API_KEY}
-#  host: ${ELASTIC_HOST:localhost}
-#  port: ${ELASTIC_PORT:9200}
-#  scheme: ${ELASTIC_SCHEME:http}
 
-#cloud:
-#  aws:
-#    s3:
-#      bucket: ${AWS_S3_BUCKET}
-#    stack:
-#      auto: false
-#    region:
-#      static: ${AWS_REGION}
-#    credentials:
-#      access-key: ${AWS_ACCESS_KEY}
-#      secret-key: ${AWS_SECRET_KEY}
+cloud:
+  aws:
+    cdn:
+      url: ${CDN_URL}
+    s3:
+      bucket: ${AWS_S3_BUCKET}
+    stack:
+      auto: false
+    region:
+      static: ${AWS_REGION}
+    credentials:
+      access-key: ${AWS_ACCESS_KEY}
+      secret-key: ${AWS_SECRET_KEY}
 
-#redis:
-#  host: ${REDIS_HOST}
-#  port: ${REDIS_PORT}
+redis:
+  enabled: true
+  host: ${REDIS_HOST}
+  port: ${REDIS_PORT}
 
 #management:
 #  endpoints:
@@ -91,3 +99,6 @@ elastic:
 #  endpoint:
 #    health:
 #      show-details: always
+
+#openai:
+#  api-key: ${OPEN_AI_API_KEY}

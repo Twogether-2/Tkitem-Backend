@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="tkitem.backend.domain.order.mapper.OrderMapper">
+
+    <insert id="insertOrder">
+        INSERT INTO ORDERS (ORDER_ID, MEMBER_ID, STATUS, CREATED_AT)
+        VALUES (ORDERS_SEQ.NEXTVAL, #{memberId}, #{status}, SYSTIMESTAMP)
+    </insert>
+
+    <select id="currOrderId" resultType="long">
+        SELECT ORDERS_SEQ.CURRVAL FROM DUAL
+    </select>
+
+    <update id="updateOrderPaid">
+        UPDATE ORDERS
+        SET PAID_AMOUNT = #{paidAmount},
+        STATUS = #{status},
+        UPDATED_AT = SYSTIMESTAMP
+        WHERE ORDER_ID = #{orderId}
+    </update>
+
+    <update id="updateOrderStatus">
+        UPDATE ORDERS
+        SET STATUS = #{status}, UPDATED_AT = SYSTIMESTAMP
+        WHERE ORDER_ID = #{orderId}
+    </update>
+
+    <update id="updateOrderItemsStatus">
+        UPDATE ORDER_ITEM SET STATUS = #{status}, UPDATED_AT = SYSTIMESTAMP
+        WHERE ORDER_ID = #{orderId}
+    </update>
+
+    <select id="sumOrderAmount" resultType="int">
+        SELECT NVL(SUM(oi.UNIT_PRICE * oi.QUANTITY), 0)
+        FROM ORDER_ITEM oi
+        WHERE oi.ORDER_ID = #{orderId}
+    </select>
+
+    <select id="findOrdersByMemberId" resultType="tkitem.backend.domain.order.dto.response.OrderSummaryResponse">
+        SELECT
+        o.ORDER_ID as orderId,
+        o.STATUS as status,
+        o.PAID_AMOUNT as paidAmount,
+        TO_CHAR(o.CREATED_AT, 'YYYY-MM-DD"T"HH24:MI:SS') as createdAt
+        FROM ORDERS o
+        WHERE o.MEMBER_ID = #{memberId}
+        ORDER BY o.ORDER_ID DESC
+    </select>
+
+    <select id="findOrderDetail" resultType="tkitem.backend.domain.order.dto.response.OrderDetailResponse">
+        SELECT
+        o.ORDER_ID as orderId,
+        o.STATUS as status,
+        o.PAID_AMOUNT as paidAmount,
+        TO_CHAR(o.CREATED_AT, 'YYYY-MM-DD"T"HH24:MI:SS') as createdAt
+        FROM ORDERS o
+        WHERE o.ORDER_ID = #{orderId}
+    </select>
+
+    <select id="findOrderItems" resultType="tkitem.backend.domain.order.dto.OrderItemDetail">
+        SELECT
+        oi.ORDER_ITEM_ID as orderItemId,
+        oi.PRODUCT_ID as productId,
+        oi.PRODUCT_NAME_SNAPSHOT as productName,
+        oi.UNIT_PRICE as price,
+        oi.QUANTITY as quantity,
+        oi.STATUS as status
+        FROM ORDER_ITEM oi
+        WHERE oi.Order_ID = #{orderId}
+        ORDER BY oi.ORDER_ITEM_ID
+    </select>
+
+</mapper>

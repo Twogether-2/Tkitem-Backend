@@ -37,9 +37,15 @@ out/
 .vscode/
 
 ### env ###
-local.env
+src/main/resources/local.env
 .env
 *.env
+src/main/resources/*.properties
+env.properties
 application.properties
 src/main/resources/wallet/
 src/main/resources/wallet/**
+
+
+### macOS ###
+.DS_Store

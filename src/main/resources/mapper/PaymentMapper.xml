@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="tkitem.backend.domain.payment.mapper.PaymentMapper">
+
+    <insert id="insertReady">
+        INSERT INTO PAYMENT (
+        PAYMENT_ID, ORDER_ID, PROVIDER, METHOD, STATUS, AMOUNT, CURRENCY,
+        MERCHANT_ORDER_ID, CREATED_AT
+        ) VALUES (
+        PAYMENT_SEQ.NEXTVAL, #{orderId}, #{provider}, NULL, #{status}, #{amount}, #{currency},
+        #{merchantOrderId}, SYSTIMESTAMP
+        )
+    </insert>
+
+    <select id="findOrderIdByMerchantOrderId" resultType="long">
+        SELECT ORDER_ID FROM PAYMENT WHERE MERCHANT_ORDER_ID = #{merchantOrderId}
+    </select>
+
+    <select id="findPaymentIdByMerchantOrderId" resultType="long">
+        SELECT PAYMENT_ID FROM PAYMENT WHERE MERCHANT_ORDER_ID = #{merchantOrderId}
+    </select>
+
+    <update id="updateApproved">
+        UPDATE PAYMENT
+        SET METHOD = #{method},
+        PAYMENT_KEY = #{paymentKey},
+        STATUS = 'APPROVED',
+        APPROVED_AT = TO_TIMESTAMP_TZ(
+        REPLACE(#{approvedAt}, 'Z', '+00:00'),
+        'YYYY-MM-DD"T"HH24:MI:SS.FF TZH:TZM'
+        ),
+        AMOUNT = #{amount}
+        WHERE PAYMENT_ID = #{paymentId}
+    </update>
+
+    <update id="updateCanceled">
+        UPDATE PAYMENT
+        SET STATUS = 'CANCELED',
+        CANCELED_AT = SYSTIMESTAMP
+        WHERE PAYMENT_ID = #{paymentId}
+    </update>
+
+    <select id="findPaymentIdByPaymentKey" resultType="long">
+        SELECT PAYMENT_ID FROM PAYMENT WHERE PAYMENT_KEY = #{paymentKey}
+    </select>
+
+    <select id="findOrderIdByPaymentKey" resultType="long">
+        SELECT ORDER_ID FROM PAYMENT WHERE PAYMENT_KEY = #{paymentKey}
+    </select>
+</mapper>

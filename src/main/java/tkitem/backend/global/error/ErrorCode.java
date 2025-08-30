@@ -1,6 +1,7 @@
 package tkitem.backend.global.error;
 
 import lombok.Getter;
+import org.springframework.http.HttpStatus;
 
 @Getter
 public enum ErrorCode {
@@ -19,8 +20,38 @@ public enum ErrorCode {
 
     /* MEMBER ERROR */
     MEMBER_NOT_FOUND(404, "MEMBER001", "Member Not Found"),
-    DUPLICATED_MEMBER(400, "MEMBER002", "Duplicated Member");
+    DUPLICATED_MEMBER(400, "MEMBER002", "Duplicated Member"),
+    INVALID_MEMBER_INFO(500, "MEMBER003", "Invalid Member Info"),
 
+    /* ORDER ERROR */
+    ORDER_NOT_FOUND(404, "ORDER001", "Order Not Found"),
+
+    /* PAYMENT ERROR */
+    PAYMENT_AMOUNT_MISMATCH(400, "PAYMENT001", "Payment Amount Mismatch"),
+    PAYMENT_NOT_FOUND(404, "PAYMENT002", "Payment Not Found"),
+
+    /* TOSS PAYMENTS ERROR */
+    TOSS_CLIENT_ERROR(400, "TOSS001", "Invalid Payment Request"),
+    TOSS_SERVER_ERROR(500, "TOSS002", "Toss Server Error"),
+
+    /* CART ERROR */
+    CART_INVALID_QUANTITY(400, "CART001", "Invalid Cart Item Quantity"),
+    CART_CONCURRENCY_CONFLICT(409, "CART002", "Concurrency Conflict"),
+    CART_NOT_FOUND(404, "CART003", "Cart Not Found"),
+    CART_ITEM_NOT_FOUND(404, "CART004", "Cart Item Not Found"),
+
+    /* TRIP / CHECKLIST */
+    TRIP_NOT_FOUND(404, "TRIP001", "Trip Not Found"),
+    TRIP_PACKAGE_REQUIRED(400, "TRIP002", "Trip Package Required"),
+    CHECKLIST_AI_FAILED(500, "CHECKLIST001", "Checklist AI Generation Failed"),
+
+    /* PRODUCT */
+    INVALID_THEME_KEY(400, "PRODUCT001", "Invalid themeKey"),
+    CATEGORY_IDS_REQUIRED(400, "PRODUCT002", "categoryIds must not be empty"),
+    INVALID_CURSOR(400, "PRODUCT003", "Invalid cursor"),
+    PRODUCT_QUERY_FAILED(500, "PRODUCT004", "Product query failed"),
+    CATEGORY_MAIN_NOT_FOUND(404, "CATEGORY001", "Main Category Not Found"),
+    CATEGORY_PARENT_NOT_FOUND(404, "CATEGORY002", "Parent SubCategory Not Found"),;
 
     private final int status;
     private final String code;

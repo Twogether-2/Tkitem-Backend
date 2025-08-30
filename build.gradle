@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.3.3'
+    id 'org.springframework.boot' version '3.5.4'
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -33,16 +33,44 @@ dependencyManagement {
 }
 
 dependencies {
+    // redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-//    implementation 'org.springframework.boot:spring-boot-starter-security'
+    // security
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    // websocket
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    // mybatis
     implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.5'
+    implementation 'com.oracle.database.security:oraclepki:21.9.0.0'
+    implementation 'com.oracle.database.security:osdt_core:21.9.0.0'
+    implementation 'com.oracle.database.security:osdt_cert:21.9.0.0'
+    runtimeOnly 'com.oracle.database.jdbc:ojdbc8'
+    // swagger
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+    // AWS S3
+    implementation 'org.springframework.cloud:spring-cloud-starter-aws:2.2.6.RELEASE'
+    // JWT
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+    implementation 'com.nimbusds:nimbus-jose-jwt:9.37'
+    // Email : Spring으로 465포트를 통해 메일을 보내주는 역할
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+    // WebFlux
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    // health check
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // Test용 H2 데이터베이스
+    implementation 'com.h2database:h2' // H2 데이터베이스 의존성 추가 (테스트용)
+    testRuntimeOnly 'com.h2database:h2'
+
     compileOnly 'org.projectlombok:lombok'
     runtimeOnly 'com.oracle.database.jdbc:ojdbc11'
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter-test:3.0.5'
-//    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
     implementation 'com.oracle.database.jdbc:ojdbc11:21.9.0.0'
