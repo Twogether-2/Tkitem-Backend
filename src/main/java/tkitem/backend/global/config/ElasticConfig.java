@@ -27,23 +27,25 @@ public class ElasticConfig {
     public ElasticConfig(Environment env) { this.env = env; }
 
     @Bean
-    public ElasticsearchClient elasticsearchClient() {
-        String ep = notBlank(endpoint)
-                ? endpoint
-                : orEnv("ELASTICSEARCH_HOST",
-                buildFromParts(scheme, host, port));
-
-        HttpHost httpHost = HttpHost.create(ep);
-
-        String key = notBlank(apiKey) ? apiKey : env.getProperty("ELASTIC_API_KEY", "");
-        Header auth = new BasicHeader("Authorization", "ApiKey " + key);
-
-        RestClient rest = RestClient.builder(httpHost)
-                .setDefaultHeaders(new Header[]{ auth })
-                .build();
-
+    public ElasticsearchClient elasticsearchClient(org.elasticsearch.client.RestClient rest) {
         ElasticsearchTransport transport = new RestClientTransport(rest, new JacksonJsonpMapper());
         return new ElasticsearchClient(transport);
+    }
+
+    @Bean
+    public RestClient lowLevelRestClient() {
+        String ep = notBlank(endpoint)
+                ? endpoint
+                : orEnv("ELASTICSEARCH_HOST", buildFromParts(scheme, host, port));
+        HttpHost httpHost = HttpHost.create(ep);
+        String key = notBlank(apiKey) ? apiKey : env.getProperty("ELASTIC_API_KEY", "");
+
+        Header[] headers = notBlank(key)
+                ? new Header[]{ new BasicHeader("Authorization", "ApiKey " + key) }
+                : new Header[0];
+        return RestClient.builder(httpHost)
+                .setDefaultHeaders(headers)
+                .build();
     }
 
     private String orEnv(String name, String fallback) {

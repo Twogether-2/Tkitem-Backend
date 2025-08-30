@@ -10,6 +10,20 @@ spring:
     password: ${ORACLE_DB_PASSWORD}
     hikari:
       connectionInitSql: "ALTER SESSION DISABLE PARALLEL DML"
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${EMAIL_USERNAME}
+    password: ${EMAIL_PASSWORD}   # Gmail은 앱 비밀번호 필요
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
   ai:
     retry:
       enabled: false
@@ -19,6 +33,11 @@ spring:
       embedding:
         options:
           model: text-embedding-3-small   # 비용↓, 1536차원
+
+  elasticse:
+    uris: ${ELASTICSEARCH_HOST}
+#    endpoint: ${ELASTICSEARCH_HOST}
+#    apiKey: ${ELASTIC_API_KEY}
 
 logging:
   level:
@@ -34,19 +53,6 @@ app:
   classify:
     batch-size: 500          # 1회 처리량 (조절)
     ambiguity-margin: 0.06   # top1-top2 마진 미만이면 '애매'
-
-  servlet:
-    multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: ${EMAIL_USERNAME}
-    password: ${EMAIL_PASSWORD}   # Gmail은 앱 비밀번호 필요
-    properties:
-      mail.smtp.auth: true
-      mail.smtp.starttls.enable: true
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
@@ -67,10 +73,6 @@ jwt:
 kakao:
   api-key: ${KAKAO_API_KEY}
 
-elastic:
-  endpoint: ${ELASTICSEARCH_HOST}
-  apiKey: ${ELASTIC_API_KEY}
-
 cloud:
   aws:
     cdn:
@@ -90,6 +92,8 @@ redis:
   host: ${REDIS_HOST}
   port: ${REDIS_PORT}
 
+elastic:
+  apiKey: ${ELASTIC_API_KEY}
 #management:
 #  endpoints:
 #    web:
