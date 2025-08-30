@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.product.dto.response.ProductListResponseDto;
+import tkitem.backend.domain.product.dto.response.SubCategoryListResponseDto;
 import tkitem.backend.domain.product.enums.ThemePreset;
 import tkitem.backend.domain.product.mapper.ProductMapper;
 import tkitem.backend.domain.product.vo.ProductVo;
@@ -68,6 +69,22 @@ public class ProductServiceImpl implements ProductService {
         Long nextCursor = hasMore ? page.get(page.size() - 1).getProductId() : null;
         return new ProductListResponseDto<>(page, hasMore ? nextCursor : null, hasMore);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SubCategoryListResponseDto getSubCategoriesByMain(Long mainId, String isProduct) {
+        if (mainId == null || mainId <= 0) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        if (productMapper.existsCategoryMain(mainId) == 0) throw new BusinessException(ErrorCode.CATEGORY_MAIN_NOT_FOUND);
+
+        String filter = (isProduct == null || isProduct.isBlank())
+                ? null
+                : isProduct.trim().toUpperCase();
+
+        String mainName = productMapper.selectMainName(mainId);
+        var items = productMapper.selectSubCategoriesByMainId(mainId, filter);
+        return new SubCategoryListResponseDto(mainId, mainName, items);
+    }
+
 
     private int normalizeSize(Integer size) {
         if (size == null || size <= 0) return DEFAULT_SIZE;

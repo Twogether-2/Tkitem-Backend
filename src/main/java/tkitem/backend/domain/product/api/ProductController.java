@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import tkitem.backend.domain.product.dto.response.ProductListResponseDto;
+import tkitem.backend.domain.product.dto.response.SubCategoryListResponseDto;
 import tkitem.backend.domain.product.service.ProductService;
 import tkitem.backend.domain.product.vo.ProductVo;
 
@@ -53,5 +54,17 @@ public class ProductController {
          categoryIds = categoryIds.stream().distinct().toList();
 
         return productService.getProductsByCategoryIds(categoryIds, cursor, size);
+    }
+
+    @GetMapping("/categories/sub")
+    @Operation(
+            summary = "소분류 카테고리 조회",
+            description = "대분류 id에 따른 소분류 카테고리 조회"
+    )
+    public SubCategoryListResponseDto getSubCategoriesByMain(
+            @RequestParam Long mainId,
+            @RequestParam(required = false) String isProduct
+    ) {
+        return productService.getSubCategoriesByMain(mainId, isProduct);
     }
 }

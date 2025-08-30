@@ -71,4 +71,35 @@
         FETCH FIRST #{limit} ROWS ONLY
     </select>
 
+    <!-- 메인 카테고리 존재 여부 -->
+    <select id="existsCategoryMain" parameterType="long" resultType="int">
+        SELECT COUNT(1)
+        FROM PRODUCT_CATEGORY_MAIN
+        WHERE product_category_main_id = #{mainId}
+    </select>
+
+    <!-- 메인 카테고리 이름 조회 -->
+    <select id="selectMainName" parameterType="long" resultType="string">
+        SELECT name
+        FROM PRODUCT_CATEGORY_MAIN
+        WHERE product_category_main_id = #{mainId}
+    </select>
+
+    <!-- 메인 ID → 서브 카테고리 목록 -->
+    <select id="selectSubCategoriesByMainId"
+            resultType="tkitem.backend.domain.product.dto.response.SubCategoryResponseDto">
+        SELECT
+        s.product_category_sub_id AS id,
+        s.name                    AS name,
+        s.is_product              AS isProduct
+        FROM PRODUCT_CATEGORY_SUB s
+        WHERE s.product_category_main_id = #{mainId}
+        <if test="isProduct != null and isProduct != ''">
+            AND s.is_product = #{isProduct}
+        </if>
+        ORDER BY s.product_category_sub_id
+    </select>
+
+
+
 </mapper>

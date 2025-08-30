@@ -2,6 +2,7 @@ package tkitem.backend.domain.product.mapper;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import tkitem.backend.domain.product.dto.response.SubCategoryResponseDto;
 import tkitem.backend.domain.product.vo.ProductVo;
 
 import java.util.List;
@@ -28,5 +29,17 @@ public interface ProductMapper {
             @Param("categoryIds") List<Long> categoryIds,
             @Param("cursor") Long cursor,
             @Param("limit") int limit
+    );
+
+    // 메인 카테고리 존재 여부
+    int existsCategoryMain(@Param("mainId") Long mainId);
+
+    // 메인 카테고리 이름 조회
+    String selectMainName(@Param("mainId") Long mainId);
+
+    // 메인 ID → 서브 카테고리 목록
+    List<SubCategoryResponseDto> selectSubCategoriesByMainId(
+            @Param("mainId") Long mainId,
+            @Param("isProduct") String isProduct
     );
 }
