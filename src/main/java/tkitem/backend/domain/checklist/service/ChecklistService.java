@@ -9,7 +9,7 @@ import java.util.List;
 public interface ChecklistService {
     ChecklistAiResponseDto generateAiChecklist(Long tripId,Long memberId);
 
-    ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day, Boolean checked);
+    ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day, Boolean checked, Boolean isProduct);
 
     void createChecklist(Long tripId, Long memberId, @NotNull List<Long> productCategorySubIds, Integer scheduleDate);
 

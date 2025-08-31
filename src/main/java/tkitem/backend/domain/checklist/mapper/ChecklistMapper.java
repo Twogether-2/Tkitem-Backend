@@ -19,7 +19,8 @@ public interface ChecklistMapper {
     void generateAiCheckList(@Param("tripId") Long tripId, @Param("memberId") Long memberId);
 
     //체크리스트 조회
-    List<ChecklistItemVo> selectChecklistByTrip(@Param("tripId") Long tripId, @Param("day") Integer day, @Param("checked") Boolean checked);
+    List<ChecklistItemVo> selectChecklistByTrip(@Param("tripId") Long tripId, @Param("day") Integer day,
+                                                @Param("checked") Boolean checked, @Param("isProduct") Boolean isProduct);
 
     //카테고리 존재 개수
     int countProductCategorySubs(@Param("ids") List<Long> productCategorySubIds);
