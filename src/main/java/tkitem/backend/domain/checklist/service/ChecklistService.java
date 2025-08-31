@@ -18,4 +18,6 @@ public interface ChecklistService {
     int deleteAllActiveByTrip(Long tripId, Long memberId);
 
     void setChecked(Long checklistItemId, boolean value, Long memberId);
+
+    Integer getTripTotalDays(Long tripId);
 }

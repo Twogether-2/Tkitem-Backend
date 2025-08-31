@@ -40,4 +40,7 @@ public interface ChecklistMapper {
     int setCheckedById(@Param("checklistItemId") Long checklistItemId,
                        @Param("checked") boolean checked,
                        @Param("memberId") Long memberId);
+
+    // 여행 총 일 수 조회
+    Integer getTripTotalDays(@Param("tripId") Long tripId);
 }

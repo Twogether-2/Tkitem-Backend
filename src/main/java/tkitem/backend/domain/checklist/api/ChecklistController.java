@@ -102,5 +102,11 @@ public class ChecklistController {
         return ResponseEntity.ok(value ? "체크되었습니다." : "체크 해제되었습니다.");
     }
 
+    @GetMapping("/{tripId}/days")
+    @Operation(summary = "여행 총 일수 조회", description = "출발~도착일 차이(+1)를 반환")
+    public ResponseEntity<Integer> getTripTotalDays(@PathVariable Long tripId) {
+        return ResponseEntity.ok(checklistService.getTripTotalDays(tripId));
+    }
+
 
 }
