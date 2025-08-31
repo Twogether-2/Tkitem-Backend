@@ -1,18 +1,13 @@
 package tkitem.backend.domain.scheduleType.service;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
-import co.elastic.clients.elasticsearch.core.KnnSearchResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -50,70 +45,5 @@ public class ScheduleEsService {
         if (!exists) {
             throw new IllegalStateException("Elasticsearch index not found: " + INDEX);
         }
-    }
-
-    /**
-     * KNN + 필터 오버로드
-     * @param queryVector
-     * @param k
-     * @param candidates
-     * @param countryName
-     * @param cityName
-     * @param tourId
-     * @return
-     * @throws Exception
-     */
-    public KnnSearchResponse<Map> knnWithFilter(
-            float[] queryVector, int k, int candidates,
-            String countryName, String cityName, Long tourId
-    ) throws Exception {
-
-        List<Float> qv = new ArrayList<>(queryVector.length);
-        for (float v : queryVector) qv.add(v);
-
-        // 지역 필터 설정
-        List<Query> filters = new ArrayList<>();
-        if (countryName != null && !countryName.isBlank()) {
-            filters.add(Query.of(q -> q.term(t -> t.field("country_name").value(countryName))));
-        }
-        if (cityName != null && !cityName.isBlank()) {
-            filters.add(Query.of(q -> q.term(t -> t.field("city_name").value(cityName))));
-        }
-        if (tourId != null) {
-            filters.add(Query.of(q -> q.term(t -> t.field("tour_id").value(tourId))));
-        }
-
-        // 예산 필터 설정 필요
-
-        // 여행 일정 필터 설정 필요
-
-        int effK = Math.max(1, k);
-        int effCandidates = Math.max(effK, candidates);
-
-        KnnSearchResponse<Map> resp = esClient.knnSearch(r -> {
-            var req = r.index(INDEX)
-                    .knn(kn -> kn
-                                    .field("embedding")
-                                    .queryVector(qv)
-                                    .k(k)
-                                    .numCandidates(candidates)
-                            )
-                            .source(src -> src.filter(f -> f
-                                    .includes(
-                                            "tour_detail_schedule_id",
-                                            "tour_id",
-                                            "title",
-                                            "city_name",
-                                            "country_name",
-                                            "schedule_date",
-                                            "sort_order")));
-            if(!filters.isEmpty()) {
-                req = req.filter(filters);
-            }
-            return req;
-        }
-        , Map.class);
-
-        return resp;
     }
 }
