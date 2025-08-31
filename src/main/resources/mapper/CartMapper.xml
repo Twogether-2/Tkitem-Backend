@@ -18,4 +18,16 @@
         VALUES (#{cartId}, #{memberId}, #{createdBy})
     </insert>
 
+    <select id="findTripsByMemberId" resultType="tkitem.backend.domain.cart.dto.CartTripDto">
+        SELECT
+            T.TRIP_ID AS tripId,
+            T.TITLE AS tripTitle,
+            T2.IMG_URL AS imgUrl
+        FROM TRIP T
+                 JOIN TOUR_PACKAGE TP on T.TOUR_PACKAGE_ID = TP.TOUR_PACKAGE_ID
+                 JOIN TOUR T2 on TP.TOUR_ID = T2.TOUR_ID
+        WHERE T.MEMBER_ID = #{memberId}
+        ORDER BY T.CREATED_AT DESC
+    </select>
+
 </mapper>

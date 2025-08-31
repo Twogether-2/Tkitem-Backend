@@ -9,6 +9,7 @@ import tkitem.backend.domain.cart.dto.request.CartItemsCreateRequest;
 import tkitem.backend.domain.cart.dto.response.CartItemUpdateResponse;
 import tkitem.backend.domain.cart.dto.response.CartItemsCreateResponse;
 import tkitem.backend.domain.cart.dto.response.CartListResponse;
+import tkitem.backend.domain.cart.dto.response.CartTripListResponse;
 import tkitem.backend.domain.cart.mapper.CartItemMapper;
 import tkitem.backend.domain.cart.mapper.CartMapper;
 import tkitem.backend.global.error.ErrorCode;
@@ -156,6 +157,13 @@ public class CartServiceImpl implements CartService {
                 .orElseThrow(() -> new EntityNotFoundException(cartItemId + " is Not Found", ErrorCode.CART_ITEM_NOT_FOUND));
 
         return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CartTripListResponse getTripsForCart(Long memberId) {
+        List<CartTripDto> trips = cartMapper.findTripsByMemberId(memberId);
+        return new CartTripListResponse(trips);
     }
 
     private CartItemDto toItem(CartItemRowWithTripDto r) {
