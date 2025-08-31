@@ -164,4 +164,21 @@
         WHERE checklist_item_id = #{checklistItemId}
         AND is_deleted = 'F'
     </update>
+
+    <!-- 여행 총 일 수 조회 -->
+    <select id="getTripTotalDays" resultType="int">
+        SELECT
+            NVL(
+                    (SELECT MAX(s.schedule_date)
+                     FROM tour_package tp2
+                              JOIN tour_detail_schedule s ON s.tour_id = tp2.tour_id
+                     WHERE tp2.tour_package_id = t.tour_package_id),
+                    CASE
+                        WHEN t.departure_date IS NOT NULL AND t.arrival_date IS NOT NULL
+                            THEN (TRUNC(t.arrival_date) - TRUNC(t.departure_date) + 1)
+                        END
+            ) AS totalDays
+        FROM trip t
+        WHERE t.trip_id = #{tripId}
+    </select>
 </mapper>

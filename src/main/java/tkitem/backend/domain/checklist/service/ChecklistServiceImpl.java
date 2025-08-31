@@ -107,4 +107,15 @@ public class ChecklistServiceImpl implements ChecklistService {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Integer getTripTotalDays(Long tripId) {
+        if (tripId == null || tripId <= 0) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        if (checklistMapper.existsTrip(tripId) == 0) throw new BusinessException(ErrorCode.TRIP_NOT_FOUND);
+
+        Integer days = checklistMapper.getTripTotalDays(tripId);
+        return days;
+    }
+
 }
