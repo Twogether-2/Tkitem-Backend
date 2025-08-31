@@ -33,4 +33,133 @@
     <select id="findPackageDateCodesByTourId" resultType="java.lang.String">
         SELECT PACKAGE_DATE_CODE FROM TOUR_PACKAGE WHERE TOUR_ID = #{tourId}
     </select>
+
+    <!--  투어 추천  -->
+    <!--  filtered_pkg : 기간, 가격 필터  -->
+    <!--  pkg_agg : 필터링에 걸린 투어 상품 중 가장 가격 낮은  -->
+    <!--  tds_score :   -->
+    <select id="selectTourCandidates" parameterType="map" resultType="tkitem.backend.domain.tour.dto.TourCandidateRowDto">
+        WITH filtered_pkg AS (
+            SELECT
+                tp.tour_id,
+                tp.tour_package_id,
+                tp.price,
+                tp.departure_date,
+                tp.return_date,
+                tp.booking_url,
+                tp.departure_airline,
+                tp.return_airline
+            FROM TOUR_PACKAGE tp
+            WHERE (#{req.departureDate} IS NULL OR tp.departure_date &gt;= #{req.departureDate})
+                AND (#{req.returnDate}   IS NULL OR tp.return_date &lt;= #{req.returnDate})
+                AND (#{req.priceMin} IS NULL OR tp.price &gt;= #{req.priceMin})
+                AND (#{req.priceMax} IS NULL OR tp.price &lt;= #{req.priceMax})
+        ),
+        pkg_agg AS (
+            SELECT tour_id,
+                MIN(price) AS min_price,
+                MAX(departure_date) AS latest_departure
+            FROM filtered_pkg
+            GROUP BY tour_id
+        ),
+        rep_pkg AS (
+            SELECT t.tour_id,
+                p.tour_package_id AS "repTourPackageId",
+                p.price           AS "repPrice",
+                p.departure_date  AS "repDepartureDate",
+                p.return_date     AS "repReturnDate",
+                p.booking_url     AS "repBookingUrl",
+                p.departure_airline AS "repDepartureAirline",
+                p.return_airline    AS "repReturnAirline"
+            FROM (SELECT DISTINCT tour_id FROM filtered_pkg) t
+            CROSS APPLY (
+                SELECT fp2.tour_package_id, fp2.price, fp2.departure_date, fp2.return_date,
+                    fp2.booking_url, fp2.departure_airline, fp2.return_airline
+                FROM filtered_pkg fp2
+                WHERE fp2.tour_id = t.tour_id
+                ORDER BY fp2.price ASC NULLS LAST,
+                    fp2.departure_date ASC NULLS LAST,
+                    fp2.tour_package_id ASC
+                FETCH FIRST 1 ROW ONLY
+            ) p
+        ),
+        tds_score AS (
+            SELECT
+                tds.tour_id,
+                tds.tour_detail_schedule_id as tds_id,
+                (stt.weight * tst.score) as s
+            FROM TOUR_DETAIL_SCHEDULE tds
+                JOIN TOUR_SCHEDULE_TYPE tst ON tst.tour_detail_schedule_id = tds.tour_detail_schedule_id
+                JOIN SCHEDULE_TYPE_TAG stt ON stt.schedule_type_id = tst.schedule_type_id
+                LEFT JOIN CITY c ON c.city_id = tds.city_id
+                JOIN pkg_agg pa ON pa.tour_id = tds.tour_id
+            WHERE (#{req.country} IS NULL OR (c.country_name IS NOT NULL AND c.country_name = #{req.country}))
+                <if test="req.city != null and req.city != ''">
+                    AND (c.city_name IS NOT NULL AND c.city_name = #{req.city})
+                </if>
+                <if test="req.tagIdList != null and req.tagIdList.size() &gt; 0">
+                    AND stt.tag_id IN
+                        <foreach collection="req.tagIdList" item="id" open="(" close=")" separator=",">#{id}</foreach>
+                </if>
+        ),
+        ranked AS (
+            SELECT tour_id, tds_id, s, ROW_NUMBER() OVER (PARTITION BY tour_id ORDER BY s DESC) AS rn
+            FROM tds_score
+        ),
+        final_score AS (
+            SELECT r.tour_id,
+                SUM(CASE WHEN r.rn &lt;= #{kTop} THEN r.s ELSE 0 END) AS "sDbRaw",
+                COUNT(*) AS "tdsCnt",
+                pa.min_price AS "minPrice",
+                pa.latest_departure AS "latestDeparture"
+            FROM ranked r
+                JOIN pkg_agg pa ON pa.tour_id = r.tour_id
+            GROUP BY r.tour_id, pa.min_price, pa.latest_departure
+        )
+        SELECT
+            fs.tour_id AS "tourId",
+            fs."sDbRaw", fs."tdsCnt", fs."minPrice", fs."latestDeparture",
+            rp."repTourPackageId", rp."repPrice", rp."repDepartureDate", rp."repReturnDate",
+            rp."repBookingUrl", rp."repDepartureAirline", rp."repReturnAirline"
+        FROM final_score fs
+        JOIN rep_pkg rp ON rp.tour_id = fs.tour_id
+    </select>
+
+    <select id="selectTourMetaByIds" parameterType="map" resultType="map">
+        SELECT
+            t.tour_id AS "tourId",
+            t.title AS "title",
+            t.feature AS "feature",
+            t.img_url AS "imgUrl",
+            t.provider AS "provider"
+        FROM TOUR t
+        WHERE t.tour_id IN
+        <foreach collection="tourIds" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="selectTdsByTourIds" parameterType="map" resultType="map">
+        SELECT
+            tds.tour_id                  AS "tourId",
+            tds.tour_detail_schedule_id  AS "tourDetailScheduleId",
+            tds.city_id                  AS "cityId",
+            c.country_name               AS "countryName",
+            c.city_name                  AS "cityName",
+            tds.title                    AS "title",
+            tds.description              AS "description",
+            tds.sort_order               AS "sortOrder",
+            tds.default_type             AS "defaultType",
+            tds.schedule_date            AS "scheduleDate"
+        FROM TOUR_DETAIL_SCHEDULE tds
+            LEFT JOIN CITY c ON c.city_id = tds.city_id
+        WHERE tds.tour_id IN
+        <foreach collection="list" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+        ORDER BY
+            tds.tour_id,
+            NVL(tds.sort_order, 999999),
+            tds.schedule_date
+    </select>
 </mapper>
