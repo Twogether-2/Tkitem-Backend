@@ -43,8 +43,11 @@
         c.created_at               AS createdAt,
         c.updated_at               AS updatedAt
         FROM CHECKLIST_ITEM c
+        JOIN PRODUCT_CATEGORY_SUB s
+        ON s.product_category_sub_id = c.product_category_sub_id
         WHERE c.trip_id = #{tripId}
         AND c.is_deleted = 'F'
+
         <choose>
             <!-- day=0 → 공통(NULL) -->
             <when test="day != null and day == 0">
@@ -64,8 +67,19 @@
                 <otherwise> 'F' </otherwise>
             </choose>
         </if>
-        ORDER BY createdAt ASC, productCategorySubId ASC
+
+        <!-- isProduct: null=전체, true='T'만, false='F'만 -->
+        <if test="isProduct != null">
+            AND s.is_product =
+            <choose>
+                <when test="isProduct"> 'T' </when>
+                <otherwise> 'F' </otherwise>
+            </choose>
+        </if>
+
+        ORDER BY c.created_at ASC, c.product_category_sub_id ASC
     </select>
+
 
     <!-- 카테고리 존재 개수 -->
     <select id="countProductCategorySubs" parameterType="list" resultType="int">
