@@ -67,6 +67,10 @@ mybatis:
 swagger:
   server-url: ${SWAGGER_SERVER}
 
+springdoc:
+  swagger-ui:
+    persistAuthorization: true
+
 jwt:
   secret: ${JWT_SECRET}
   access:
