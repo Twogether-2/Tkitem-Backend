@@ -47,13 +47,7 @@ public class ImageServiceImpl implements ImageService {
 			try (InputStream inputStream = multipartFile.getInputStream()) {
 				amazonS3.putObject(bucket, s3FileName, inputStream, objMeta);
 			}
-
-			// Url 가져와서 반환 (CDN 우선)
-			log.info("S3 upload file name = {}", s3FileName);
-			if (cdnUrl != null && !cdnUrl.isBlank()) {
-				String normalizedCdn = cdnUrl.endsWith("/") ? cdnUrl.substring(0, cdnUrl.length() - 1) : cdnUrl;
-				return normalizedCdn + "/" + s3FileName;
-			}
+			
 			return amazonS3.getUrl(bucket, s3FileName).toString();
 		}
 		catch (AmazonS3Exception e) {
