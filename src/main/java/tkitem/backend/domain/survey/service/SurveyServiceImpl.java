@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.Period;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,12 +17,14 @@ import tkitem.backend.domain.survey.vo.Survey;
 import tkitem.backend.domain.survey.vo.SurveyQuestion;
 import tkitem.backend.global.error.ErrorCode;
 import tkitem.backend.global.error.exception.BusinessException;
+import tkitem.backend.global.util.CloudFrontUtil;
 
 @Slf4j
 @Service
 @Transactional
 @RequiredArgsConstructor
 public class SurveyServiceImpl implements SurveyService{
+
 	private final SurveyMapper surveyMapper;
 
 	@Override
@@ -49,6 +52,11 @@ public class SurveyServiceImpl implements SurveyService{
 				ageType,
 				member.getGender()
 			);
+
+			for(SurveyQuestion surveyQuestion : surveyQuestionList){
+				String cdnUrl = CloudFrontUtil.getCloudFrontUrl(surveyQuestion.getImageUrl());
+				surveyQuestion.setImageUrl(cdnUrl);
+			}
 			survey.setQuestions(surveyQuestionList);
 		}
 
