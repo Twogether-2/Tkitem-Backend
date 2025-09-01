@@ -14,6 +14,8 @@ import tkitem.backend.domain.order.mapper.OrderItemMapper;
 import tkitem.backend.domain.order.mapper.OrderMapper;
 import tkitem.backend.domain.payment.enums.PaymentStatus;
 import tkitem.backend.domain.payment.mapper.PaymentMapper;
+import tkitem.backend.domain.product.service.ProductService;
+import tkitem.backend.domain.product.vo.ProductVo;
 import tkitem.backend.global.error.ErrorCode;
 import tkitem.backend.global.error.exception.BusinessException;
 import tkitem.backend.global.error.exception.EntityNotFoundException;
@@ -28,6 +30,7 @@ public class OrderServiceImpl implements OrderService {
 
     private static final String TOSS_PROVIDER = "TOSS";
 
+    private final ProductService productService;
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
     private final PaymentMapper paymentMapper;
@@ -42,24 +45,21 @@ public class OrderServiceImpl implements OrderService {
         for (int i=0; i<req.getItems().size(); i++) {
 
             OrderCreateRequest.OrderItemRequest item = req.getItems().get(i);
-            // TODO productMapper 연결
-            Integer unitPrice = 1000;
-            String name = "상품";
-            String img = "https://image.hmall.com/static/6/0/73/37/2237730609_0.jpg?RS=400x400&AR=0&SF=webp";
+            ProductVo product = productService.getProductById(item.getProductId());
 
             orderItemMapper.insertOrderItem(
                     orderId,
                     item.getProductId(),
                     item.getTripId(),
                     item.getQuantity(),
-                    unitPrice,
+                    product.getPrice(),
                     "KRW",
-                    name,
-                    img,
+                    product.getName(),
+                    product.getImgUrl(),
                     OrderStatus.PENDING.name()
             );
             if (i == 0) {
-                firstName = (name != null ? name : "주문상품");
+                firstName = (product.getName() != null ? product.getName() : "주문상품");
             }
         }
 

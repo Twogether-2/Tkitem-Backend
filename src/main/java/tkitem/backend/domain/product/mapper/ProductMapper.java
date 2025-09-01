@@ -6,6 +6,7 @@ import tkitem.backend.domain.product.dto.response.SubCategoryResponseDto;
 import tkitem.backend.domain.product.vo.ProductVo;
 
 import java.util.List;
+import java.util.Optional;
 
 @Mapper
 public interface ProductMapper {
@@ -51,4 +52,6 @@ public interface ProductMapper {
 
     // parent_sub_id 로 자식 서브카테고리 목록
     List<SubCategoryResponseDto> selectSubCategoriesByParentId(@Param("parentId") Long parentId);
+
+    Optional<ProductVo> findById(@Param("productId") Long productId);
 }
