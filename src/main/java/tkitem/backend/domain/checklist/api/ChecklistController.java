@@ -38,14 +38,16 @@ public class ChecklistController {
         - day=0: 공통만 (schedule_date IS NULL)
         - day>=1: 해당 일자만 (schedule_date = day)
         - checked: false(체크비활성), true(체크활성), null(전체)
+        - isProduct : null(전체), true(상품형만), false(비상품형만)
         """
     )
     public ResponseEntity<ChecklistListResponseDto> getChecklist(
             @PathVariable Long tripId,
             @RequestParam(required = false) Integer day,
-            @RequestParam(required = false) Boolean checked
+            @RequestParam(required = false) Boolean checked,
+            @RequestParam(required = false) Boolean isProduct
     ) {
-        return ResponseEntity.ok(checklistService.getChecklistByTrip(tripId, day, checked));
+        return ResponseEntity.ok(checklistService.getChecklistByTrip(tripId, day, checked, isProduct));
     }
 
     @PostMapping("/{tripId}")
@@ -66,5 +68,45 @@ public class ChecklistController {
         );
         return ResponseEntity.ok("추가 성공");
     }
+
+    @DeleteMapping("/item/{checklistItemId}")
+    @Operation(summary = "체크리스트 단건 삭제", description = "checklist_item_id 기준 soft delete (is_deleted='T')")
+    public ResponseEntity<String> deleteChecklistItem(
+            @PathVariable Long checklistItemId,
+            @AuthenticationPrincipal Member member
+    ) {
+        checklistService.deleteChecklistItem(checklistItemId, member.getMemberId());
+        return ResponseEntity.ok("삭제되었습니다.");
+    }
+
+    @DeleteMapping("/{tripId}")
+    @Operation(summary = "체크리스트 초기화(일괄 삭제)",
+            description = "해당 trip의 is_deleted='F' 항목을 모두 'T'로 변경")
+    public ResponseEntity<String> deleteAllActiveByTrip(
+            @PathVariable Long tripId,
+            @AuthenticationPrincipal Member member
+    ) {
+        int count = checklistService.deleteAllActiveByTrip(tripId, member.getMemberId());
+        return ResponseEntity.ok(count + "건 삭제되었습니다.");
+    }
+
+    @PatchMapping("/item/{checklistItemId}/checked")
+    @Operation(summary="체크/체크해제(단건)",
+            description="value=true면 체크, false면 체크해제")
+    public ResponseEntity<String> setChecked(
+            @PathVariable Long checklistItemId,
+            @RequestParam boolean value,
+            @AuthenticationPrincipal Member member
+    ) {
+        checklistService.setChecked(checklistItemId, value, member.getMemberId());
+        return ResponseEntity.ok(value ? "체크되었습니다." : "체크 해제되었습니다.");
+    }
+
+    @GetMapping("/{tripId}/days")
+    @Operation(summary = "여행 총 일수 조회", description = "출발~도착일 차이(+1)를 반환")
+    public ResponseEntity<Integer> getTripTotalDays(@PathVariable Long tripId) {
+        return ResponseEntity.ok(checklistService.getTripTotalDays(tripId));
+    }
+
 
 }

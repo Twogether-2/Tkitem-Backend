@@ -48,7 +48,15 @@ public enum ErrorCode {
     /* PREFERENCE ERROR */
     INVALID_IMAGE_URL(400, "PREFERENCE001", "Invalid Image URL"),
     AI_RESPONSE_FAILED(500, "PREFERENCE002", "AI Response Failed"),
-    AI_RESPONSE_INVALID(500, "PREFERENCE003", "AI Response Invalid or Empty");
+    AI_RESPONSE_INVALID(500, "PREFERENCE003", "AI Response Invalid or Empty"),
+
+    /* PRODUCT */
+    INVALID_THEME_KEY(400, "PRODUCT001", "Invalid themeKey"),
+    CATEGORY_IDS_REQUIRED(400, "PRODUCT002", "categoryIds must not be empty"),
+    INVALID_CURSOR(400, "PRODUCT003", "Invalid cursor"),
+    PRODUCT_QUERY_FAILED(500, "PRODUCT004", "Product query failed"),
+    CATEGORY_MAIN_NOT_FOUND(404, "CATEGORY001", "Main Category Not Found"),
+    CATEGORY_PARENT_NOT_FOUND(404, "CATEGORY002", "Parent SubCategory Not Found");
 
     private final int status;
     private final String code;

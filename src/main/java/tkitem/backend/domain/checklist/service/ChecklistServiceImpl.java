@@ -36,18 +36,18 @@ public class ChecklistServiceImpl implements ChecklistService {
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.CHECKLIST_AI_FAILED);
         }
-        List<ChecklistItemVo> items = checklistMapper.selectChecklistByTrip(tripId, null, null);
+        List<ChecklistItemVo> items = checklistMapper.selectChecklistByTrip(tripId, null, null, null);
         return new ChecklistAiResponseDto(tripId, items.size());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day, Boolean checked) {
+    public ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day, Boolean checked, Boolean isProduct) {
         if (tripId == null || tripId <= 0) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         if (checklistMapper.existsTrip(tripId) == 0) throw new BusinessException(ErrorCode.TRIP_NOT_FOUND);
         if (day != null && day < 0) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
 
-        List<ChecklistItemVo> items = checklistMapper.selectChecklistByTrip(tripId, day, checked);
+        List<ChecklistItemVo> items = checklistMapper.selectChecklistByTrip(tripId, day, checked, isProduct);
         return ChecklistListResponseDto.of(tripId, items);
     }
 
@@ -71,4 +71,51 @@ public class ChecklistServiceImpl implements ChecklistService {
 
         checklistMapper.createChecklist(tripId, memberId, normalizedDay, productCategorySubIds);
     }
+
+    @Override
+    @Transactional
+    public void deleteChecklistItem(Long checklistItemId, Long memberId) {
+        if (checklistItemId == null || checklistItemId <= 0 || memberId == null || memberId <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        int updated = checklistMapper.softDeleteById(checklistItemId, memberId);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+    }
+
+    @Override
+    @Transactional
+    public int deleteAllActiveByTrip(Long tripId, Long memberId) {
+        if (tripId == null || tripId <= 0 || memberId == null || memberId <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        if (checklistMapper.existsTrip(tripId) == 0) {
+            throw new BusinessException(ErrorCode.TRIP_NOT_FOUND);
+        }
+        return checklistMapper.softDeleteAllActiveByTrip(tripId, memberId);
+    }
+
+    @Override
+    @Transactional
+    public void setChecked(Long checklistItemId, boolean checked, Long memberId) {
+        if (checklistItemId == null || checklistItemId <= 0 || memberId == null || memberId <= 0)
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+
+        int updated = checklistMapper.setCheckedById(checklistItemId, checked, memberId);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Integer getTripTotalDays(Long tripId) {
+        if (tripId == null || tripId <= 0) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        if (checklistMapper.existsTrip(tripId) == 0) throw new BusinessException(ErrorCode.TRIP_NOT_FOUND);
+
+        Integer days = checklistMapper.getTripTotalDays(tripId);
+        return days;
+    }
+
 }

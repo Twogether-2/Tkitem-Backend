@@ -8,6 +8,5 @@ import tkitem.backend.domain.preference.vo.Preference;
 
 public interface PreferenceService {
 	void insertPreference(Member member, CalculateWeightRequest request);
-	void insertPreferenceByOpenAiResult(Member member, OpenAiResponse response);
 	PreferenceResponse getPreference(Member member);
 }

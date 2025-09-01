@@ -23,18 +23,46 @@ spring:
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
+
   ai:
+    retry:
+      enabled: false
     openai:
-      api-key: ${OPENAI_API_KEY}          # 필수: 환경변수로 주입
-      base-url: https://api.openai.com    # 기본값이라 생략 가능
+      api-key: ${OPEN_AI_API_KEY}
+      base-url: https://api.openai.com
       chat:
         options:
           model: gpt-4o              # 또는 gpt-4o
+      embedding:
+        options:
+          model: text-embedding-3-small   # 비용↓, 1536차원
+
+  elasticse:
+    uris: ${ELASTICSEARCH_HOST}
+#    endpoint: ${ELASTICSEARCH_HOST}
+#    apiKey: ${ELASTIC_API_KEY}
+
+logging:
+  level:
+    org.springframework.web.client: WARN
+    org.apache.hc.client5.http: WARN
+    org.apache.hc.client5.http.wire: OFF  # [주의] 매우 상세, 진단 끝나면 끄기
+    org.springframework.ai: WARN
+
+rule:
+  classifier:
+    path: classpath:dummy/rule_keywords.json
+
+app:
+  classify:
+    batch-size: 500          # 1회 처리량 (조절)
+    ambiguity-margin: 0.06   # top1-top2 마진 미만이면 '애매'
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
   configuration:
     map-underscore-to-camel-case: true
+    default-executor-type: BATCH
 
 swagger:
   server-url: ${SWAGGER_SERVER}
@@ -68,17 +96,17 @@ redis:
   host: ${REDIS_HOST}
   port: ${REDIS_PORT}
 
-toss:
-  secret-key: ${TOSS_SECRET_KEY}
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health
-  endpoint:
-    health:
-      show-details: always
+elastic:
+  apiKey: ${ELASTIC_API_KEY}
+#management:
+#  endpoints:
+#    web:
+#      exposure:
+#        include: health
+#
+#  endpoint:
+#    health:
+#      show-details: always
 
 #openai:
 #  api-key: ${OPEN_AI_API_KEY}
