@@ -1,13 +1,13 @@
-package tkitem.backend.domain.recommendation.service;
+package tkitem.backend.domain.product_recommendation.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import tkitem.backend.domain.recommendation.dto.*;
-import tkitem.backend.domain.recommendation.dto.request.ProductRecommendationRequest;
-import tkitem.backend.domain.recommendation.dto.response.ProductRecommendationResponse;
-import tkitem.backend.domain.recommendation.mapper.ProductRecommendationMapper;
-import tkitem.backend.domain.recommendation.util.TagExtractor;
+import tkitem.backend.domain.product_recommendation.dto.*;
+import tkitem.backend.domain.product_recommendation.dto.request.ProductRecommendationRequest;
+import tkitem.backend.domain.product_recommendation.dto.response.ProductRecommendationResponse;
+import tkitem.backend.domain.product_recommendation.mapper.ProductRecommendationMapper;
+import tkitem.backend.domain.product_recommendation.util.TagExtractor;
 
 import java.math.*;
 import java.util.*;
@@ -76,7 +76,10 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
                 double tagNorm = Math.max(0, (c.getTagScore()==null?0.0:c.getTagScore().doubleValue()) / maxTag);
                 double ratingNorm = Math.max(0, (c.getAvgReview()==null?0.0:c.getAvgReview().doubleValue()) / 5.0);
                 double utility = wTag * tagNorm + wRating * ratingNorm;
-                opts.add(Option.pick(c.getProductId(), c.getName(), price, utility, c.getMatchedTags()));
+                opts.add(Option.pick(
+                        c.getProductId(), c.getName(), price, utility, c.getMatchedTags(),
+                        c.getBrandName(), c.getCategory(), c.getImgUrl()
+                ));
             }
             groups.add(opts);
         }
@@ -123,6 +126,9 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
                 PlannedPickDto pickDto = PlannedPickDto.builder()
                         .productId(o.productId)
                         .name(o.name)
+                        .brandName(o.brandName)
+                        .category(o.category)
+                        .imgUrl(o.imgUrl)
                         .price(BigDecimal.valueOf(o.cost))
                         .utility(o.utility)
                         .matchedTags(o.matchedTags)
@@ -190,23 +196,32 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
     }
 
     // 내부 DP 옵션
+    // ProductRecommendationServiceImpl 내부
+
     private static final class Option {
         final boolean isSkip;
         final Long productId;
         final String name;
+        final String brandName;
+        final String category;
+        final String imgUrl;
         final double cost;
         final double utility;
         final String matchedTags;
 
-        private Option(boolean isSkip, Long pid, String name, double cost, double utility, String tags) {
+        private Option(boolean isSkip, Long pid, String name, double cost, double utility, String tags,
+                       String brandName, String category, String imgUrl) {
             this.isSkip = isSkip; this.productId = pid; this.name = name;
             this.cost = cost; this.utility = utility; this.matchedTags = tags;
+            this.brandName = brandName; this.category = category; this.imgUrl = imgUrl;
         }
-        static Option skip() { return new Option(true, null, null, 0.0, 0.0, null); }
-        static Option pick(Long id, String name, double cost, double util, String tags) {
-            return new Option(false, id, name, cost, util, tags);
+        static Option skip() { return new Option(true, null, null, 0.0, 0.0, null, null, null, null); }
+        static Option pick(Long id, String name, double cost, double util, String tags,
+                           String brandName, String category, String imgUrl) {
+            return new Option(false, id, name, cost, util, tags, brandName, category, imgUrl);
         }
     }
+
 
 }
 

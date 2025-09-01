@@ -1,4 +1,4 @@
-package tkitem.backend.domain.recommendation.util;
+package tkitem.backend.domain.product_recommendation.util;
 
 import java.util.*;
 import java.util.regex.*;

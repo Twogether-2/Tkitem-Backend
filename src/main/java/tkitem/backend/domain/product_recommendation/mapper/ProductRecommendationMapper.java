@@ -1,9 +1,9 @@
-package tkitem.backend.domain.recommendation.mapper;
+package tkitem.backend.domain.product_recommendation.mapper;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import tkitem.backend.domain.recommendation.dto.CandidateProductDto;
-import tkitem.backend.domain.recommendation.dto.ChecklistItemDto;
+import tkitem.backend.domain.product_recommendation.dto.CandidateProductDto;
+import tkitem.backend.domain.product_recommendation.dto.ChecklistItemDto;
 
 import java.util.List;
 
