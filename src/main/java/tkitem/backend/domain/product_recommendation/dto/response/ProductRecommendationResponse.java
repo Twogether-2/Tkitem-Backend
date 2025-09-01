@@ -1,7 +1,7 @@
-package tkitem.backend.domain.recommendation.dto.response;
+package tkitem.backend.domain.product_recommendation.dto.response;
 
 import lombok.*;
-import tkitem.backend.domain.recommendation.dto.ScheduleGroupDto;
+import tkitem.backend.domain.product_recommendation.dto.ScheduleGroupDto;
 
 import java.math.BigDecimal;
 import java.util.List;

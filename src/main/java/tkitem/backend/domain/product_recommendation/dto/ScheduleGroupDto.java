@@ -1,4 +1,4 @@
-package tkitem.backend.domain.recommendation.dto;
+package tkitem.backend.domain.product_recommendation.dto;
 
 import lombok.*;
 

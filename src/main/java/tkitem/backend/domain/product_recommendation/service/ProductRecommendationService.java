@@ -1,7 +1,7 @@
-package tkitem.backend.domain.recommendation.service;
+package tkitem.backend.domain.product_recommendation.service;
 
-import tkitem.backend.domain.recommendation.dto.request.ProductRecommendationRequest;
-import tkitem.backend.domain.recommendation.dto.response.ProductRecommendationResponse;
+import tkitem.backend.domain.product_recommendation.dto.request.ProductRecommendationRequest;
+import tkitem.backend.domain.product_recommendation.dto.response.ProductRecommendationResponse;
 
 import java.math.BigDecimal;
 import java.util.List;

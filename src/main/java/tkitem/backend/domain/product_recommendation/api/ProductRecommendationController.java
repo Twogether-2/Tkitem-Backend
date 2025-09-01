@@ -1,11 +1,11 @@
-package tkitem.backend.domain.recommendation.api;
+package tkitem.backend.domain.product_recommendation.api;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import tkitem.backend.domain.recommendation.dto.request.ProductRecommendationRequest;
-import tkitem.backend.domain.recommendation.dto.response.ProductRecommendationResponse;
-import tkitem.backend.domain.recommendation.service.ProductRecommendationServiceImpl;
+import tkitem.backend.domain.product_recommendation.dto.request.ProductRecommendationRequest;
+import tkitem.backend.domain.product_recommendation.dto.response.ProductRecommendationResponse;
+import tkitem.backend.domain.product_recommendation.service.ProductRecommendationServiceImpl;
 
 @RequiredArgsConstructor
 @RequestMapping("/product-recommendation")
