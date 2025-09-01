@@ -10,6 +10,7 @@ import tkitem.backend.domain.product.mapper.ProductMapper;
 import tkitem.backend.domain.product.vo.ProductVo;
 import tkitem.backend.global.error.ErrorCode;
 import tkitem.backend.global.error.exception.BusinessException;
+import tkitem.backend.global.error.exception.EntityNotFoundException;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -100,6 +101,12 @@ public class ProductServiceImpl implements ProductService {
         return new SubCategoryListResponseDto(parentId, ParentName, items);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ProductVo getProductById(Long productId) {
+        return productMapper.findById(productId)
+                .orElseThrow(() -> new EntityNotFoundException(ErrorCode.PRODUCT_NOT_FOUND.getMessage(), ErrorCode.PRODUCT_NOT_FOUND));
+    }
 
     private int normalizeSize(Integer size) {
         if (size == null || size <= 0) return DEFAULT_SIZE;

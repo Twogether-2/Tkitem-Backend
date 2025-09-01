@@ -15,4 +15,6 @@ public interface ProductService {
     SubCategoryListResponseDto getSubCategoriesByMain(Long mainId, String isProduct);
 
     SubCategoryListResponseDto getSubCategoriesByParent(Long parentId);
+
+    ProductVo getProductById(Long productId);
 }

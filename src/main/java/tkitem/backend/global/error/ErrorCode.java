@@ -55,6 +55,7 @@ public enum ErrorCode {
     CATEGORY_IDS_REQUIRED(400, "PRODUCT002", "categoryIds must not be empty"),
     INVALID_CURSOR(400, "PRODUCT003", "Invalid cursor"),
     PRODUCT_QUERY_FAILED(500, "PRODUCT004", "Product query failed"),
+    PRODUCT_NOT_FOUND(404, "PRODUCT005", "Product Not Found"),
     CATEGORY_MAIN_NOT_FOUND(404, "CATEGORY001", "Main Category Not Found"),
     CATEGORY_PARENT_NOT_FOUND(404, "CATEGORY002", "Parent SubCategory Not Found");
 
