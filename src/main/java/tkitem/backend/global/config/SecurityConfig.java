@@ -67,7 +67,6 @@ public class SecurityConfig {
                     PREFIX + "/auth/email",
                     PREFIX + "/auth/email/verify",
                     PREFIX + "/member/duplicate",
-                    PREFIX + "/preference/ai/**",
                     STATIC_RESOURCE,
                     PREFIX + "/actuator/health",
                     "/actuator/health",

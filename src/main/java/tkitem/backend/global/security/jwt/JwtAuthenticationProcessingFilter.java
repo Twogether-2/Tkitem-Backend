@@ -55,7 +55,6 @@ public class JwtAuthenticationProcessingFilter extends OncePerRequestFilter{
         PREFIX + "/auth/email/verify",
         PREFIX + "/member/duplicate",
         PREFIX + "/actuator/health",
-        PREFIX + "/preference/ai/**",
         "/actuator/health",
         "/v3/api-docs/**",
         "/swagger-ui/**",

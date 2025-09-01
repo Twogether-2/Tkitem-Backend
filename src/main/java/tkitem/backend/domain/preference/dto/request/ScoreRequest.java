@@ -1,3 +1,5 @@
 package tkitem.backend.domain.preference.dto.request;
 
-public record ScoreRequest(String imgUrl) {}
+import java.util.List;
+
+public record ScoreRequest(List<String> imgUrlList) {}

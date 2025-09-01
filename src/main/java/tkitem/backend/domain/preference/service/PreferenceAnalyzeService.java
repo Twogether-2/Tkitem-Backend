@@ -1,8 +1,10 @@
 package tkitem.backend.domain.preference.service;
 
-import tkitem.backend.domain.preference.dto.response.ScoreResponse;
+import java.util.List;
+
+import tkitem.backend.domain.preference.dto.response.OpenAiResponse;
 
 public interface PreferenceAnalyzeService {
-	ScoreResponse getWeightByOnlyOpenAI(String imageUrl);
+	OpenAiResponse getWeightByOnlyOpenAI(List<String> imageUrl);
 
 }

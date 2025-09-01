@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.preference.dto.request.CalculateWeightRequest;
 import tkitem.backend.domain.preference.dto.request.ScoreRequest;
+import tkitem.backend.domain.preference.dto.response.OpenAiResponse;
 import tkitem.backend.domain.preference.dto.response.PreferenceResponse;
 import tkitem.backend.domain.preference.dto.response.ScoreResponse;
 import tkitem.backend.domain.preference.service.PreferenceAnalyzeService;
@@ -44,10 +45,11 @@ public class PreferenceController {
 		return ResponseEntity.ok().body(preference);
 	}
 
-	@PostMapping("/ai/weight")
-	@Operation(summary = "패션 이미지의 가중치 값 추출", description = "이미지를 보고 b, m, f, v, look에 대한 가중치 값 추출(openAI만 이용)")
-	public ResponseEntity<ScoreResponse> getWeightByOpenAI(@RequestBody ScoreRequest reqeust){
-		ScoreResponse result = preferenceAnalyzeService.getWeightByOnlyOpenAI(reqeust.imgUrl());
-		return ResponseEntity.ok().body(result);
+	@PostMapping("/ai")
+	@Operation(summary = "패션 이미지의 가중치 값 추출 후 취향 저장", description = "이미지를 보고 b, m, f, v, look에 대한 가중치 값 추출(openAI만 이용)")
+	public ResponseEntity<String> getWeightByOpenAI(@AuthenticationPrincipal Member member, @RequestBody ScoreRequest reqeust){
+		OpenAiResponse result = preferenceAnalyzeService.getWeightByOnlyOpenAI(reqeust.imgUrlList());
+		preferenceService.insertPreferenceByOpenAiResult(member, result);
+		return ResponseEntity.ok().body("success");
 	}
 }
