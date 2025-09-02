@@ -12,7 +12,7 @@
                 title,
                 TO_CHAR(departure_date, 'YYYY-MM-DD') AS departureDate,
                 TO_CHAR(arrival_date, 'YYYY-MM-DD')   AS arrivalDate,
-                type
+                type,
                 CASE
                     WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN 'UPCOMING'
                     WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN 'ONGOING'
@@ -25,6 +25,9 @@
                     departure_date &lt; TO_DATE(#{cursorDepartureDate}, 'YYYY-MM-DD')
                     OR (departure_date = TO_DATE(#{cursorDepartureDate}, 'YYYY-MM-DD') AND trip_id &lt; #{cursorTripId})
                 )
+            </if>
+            <if test="cursorDepartureDate == null or cursorTripId == null">
+                <!-- No additional cursor condition for first page -->
             </if>
             ORDER BY
                 CASE

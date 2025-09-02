@@ -41,8 +41,8 @@ public class TripController {
 	public ResponseEntity<List<Trip>> getTrips(
 		@AuthenticationPrincipal Member member,
 		@RequestParam(value = "limit", defaultValue = "5") int limit,
-		@RequestParam(value = "cursorDepartureDate") String cursorDepartureDate,
-		@RequestParam("cursorTripId") Long cursorTripId){
+		@RequestParam(value = "cursorDepartureDate", required = false) String cursorDepartureDate,
+		@RequestParam(value = "cursorTripId", required = false) Long cursorTripId){
 
 		List<Trip> result = tripService.getMyTripList(member, cursorDepartureDate, cursorTripId, limit);
 		return ResponseEntity.ok(result);
