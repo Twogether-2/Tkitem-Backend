@@ -26,7 +26,7 @@ public class OrderController {
     }
 
     @GetMapping
-    public List<OrderSummaryResponse> list(@AuthenticationPrincipal Member member) {
+    public OrderSummaryResponse list(@AuthenticationPrincipal Member member) {
         return orderService.findOrdersByMemberId(member.getMemberId());
     }
 
