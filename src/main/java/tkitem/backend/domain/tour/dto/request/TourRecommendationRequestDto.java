@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Date;
 import java.util.List;
-
+// TODO : 지역 List 로 받아서 mapper 도 처리 해줘야해
 public record TourRecommendationRequestDto (
     @Schema(description = "출발일 시작(포함)", example = "2026-04-01")
     Date departureDate,
@@ -14,6 +14,8 @@ public record TourRecommendationRequestDto (
     Long priceMin,
     @Schema(description = "최대 가격", example = "2000000")
     Long priceMax,
+    @Schema(description = "국가그룹명(한글)", example = "동남아")
+    String countryGroup,
     @Schema(description = "국가명(한글)", example = "베트남")
     String country,
     @Schema(description = "도시명(한글)", example = "다낭")
