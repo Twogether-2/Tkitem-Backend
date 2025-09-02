@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="tkitem.backend.domain.trip.mapper.TripMapper">
+    <select id="selectTripsByMemberId" resultType="tkitem.backend.domain.trip.vo.Trip">
+        SELECT *
+        FROM (
+            SELECT
+                trip_id       AS tripId,
+                tour_package_id AS tourPackageId,
+                img_url    AS imgUrl,
+                title,
+                TO_CHAR(departure_date, 'YYYY-MM-DD') AS departureDate,
+                TO_CHAR(arrival_date, 'YYYY-MM-DD')   AS arrivalDate,
+                type
+                CASE
+                    WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN 'UPCOMING'
+                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN 'ONGOING'
+                    WHEN TRUNC(SYSDATE) &gt; TRUNC(arrival_date) THEN 'PAST'
+                END AS status
+            FROM TRIP
+            WHERE member_id = #{memberId}
+            <if test="cursorDepartureDate != null and cursorTripId != null">
+                AND (
+                    departure_date &lt; TO_DATE(#{cursorDepartureDate}, 'YYYY-MM-DD')
+                    OR (departure_date = TO_DATE(#{cursorDepartureDate}, 'YYYY-MM-DD') AND trip_id &lt; #{cursorTripId})
+                )
+            </if>
+            ORDER BY
+                CASE
+                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN 1
+                    WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN 2
+                    WHEN TRUNC(SYSDATE) > TRUNC(arrival_date) THEN 3
+                END,
+                CASE
+                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN TRUNC(departure_date)
+                    WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN TRUNC(departure_date)
+                    WHEN TRUNC(SYSDATE) > TRUNC(arrival_date) THEN NULL
+                END ASC,
+                CASE
+                    WHEN TRUNC(SYSDATE) > TRUNC(arrival_date) THEN TRUNC(arrival_date)
+                    ELSE NULL
+                END DESC,
+                trip_id DESC
+        )
+        WHERE ROWNUM &lt;= #{limit}
+    </select>
+
+    <select id="selectTripInfoByTripId" resultType="tkitem.backend.domain.trip.vo.Trip">
+        SELECT
+            trip_id       AS tripId,
+            img_url       AS imgUrl,
+            tour_package_id AS tourPackageId,
+            title,
+            type,
+            TO_CHAR(departure_date, 'YYYY-MM-DD') AS departureDate,
+            TO_CHAR(arrival_date, 'YYYY-MM-DD')   AS arrivalDate,
+            CASE
+                WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN 'UPCOMING'
+                WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN 'ONGOING'
+                WHEN TRUNC(SYSDATE) &gt; TRUNC(arrival_date) THEN 'PAST'
+            END AS status
+        FROM TRIP
+        WHERE trip_id = #{tripId}
+    </select>
+</mapper>
