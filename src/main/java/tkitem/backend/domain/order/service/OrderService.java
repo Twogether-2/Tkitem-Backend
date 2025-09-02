@@ -13,6 +13,6 @@ public interface OrderService {
     int calculateAmount(Long orderId);
     void markPaid(Long orderId, int paidAmount);
     void markCanceled(Long orderId);
-    List<OrderSummaryResponse> findOrdersByMemberId(Long memberId);
+    OrderSummaryResponse findOrdersByMemberId(Long memberId);
     OrderDetailResponse findOrderDetail(Long orderId);
 }

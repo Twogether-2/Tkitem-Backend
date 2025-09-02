@@ -39,38 +39,88 @@
         WHERE oi.ORDER_ID = #{orderId}
     </select>
 
-    <select id="findOrdersByMemberId" resultType="tkitem.backend.domain.order.dto.response.OrderSummaryResponse">
+    <resultMap id="OrderDetailMap"
+               type="tkitem.backend.domain.order.dto.response.OrderDetailResponse">
+        <id     property="orderId"    column="order_id"/>
+        <result property="status"     column="status"/>
+        <result property="paidAmount" column="paid_amount"/>
+        <result property="createdAt"  column="created_at_str"/>
+        <collection property="order"
+                    column="order_id"
+                    select="findTripGroupsByOrderId"/>
+    </resultMap>
+
+    <!-- 회원의 주문 헤더 목록 -->
+    <select id="findOrdersByMemberId" resultMap="OrderDetailMap">
         SELECT
-        o.ORDER_ID as orderId,
-        o.STATUS as status,
-        o.PAID_AMOUNT as paidAmount,
-        TO_CHAR(o.CREATED_AT, 'YYYY-MM-DD"T"HH24:MI:SS') as createdAt
+        o.ORDER_ID                                       AS order_id,
+        o.STATUS                                         AS status,
+        o.PAID_AMOUNT                                    AS paid_amount,
+        TO_CHAR(o.CREATED_AT, 'YYYY-MM-DD') AS created_at_str
         FROM ORDERS o
         WHERE o.MEMBER_ID = #{memberId}
         ORDER BY o.ORDER_ID DESC
     </select>
 
-    <select id="findOrderDetail" resultType="tkitem.backend.domain.order.dto.response.OrderDetailResponse">
+    <!-- 여행 그룹 resultMap: tripId, tripTitle + items[] -->
+    <resultMap id="TripGroupMap"
+               type="tkitem.backend.domain.order.dto.TripOrderGroup">
+        <id     property="tripId"    column="trip_id"/>
+        <result property="tripTitle" column="trip_title"/>
+        <collection property="items"
+                    ofType="tkitem.backend.domain.order.dto.OrderItemDetail"
+                    column="{orderId=order_id,tripId=trip_id}"
+                    select="findOrderItemsByOrderAndTrip"/>
+    </resultMap>
+
+    <!-- 주문별 여행 그룹 목록 -->
+    <select id="findTripGroupsByOrderId" resultMap="TripGroupMap">
         SELECT
-        o.ORDER_ID as orderId,
-        o.STATUS as status,
-        o.PAID_AMOUNT as paidAmount,
-        TO_CHAR(o.CREATED_AT, 'YYYY-MM-DD"T"HH24:MI:SS') as createdAt
-        FROM ORDERS o
-        WHERE o.ORDER_ID = #{orderId}
+            #{orderId}                      AS order_id,
+            oi.TRIP_ID                      AS trip_id,
+            NVL(t.TITLE, '일반')           AS trip_title
+        FROM ORDER_ITEM oi
+            LEFT JOIN TRIP t ON t.TRIP_ID = oi.TRIP_ID
+        WHERE oi.ORDER_ID = #{orderId}
+        GROUP BY
+            oi.TRIP_ID,
+            NVL(t.TITLE, '일반')
+        ORDER BY MIN(oi.ORDER_ITEM_ID)
     </select>
 
-    <select id="findOrderItems" resultType="tkitem.backend.domain.order.dto.OrderItemDetail">
+    <!-- (orderId, tripId)별 아이템 상세 -->
+    <select id="findOrderItemsByOrderAndTrip"
+            parameterType="map"
+            resultType="tkitem.backend.domain.order.dto.OrderItemDetail">
         SELECT
-        oi.ORDER_ITEM_ID as orderItemId,
-        oi.PRODUCT_ID as productId,
-        oi.PRODUCT_NAME_SNAPSHOT as productName,
-        oi.UNIT_PRICE as price,
-        oi.QUANTITY as quantity,
-        oi.STATUS as status
+        oi.ORDER_ITEM_ID          AS orderItemId,
+        oi.PRODUCT_ID             AS productId,
+        oi.PRODUCT_NAME_SNAPSHOT  AS productName,
+        oi.PRODUCT_IMG_SNAPSHOT   AS imgUrl,
+        oi.UNIT_PRICE             AS price,
+        oi.QUANTITY               AS quantity,
+        oi.STATUS                 AS status
         FROM ORDER_ITEM oi
-        WHERE oi.Order_ID = #{orderId}
+        WHERE oi.ORDER_ID = #{orderId}
+        <choose>
+            <when test="tripId == null">
+                AND oi.TRIP_ID IS NULL
+            </when>
+            <otherwise>
+                AND oi.TRIP_ID = #{tripId, jdbcType=NUMERIC, javaType=java.lang.Long}
+            </otherwise>
+        </choose>
         ORDER BY oi.ORDER_ITEM_ID
+    </select>
+
+    <select id="findOrderDetail" resultMap="OrderDetailMap">
+        SELECT
+        o.ORDER_ID                                       AS order_id,
+        o.STATUS                                         AS status,
+        o.PAID_AMOUNT                                    AS paid_amount,
+        TO_CHAR(o.CREATED_AT, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at_str
+        FROM ORDERS o
+        WHERE o.ORDER_ID = #{orderId}
     </select>
 
 </mapper>

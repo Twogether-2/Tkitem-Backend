@@ -35,6 +35,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderItemMapper orderItemMapper;
     private final PaymentMapper paymentMapper;
 
+    @Override
     public OrderCreateResponse createOrder(Long memberId, OrderCreateRequest req) {
         // 1) 주문 헤더
         orderMapper.insertOrder(memberId, OrderStatus.PENDING.name());
@@ -75,32 +76,36 @@ public class OrderServiceImpl implements OrderService {
         return new OrderCreateResponse(merchantOrderId, amount, orderName);
     }
 
+    @Override
     @Transactional(readOnly = true)
     public int calculateAmount(Long orderId) {
         return orderMapper.sumOrderAmount(orderId);
     }
 
+    @Override
     public void markPaid(Long orderId, int paidAmount) {
         orderMapper.updateOrderPaid(orderId, paidAmount, OrderStatus.PAID.name());
         orderMapper.updateOrderItemsStatus(orderId, OrderItemStatus.PAID.name());
     }
 
+    @Override
     public void markCanceled(Long orderId) {
         orderMapper.updateOrderStatus(orderId, OrderStatus.CANCELED.name());
         orderMapper.updateOrderItemsStatus(orderId, OrderItemStatus.CANCELED.name());
     }
 
+    @Override
     @Transactional(readOnly = true)
-    public List<OrderSummaryResponse> findOrdersByMemberId(Long memberId) {
-        return orderMapper.findOrdersByMemberId(memberId);
+    public OrderSummaryResponse findOrdersByMemberId(Long memberId) {
+        List<OrderDetailResponse> list = orderMapper.findOrdersByMemberId(memberId);
+        return new OrderSummaryResponse(list);
     }
 
+    @Override
     @Transactional(readOnly = true)
     public OrderDetailResponse findOrderDetail(Long orderId) {
-        OrderDetailResponse head = orderMapper.findOrderDetail(orderId)
-                .orElseThrow(() -> new EntityNotFoundException(ErrorCode.ORDER_NOT_FOUND.getMessage(), ErrorCode.ORDER_NOT_FOUND));
-
-        List<OrderItemDetail> items = orderMapper.findOrderItems(orderId);
-        return new OrderDetailResponse(head.getOrderId(), head.getStatus(), head.getPaidAmount(), head.getCreatedAt(), items);
+        return orderMapper.findOrderDetail(orderId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        ErrorCode.ORDER_NOT_FOUND.getMessage(), ErrorCode.ORDER_NOT_FOUND));
     }
 }
