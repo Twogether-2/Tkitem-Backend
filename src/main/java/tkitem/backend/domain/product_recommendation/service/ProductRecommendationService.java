@@ -1,6 +1,7 @@
 package tkitem.backend.domain.product_recommendation.service;
 
 import tkitem.backend.domain.product_recommendation.dto.request.ProductRecommendationRequest;
+import tkitem.backend.domain.product_recommendation.dto.response.CandidateListResponse;
 import tkitem.backend.domain.product_recommendation.dto.response.ProductRecommendationResponse;
 
 import java.math.BigDecimal;
@@ -17,4 +18,6 @@ public interface ProductRecommendationService {
             int perItemCandidates,
             int step
     );
+
+    CandidateListResponse getCandidatesForChecklistItem(Long tripId, Long checklistItemId, int limit);
 }

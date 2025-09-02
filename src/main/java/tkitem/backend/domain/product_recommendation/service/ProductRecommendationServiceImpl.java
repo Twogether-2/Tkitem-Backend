@@ -3,8 +3,10 @@ package tkitem.backend.domain.product_recommendation.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.product_recommendation.dto.*;
 import tkitem.backend.domain.product_recommendation.dto.request.ProductRecommendationRequest;
+import tkitem.backend.domain.product_recommendation.dto.response.CandidateListResponse;
 import tkitem.backend.domain.product_recommendation.dto.response.ProductRecommendationResponse;
 import tkitem.backend.domain.product_recommendation.mapper.ProductRecommendationMapper;
 import tkitem.backend.domain.product_recommendation.util.TagExtractor;
@@ -20,6 +22,8 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
 
     private final ProductRecommendationMapper productRecommendationMapper;
 
+    @Override
+    @Transactional(readOnly = true)
     public ProductRecommendationResponse planWithBudget(
             Long tripId,
             List<Long> checklistItemIds,
@@ -180,6 +184,42 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
                 .remaining(remaining)
                 .groups(groupsOut)
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CandidateListResponse getCandidatesForChecklistItem(Long tripId, Long checklistItemId, int limit) {
+        // 0) limit 가드
+        int topN = Math.max(1, Math.min(limit, 50));
+
+        // 1) checklist item 검증 + 메타 확보 (tripId 스코프)
+        List<ChecklistItemDto> items = productRecommendationMapper.selectChecklistItemsByIds(tripId, List.of(checklistItemId));
+        if (items.isEmpty()) {
+            // 프로젝트에 EntityNotFoundException 있으면 그거 사용
+            throw new IllegalArgumentException("tripId=" + tripId + " 범위에 checklistItemId=" + checklistItemId + "가 없습니다.");
+        }
+        ChecklistItemDto it = items.get(0);
+
+        // 2) 태그 추출 (notes + itemName). TagExtractor가 Set<String>이든 List<String>이든 안전 처리
+        Set<String> extracted = Optional.ofNullable(
+                TagExtractor.extractTagCodes(
+                        Optional.ofNullable(it.getNotes()).orElse(""),
+                        Optional.ofNullable(it.getItemName()).orElse("")
+                )
+        ).orElseGet(Collections::emptySet);
+        ArrayList<String> ctxTagCodes = new ArrayList<>(extracted);
+
+        // 3) 태그 매칭 후보 → 없으면 인기/평점 백업
+        List<CandidateProductDto> candidates = Collections.emptyList();
+        if (!ctxTagCodes.isEmpty()) {
+            candidates = productRecommendationMapper.selectCandidatesForItem(it.getProductCategorySubId(), ctxTagCodes, topN);
+        }
+        if (candidates == null || candidates.isEmpty()) {
+            candidates = productRecommendationMapper.selectPopularCandidatesFallback(it.getProductCategorySubId(), topN);
+        }
+
+        // 4) 응답 (tripId 포함해 세팅)
+        return CandidateListResponse.of(tripId, it, ctxTagCodes, candidates);
     }
 
     private List<ChecklistItemDto> applyScheduleDateFilter(List<ChecklistItemDto> items, String scheduleDateParam) {
