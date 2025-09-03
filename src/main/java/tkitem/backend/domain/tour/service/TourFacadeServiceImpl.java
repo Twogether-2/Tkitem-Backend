@@ -1,6 +1,7 @@
 package tkitem.backend.domain.tour.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
@@ -13,6 +14,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TourFacadeServiceImpl implements TourFacadeService {
 
     private final TourRecommendService tourRecommendService;
@@ -34,6 +36,30 @@ public class TourFacadeServiceImpl implements TourFacadeService {
         boolean useEs = queryText != null && !queryText.isBlank();
         if(!useEs){
             List<TourRecommendationResponseDto> trrDtoList = tourRecommendService.recommendDbOnly(req, topN);
+
+            // ===================== [추가 시작] =====================
+            int total = (trrDtoList == null) ? 0 : trrDtoList.size();
+            int show = Math.min(total, topN);
+            log.info("[DB-ONLY] totalCandidates={}, willShowTopN={}", total, show);
+
+            for (int i = 0; i < show; i++) {
+                TourRecommendationResponseDto r = trrDtoList.get(i);
+                log.info("[DB-ONLY][{}] tourId={}, title='{}', price={}, dep={}, ret={}, pkgId={}, dbScore={}, finalScore={}",
+                        i,
+                        r.getTourId(),
+                        r.getTitle(),
+                        r.getPrice(),
+                        r.getDepartureDate(),
+                        r.getReturnDate(),
+                        r.getTourPackageId(),
+                        r.getDbScore(),
+                        r.getFinalScore());
+            }
+            if (show == 0) {
+                log.info("[DB-ONLY] no candidates.");
+            }
+            // ===================== [추가 끝] =====================
+
             return tourRecommendService.enrichRecommendationDetails(trrDtoList.subList(0, Math.min(trrDtoList.size(), topN)));
         }
 
