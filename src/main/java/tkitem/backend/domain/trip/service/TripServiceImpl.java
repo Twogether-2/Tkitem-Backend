@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.TourPackageInfo;
 import tkitem.backend.domain.tour.mapper.TourMapper;
+import tkitem.backend.domain.trip.dto.TripCreateResponseDto;
 import tkitem.backend.domain.trip.dto.TripInfoResponse;
 import tkitem.backend.domain.trip.dto.UpcomingTripResponse;
 import tkitem.backend.domain.trip.mapper.TripMapper;
@@ -66,4 +67,17 @@ public class TripServiceImpl implements TripService{
 		return tripMapper.selectUpcomingTrips(member.getMemberId());
 	}
 
+	@Override
+	public TripCreateResponseDto createTrip(Long tourPackageId, Member member) {
+
+		TripCreateResponseDto tripCreateResponseDto = tripMapper.selectTripforCreate(tourPackageId);
+
+		if(tripCreateResponseDto == null) throw new BusinessException(ErrorCode.TRIP_NOT_FOUND);
+
+		tripCreateResponseDto.setMemberId(member.getMemberId());
+
+		tripMapper.insertTrip(tripCreateResponseDto);
+
+		return tripCreateResponseDto;
+	}
 }

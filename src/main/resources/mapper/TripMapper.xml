@@ -71,7 +71,7 @@
     </select>
 
     <!-- 오늘 기준 남은 여행 목록 조회(출발일 가까운 순)-->
-    <select id="selectUpcomingTrips" resultType="tkitem.backend.domain.trip.dto.UpcomingTripResponse">
+    <select id="selectUpcomingTrips" parameterType="map" resultType="tkitem.backend.domain.trip.dto.UpcomingTripResponse">
         SELECT
         tr.trip_id            AS tripId,
         tr.title              AS title,
@@ -91,4 +91,54 @@
         GROUP BY tr.trip_id, tr.title, tr.departure_date, tr.arrival_date, t.img_url
         ORDER BY tr.departure_date ASC
     </select>
+
+    <select id="selectTripforCreate" resultType="tkitem.backend.domain.trip.dto.TripCreateResponseDto">
+        WITH city_list AS(
+            SELECT DISTINCT c.city_name
+            FROM TOUR_PACKAGE tp
+                JOIN TOUR t ON t.tour_id = tp.tour_id
+                JOIN TOUR_CITY tc ON tc.tour_id = t.tour_id
+                JOIN CITY c ON c.city_id = tc.city_id
+            WHERE tp.tour_package_id = #{tourPackageId}
+        )
+        SELECT
+            SEQ_TRIP.NEXTVAL AS tripId,
+            tp.tour_package_id AS tourPackageId,
+            (SELECT LISTAGG(city_name, ', ')
+                WITHIN GROUP (ORDER BY city_name)
+                FROM city_list) || ' 여행' AS title,
+            tp.departure_date AS departureDate,
+            tp.return_date AS arrivalDate,
+            'PKG' AS type,
+            tp.img_url AS imgUrl
+        FROM TOUR_PACKAGE tp
+        WHERE tp.tour_package_id = #{tourPackageId}
+    </select>
+
+    <insert id="insertTrip" parameterType="tkitem.backend.domain.trip.dto.TripCreateResponseDto">
+        INSERT INTO TRIP(
+            trip_id,
+            member_id,
+            tour_package_id,
+            title,
+            departure_date,
+            arrival_date,
+            type,
+            img_url,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            #{tripId},
+            #{memberId},
+            #{tourPackageId},
+            #{title},
+            #{departureDate},
+            #{arrivalDate},
+            #{type},
+            #{imgUrl},
+            SYSDATE,
+            SYSDATE
+        )
+    </insert>
 </mapper>
