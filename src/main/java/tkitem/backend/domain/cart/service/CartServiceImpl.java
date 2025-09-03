@@ -12,6 +12,8 @@ import tkitem.backend.domain.cart.dto.response.CartListResponse;
 import tkitem.backend.domain.cart.dto.response.CartTripListResponse;
 import tkitem.backend.domain.cart.mapper.CartItemMapper;
 import tkitem.backend.domain.cart.mapper.CartMapper;
+import tkitem.backend.domain.trip.dto.TripInfoResponse;
+import tkitem.backend.domain.trip.service.TripService;
 import tkitem.backend.global.error.ErrorCode;
 import tkitem.backend.global.error.exception.BusinessException;
 import tkitem.backend.global.error.exception.EntityNotFoundException;
@@ -27,6 +29,7 @@ public class CartServiceImpl implements CartService {
 
     private static final String DEFAULT_CART_TITLE = "기본 장바구니";
 
+    private final TripService tripService;
     private final CartMapper cartMapper;
     private final CartItemMapper cartItemMapper;
 
@@ -177,9 +180,12 @@ public class CartServiceImpl implements CartService {
     }
 
     private String defaultTitle(Long tripId) {
-        if (tripId == null) return DEFAULT_CART_TITLE;
-        // TODO: TripMapper 붙이면 실제 이름 사용
-        return "여행 장바구니 #" + tripId;
+        if (tripId == null) {
+            return DEFAULT_CART_TITLE;
+        }
+
+        TripInfoResponse response = tripService.getTripInfo(tripId);
+        return response.trip().getTitle();
     }
 
 }
