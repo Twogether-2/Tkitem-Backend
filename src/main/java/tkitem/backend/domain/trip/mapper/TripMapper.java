@@ -6,7 +6,7 @@ import java.util.Optional;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
-import tkitem.backend.domain.trip.dto.TripInfoResponse;
+import tkitem.backend.domain.trip.dto.UpcomingTripResponse;
 import tkitem.backend.domain.trip.vo.Trip;
 
 @Mapper
@@ -20,4 +20,7 @@ public interface TripMapper {
 	);
 
 	Optional<Trip> selectTripInfoByTripId(@Param("tripId") Long tripId);
+
+	// 오늘 기준 남은 여행 목록 조회(출발일 가까운 순)
+	List<UpcomingTripResponse> selectUpcomingTrips(@Param("memberId") Long memberId);
 }
