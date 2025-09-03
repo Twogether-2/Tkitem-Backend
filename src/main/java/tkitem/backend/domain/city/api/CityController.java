@@ -1,4 +1,4 @@
-package tkitem.backend.domain.city.controller;
+package tkitem.backend.domain.city.api;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;

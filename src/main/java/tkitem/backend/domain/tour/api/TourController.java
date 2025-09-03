@@ -1,0 +1,76 @@
+package tkitem.backend.domain.tour.api;
+
+import io.swagger.v3.oas.annotations.Operation;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ResourceLoader;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
+import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
+import tkitem.backend.domain.tour.service.DataLoadService;
+import tkitem.backend.domain.tour.service.TourFacadeService;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/tour")
+@RequiredArgsConstructor
+@Slf4j
+public class TourController {
+    private final DataLoadService dataLoadService;
+    private final TourFacadeService tourFacadeService;
+
+    @PostMapping("/init")
+    public ResponseEntity<String> initTour(){
+        try{
+            // 외부 CSV 파일의 절대 경로를 지정합니다.
+            String csvFilePath = "C:\\Users\\pch\\git\\TeamProject\\3st_team\\data\\trip_data.json";
+            dataLoadService.loadDataFromCsv(csvFilePath);
+            return ResponseEntity.ok("투어 데이터 초기화에 성공했습니다.");
+        } catch (Exception e){
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("투어 데이터 초기화 중 오류가 발생했습니다: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/recommend")
+    @Operation(
+            summary = "투어 추천",
+            description = "요금, 지역, 함께가는 사람(미완), 여행 스타일, 일정, 자유텍스트 기반으로 유사한 여행 상품을 추천합니다."
+    )
+    public ResponseEntity<List<TourRecommendationResponseDto>> recommend(
+            @RequestBody TourRecommendationRequestDto req,
+            @RequestParam(name = "text", required = false) String queryText,
+            @RequestParam(name = "topN", defaultValue = "5") int topN
+            ) throws Exception{
+        log.info("접근");
+        // [추가] 요청 파라미터 요약 로그
+        log.info("[REQ] text={}, topN={}", queryText, topN); // [추가]
+        log.info("[REQ] date {} ~ {}, price {} ~ {}, tags={}",            // [추가]
+                req.getDepartureDate(), req.getReturnDate(),
+                req.getPriceMin(), req.getPriceMax(),
+                req.getTagIdList());
+
+        // locations 상세 로그 (null-safe)
+        if (req.getLocations() == null) {
+            log.info("[REQ] locations = null");
+        } else if (req.getLocations().isEmpty()) {
+            log.info("[REQ] locations = [] (empty)");
+        } else {
+            for (int i = 0; i < req.getLocations().size(); i++) {
+                var loc = req.getLocations().get(i);
+                log.info("[REQ] locations[{}] group='{}', country='{}', city='{}'",
+                        i,
+                        loc.getCountryGroup(),
+                        loc.getCountry(),
+                        loc.getCity());
+            }
+        }
+        List<TourRecommendationResponseDto> responseDtodList = tourFacadeService.recommend(req, queryText, topN);
+        log.info("성공");
+        log.info("[RES] size={}", responseDtodList == null ? null : responseDtodList.size());
+        return ResponseEntity.ok(responseDtodList);
+    }
+
+}

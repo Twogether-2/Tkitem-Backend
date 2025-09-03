@@ -1,4 +1,4 @@
-package tkitem.backend.domain.scheduleType.controller;
+package tkitem.backend.domain.scheduleType.api;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
