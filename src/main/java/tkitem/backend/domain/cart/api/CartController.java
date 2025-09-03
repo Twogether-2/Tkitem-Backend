@@ -12,6 +12,7 @@ import tkitem.backend.domain.cart.dto.request.CartItemsCreateRequest;
 import tkitem.backend.domain.cart.dto.response.CartItemUpdateResponse;
 import tkitem.backend.domain.cart.dto.response.CartItemsCreateResponse;
 import tkitem.backend.domain.cart.dto.response.CartListResponse;
+import tkitem.backend.domain.cart.dto.response.CartTripListResponse;
 import tkitem.backend.domain.cart.service.CartService;
 import tkitem.backend.domain.member.vo.Member;
 
@@ -64,4 +65,11 @@ public class CartController {
         return ResponseEntity.ok(cartService.deleteCartItem(member.getMemberId(), cartItemId));
     }
 
+    @Operation(summary = "장바구니 헤더용 여행 목록", description = "사용자의 여행 목록을 반환합니다.")
+    @GetMapping("/trips")
+    public ResponseEntity<CartTripListResponse> listTripsForCart(
+            @AuthenticationPrincipal Member member
+    ) {
+        return ResponseEntity.ok(cartService.getTripsForCart(member.getMemberId()));
+    }
 }

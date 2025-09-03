@@ -126,5 +126,19 @@
         ORDER BY s.product_category_sub_id
     </select>
 
+    <select id="findById" resultType="tkitem.backend.domain.product.vo.ProductVo">
+        SELECT
+            product_id as productId,
+            category_id as categoryId,
+            brand_name as brandName,
+            avg_review as avgReview,
+            name,
+            price,
+            code,
+            url,
+            img_url as imgUrl
+        FROM product
+        WHERE product_id = #{productId}
+    </select>
 
 </mapper>

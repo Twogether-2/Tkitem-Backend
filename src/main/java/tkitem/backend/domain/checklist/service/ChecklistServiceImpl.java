@@ -36,18 +36,18 @@ public class ChecklistServiceImpl implements ChecklistService {
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.CHECKLIST_AI_FAILED);
         }
-        List<ChecklistItemVo> items = checklistMapper.selectChecklistByTrip(tripId, null, null);
+        List<ChecklistItemVo> items = checklistMapper.selectChecklistByTrip(tripId, null, null, null);
         return new ChecklistAiResponseDto(tripId, items.size());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day, Boolean checked) {
+    public ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day, Boolean checked, Boolean isProduct) {
         if (tripId == null || tripId <= 0) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         if (checklistMapper.existsTrip(tripId) == 0) throw new BusinessException(ErrorCode.TRIP_NOT_FOUND);
         if (day != null && day < 0) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
 
-        List<ChecklistItemVo> items = checklistMapper.selectChecklistByTrip(tripId, day, checked);
+        List<ChecklistItemVo> items = checklistMapper.selectChecklistByTrip(tripId, day, checked, isProduct);
         return ChecklistListResponseDto.of(tripId, items);
     }
 
@@ -107,4 +107,15 @@ public class ChecklistServiceImpl implements ChecklistService {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Integer getTripTotalDays(Long tripId) {
+        if (tripId == null || tripId <= 0) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        if (checklistMapper.existsTrip(tripId) == 0) throw new BusinessException(ErrorCode.TRIP_NOT_FOUND);
+
+        Integer days = checklistMapper.getTripTotalDays(tripId);
+        return days;
+    }
+
 }

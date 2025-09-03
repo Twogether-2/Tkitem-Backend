@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="tkitem.backend.domain.product_recommendation.mapper.ProductRecommendationMapper">
+
+    <!-- 체크리스트 아이템 조회: tripId 검증 포함 -->
+    <select id="selectChecklistItemsByIds" resultType="tkitem.backend.domain.product_recommendation.dto.ChecklistItemDto">
+        WITH sel(id) AS (
+        <foreach collection="ids" item="x" separator=" UNION ALL ">
+            SELECT CAST(#{x} AS NUMBER) FROM dual
+        </foreach>
+        )
+        SELECT ci.checklist_item_id       AS checklistItemId,
+        ci.product_category_sub_id AS productCategorySubId,
+        ci.item_name               AS itemName,
+        ci.schedule_date           AS scheduleDate,
+        ci.score                   AS score,
+        ci.tier                    AS tier,
+        ci.notes                   AS notes
+        FROM CHECKLIST_ITEM ci
+        JOIN sel s ON s.id = ci.checklist_item_id
+        WHERE ci.is_deleted = 'F'
+        AND ci.trip_id = #{tripId}
+    </select>
+
+    <!-- 태그 기반 후보 (상위 N) -->
+    <select id="selectCandidatesForItem"
+            resultType="tkitem.backend.domain.product_recommendation.dto.CandidateProductDto">
+        WITH ctx AS (
+        SELECT ct.tag_code
+        FROM COMMON_TAG ct
+        WHERE ct.tag_code IN
+        <foreach collection="ctxTagCodes" item="c" open="(" separator="," close=")">
+            #{c}
+        </foreach>
+        ),
+        cand AS (
+        SELECT
+        p.product_id AS productId,
+        p.name       AS name,
+        p.brand_name AS brandName,       -- 추가
+        pcs.name     AS category,        -- 추가 (서브 카테고리명)
+        p.img_url    AS imgUrl,          -- 추가
+        p.price      AS price,
+        p.avg_review AS avgReview,
+        SUM(
+        CASE WHEN ct.tag_code IN (SELECT tag_code FROM ctx)
+        THEN pt.weight * CASE WHEN pt.source = 'MANUAL' THEN 1.1 ELSE 1.0 END
+        ELSE 0
+        END
+        ) AS tagScore,
+        LISTAGG(CASE WHEN ct.tag_code IN (SELECT tag_code FROM ctx) THEN ct.tag_code END, ',')
+        WITHIN GROUP (ORDER BY ct.tag_code) AS matchedTags
+        FROM PRODUCT p
+        JOIN PRODUCT_TAG pt   ON pt.product_id = p.product_id
+        JOIN COMMON_TAG  ct   ON ct.common_tag_id = pt.common_tag_id
+        JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.product_category_sub_id = p.category_id   -- 추가
+        WHERE p.category_id = #{productCategorySubId}
+        AND p.price IS NOT NULL
+        GROUP BY
+        p.product_id, p.name, p.brand_name, pcs.name, p.img_url, p.price, p.avg_review   -- 추가된 컬럼 포함
+        )
+        SELECT productId, name, brandName, category, imgUrl, price, avgReview,
+        NVL(tagScore,0) AS tagScore, matchedTags
+        FROM cand
+        WHERE NVL(tagScore,0) > 0
+        ORDER BY tagScore DESC, NVL(avgReview,0) DESC, price ASC, name
+        FETCH FIRST #{limit} ROWS ONLY
+    </select>
+
+    <!-- 태그가 없거나 매칭 0일 때 인기/평점 후보 -->
+    <select id="selectPopularCandidatesFallback"
+            resultType="tkitem.backend.domain.product_recommendation.dto.CandidateProductDto">
+        SELECT
+            p.product_id AS productId,
+            p.name       AS name,
+            p.brand_name AS brandName,       -- 추가
+            pcs.name     AS category,        -- 추가
+            p.img_url    AS imgUrl,          -- 추가
+            p.price      AS price,
+            p.avg_review AS avgReview,
+            0            AS tagScore,
+            NULL         AS matchedTags
+        FROM PRODUCT p
+                 JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.product_category_sub_id = p.category_id   -- 추가
+        WHERE p.category_id = #{productCategorySubId}
+          AND p.price IS NOT NULL
+        ORDER BY NVL(p.avg_review,0) DESC, p.price ASC, p.name
+            FETCH FIRST #{limit} ROWS ONLY
+    </select>
+
+</mapper>

@@ -38,14 +38,16 @@ public class ChecklistController {
         - day=0: 공통만 (schedule_date IS NULL)
         - day>=1: 해당 일자만 (schedule_date = day)
         - checked: false(체크비활성), true(체크활성), null(전체)
+        - isProduct : null(전체), true(상품형만), false(비상품형만)
         """
     )
     public ResponseEntity<ChecklistListResponseDto> getChecklist(
             @PathVariable Long tripId,
             @RequestParam(required = false) Integer day,
-            @RequestParam(required = false) Boolean checked
+            @RequestParam(required = false) Boolean checked,
+            @RequestParam(required = false) Boolean isProduct
     ) {
-        return ResponseEntity.ok(checklistService.getChecklistByTrip(tripId, day, checked));
+        return ResponseEntity.ok(checklistService.getChecklistByTrip(tripId, day, checked, isProduct));
     }
 
     @PostMapping("/{tripId}")
@@ -98,6 +100,12 @@ public class ChecklistController {
     ) {
         checklistService.setChecked(checklistItemId, value, member.getMemberId());
         return ResponseEntity.ok(value ? "체크되었습니다." : "체크 해제되었습니다.");
+    }
+
+    @GetMapping("/{tripId}/days")
+    @Operation(summary = "여행 총 일수 조회", description = "출발~도착일 차이(+1)를 반환")
+    public ResponseEntity<Integer> getTripTotalDays(@PathVariable Long tripId) {
+        return ResponseEntity.ok(checklistService.getTripTotalDays(tripId));
     }
 
 

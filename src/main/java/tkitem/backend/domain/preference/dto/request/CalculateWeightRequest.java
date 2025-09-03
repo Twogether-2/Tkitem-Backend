@@ -3,6 +3,7 @@ package tkitem.backend.domain.preference.dto.request;
 import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import tkitem.backend.domain.preference.dto.response.ScoreResponse;
 
 public record CalculateWeightRequest(
 	@Schema(description = "밝음/어두움 점수 합계 (양수 = 밝은옷, 음수 = 어두운옷)", example = "3")
@@ -24,5 +25,9 @@ public record CalculateWeightRequest(
 	String secondLook,
 
 	@Schema(description = "사용자가 응답한 설문 ID 목록", example = "[1, 2, 3]")
-	List<Long> surveyIds
+	List<Long> surveyIds,
+
+	@Schema(description = "사용자가 첨부했던 사진 수", example = "0")
+	int photoInputCnt
+
 ) {}

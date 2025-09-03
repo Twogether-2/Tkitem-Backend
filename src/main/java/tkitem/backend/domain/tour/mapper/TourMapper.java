@@ -4,6 +4,9 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
+import org.apache.ibatis.annotations.Param;
+
+import tkitem.backend.domain.tour.dto.TourPackageInfo;
 import tkitem.backend.domain.tour.vo.Tour;
 import tkitem.backend.domain.tour.vo.TourCity;
 import tkitem.backend.domain.tour.vo.TourDetailSchedule;
@@ -11,6 +14,7 @@ import tkitem.backend.domain.tour.vo.TourPackage;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @Mapper
@@ -33,6 +37,13 @@ public interface TourMapper {
      * @param tourPackage
      */
     void insertTourPackage(TourPackage tourPackage);
+
+    /**
+     * TourPackageInfo 조회
+     * @param tourPackageId
+     * @return
+     */
+    Optional<TourPackageInfo> findTourPackageInfoByTourPackageId(@Param("tourPackageId") Long tourPackageId);
 
     /**
      * TourDetailSchedule 객체를 받아 단일(single)로 삽입

@@ -43,8 +43,11 @@
         c.created_at               AS createdAt,
         c.updated_at               AS updatedAt
         FROM CHECKLIST_ITEM c
+        JOIN PRODUCT_CATEGORY_SUB s
+        ON s.product_category_sub_id = c.product_category_sub_id
         WHERE c.trip_id = #{tripId}
         AND c.is_deleted = 'F'
+
         <choose>
             <!-- day=0 → 공통(NULL) -->
             <when test="day != null and day == 0">
@@ -64,8 +67,19 @@
                 <otherwise> 'F' </otherwise>
             </choose>
         </if>
-        ORDER BY createdAt ASC, productCategorySubId ASC
+
+        <!-- isProduct: null=전체, true='T'만, false='F'만 -->
+        <if test="isProduct != null">
+            AND s.is_product =
+            <choose>
+                <when test="isProduct"> 'T' </when>
+                <otherwise> 'F' </otherwise>
+            </choose>
+        </if>
+
+        ORDER BY c.created_at ASC, c.product_category_sub_id ASC
     </select>
+
 
     <!-- 카테고리 존재 개수 -->
     <select id="countProductCategorySubs" parameterType="list" resultType="int">
@@ -150,4 +164,21 @@
         WHERE checklist_item_id = #{checklistItemId}
         AND is_deleted = 'F'
     </update>
+
+    <!-- 여행 총 일 수 조회 -->
+    <select id="getTripTotalDays" resultType="int">
+        SELECT
+            NVL(
+                    (SELECT MAX(s.schedule_date)
+                     FROM tour_package tp2
+                              JOIN tour_detail_schedule s ON s.tour_id = tp2.tour_id
+                     WHERE tp2.tour_package_id = t.tour_package_id),
+                    CASE
+                        WHEN t.departure_date IS NOT NULL AND t.arrival_date IS NOT NULL
+                            THEN (TRUNC(t.arrival_date) - TRUNC(t.departure_date) + 1)
+                        END
+            ) AS totalDays
+        FROM trip t
+        WHERE t.trip_id = #{tripId}
+    </select>
 </mapper>

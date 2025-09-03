@@ -30,6 +30,9 @@ spring:
     openai:
       api-key: ${OPEN_AI_API_KEY}
       base-url: https://api.openai.com
+      chat:
+        options:
+          model: gpt-4o              # 또는 gpt-4o
       embedding:
         options:
           model: text-embedding-3-small   # 비용↓, 1536차원
@@ -41,9 +44,10 @@ spring:
 
 logging:
   level:
-    org.springframework.web.client: DEBUG
+    org.springframework.web.client: WARN
     org.apache.hc.client5.http: WARN
     org.apache.hc.client5.http.wire: OFF  # [주의] 매우 상세, 진단 끝나면 끄기
+    org.springframework.ai: WARN
 
 rule:
   classifier:
@@ -62,6 +66,10 @@ mybatis:
 
 swagger:
   server-url: ${SWAGGER_SERVER}
+
+springdoc:
+  swagger-ui:
+    persistAuthorization: true
 
 jwt:
   secret: ${JWT_SECRET}

@@ -216,4 +216,23 @@
             NVL(tds.sort_order, 999999),
             tds.schedule_date
     </select>
+
+    <select id="findTourPackageInfoByTourPackageId" resultType="tkitem.backend.domain.tour.dto.TourPackageInfo">
+        SELECT
+        tp.tour_package_id AS tourPackageId,
+        tp.tour_id         AS tourId,
+        tp.price           AS price,
+        tp.departure_date  AS departureDate,
+        tp.return_date     AS returnDate,
+        tp.departure_airline AS departureAirline,
+        tp.return_airline  AS returnAirline,
+        tp.package_date_code AS packageDateCode,
+        tp.booking_url     AS bookingUrl,
+        tp.source_url      AS sourceUrl,
+        t.title AS title,
+        t.img_url AS imgUrl
+        FROM TOUR_PACKAGE tp
+        LEFT JOIN TOUR t ON tp.tour_id = t.tour_id
+        WHERE tp.tour_package_id = #{tourPackageId}
+    </select>
 </mapper>

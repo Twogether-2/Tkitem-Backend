@@ -5,6 +5,7 @@ import tkitem.backend.domain.cart.dto.request.CartItemQuantityUpdateRequest;
 import tkitem.backend.domain.cart.dto.request.CartItemsCreateRequest;
 import tkitem.backend.domain.cart.dto.response.CartItemsCreateResponse;
 import tkitem.backend.domain.cart.dto.response.CartListResponse;
+import tkitem.backend.domain.cart.dto.response.CartTripListResponse;
 
 import java.util.List;
 
@@ -14,4 +15,5 @@ public interface CartService {
     CartListResponse getCart(Long memberId, boolean hasTripParam, Long tripIdOrNull);
     CartItemUpdateResponse changeQuantity(Long memberId, Long cartItemId, CartItemQuantityUpdateRequest request);
     CartItemUpdateResponse deleteCartItem(Long memberId, Long cartItemId);
+    CartTripListResponse getTripsForCart(Long memberId);
 }
