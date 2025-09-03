@@ -107,7 +107,7 @@
                 AND oi.TRIP_ID IS NULL
             </when>
             <otherwise>
-                AND oi.TRIP_ID = #{tripId, jdbcType=NUMERIC, javaType=java.lang.Long}
+                AND oi.TRIP_ID = #{tripId, jdbcType=NUMERIC}
             </otherwise>
         </choose>
         ORDER BY oi.ORDER_ITEM_ID
