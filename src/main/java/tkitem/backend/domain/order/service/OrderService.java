@@ -4,12 +4,11 @@ import tkitem.backend.domain.order.dto.request.OrderCreateRequest;
 import tkitem.backend.domain.order.dto.response.OrderCreateResponse;
 import tkitem.backend.domain.order.dto.response.OrderDetailResponse;
 import tkitem.backend.domain.order.dto.response.OrderSummaryResponse;
-
-import java.util.List;
+import tkitem.backend.domain.order.enums.CheckoutMode;
 
 public interface OrderService {
 
-    OrderCreateResponse createOrder(Long memberId, OrderCreateRequest req);
+    OrderCreateResponse createOrder(Long memberId, OrderCreateRequest req, CheckoutMode mode);
     int calculateAmount(Long orderId);
     void markPaid(Long orderId, int paidAmount);
     void markCanceled(Long orderId);
