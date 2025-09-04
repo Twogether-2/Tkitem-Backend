@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.trip.dto.TripInfoResponse;
+import tkitem.backend.domain.trip.dto.UpcomingTripResponse;
 import tkitem.backend.domain.trip.service.TripService;
 import tkitem.backend.domain.trip.vo.Trip;
 
@@ -60,4 +61,17 @@ public class TripController {
 		TripInfoResponse result = tripService.getTripInfo(tripId);
 		return ResponseEntity.ok(result);
 	}
+
+	@Operation(
+			summary = "다가오는 여행 조회",
+			description = "오늘 기준으로 출발일이 남은 여행들을 출발일 가까운 순으로 반환"
+	)
+	@GetMapping("/upcoming")
+	public ResponseEntity<List<UpcomingTripResponse>> getUpcomingTrips(
+			@AuthenticationPrincipal Member member) {
+
+		List<UpcomingTripResponse> result = tripService.getUpcomingTrips(member);
+		return ResponseEntity.ok(result);
+	}
+
 }

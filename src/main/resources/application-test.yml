@@ -50,8 +50,8 @@ cloud:
 
 redis:
   enabled: true
-  host: ${REDIS_HOST}
-  port: ${REDIS_PORT}
+  host: localhost
+  port: 6379
 
 toss:
   secret-key: ${TOSS_SECRET_KEY}

@@ -12,9 +12,9 @@ import tkitem.backend.domain.scheduleType.mapper.TourDetailScheduleMapper;
 import tkitem.backend.domain.scheduleType.mapper.TourScheduleTypeMapper;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -176,7 +176,7 @@ public class TourTypePipelineService {
     // ES 문서 변환
     private Map<String, Object> toEsDoc(TourDetailScheduleRowDto r, String title, String desc, String combined, float[] vec){
 
-        Map<String, Object> doc = new HashMap<>();
+        Map<String, Object> doc = new ConcurrentHashMap<>();
         doc.put("tour_detail_schedule_id", r.getTourDetailScheduleId());
         doc.put("tour_id", r.getTourId());
         doc.put("schedule_date", r.getScheduleDate());

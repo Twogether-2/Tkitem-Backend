@@ -2,6 +2,9 @@ package tkitem.backend.domain.tour.mapper;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
+import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
+import org.apache.ibatis.annotations.Param;
 
 import tkitem.backend.domain.tour.dto.TourPackageInfo;
 import tkitem.backend.domain.tour.vo.Tour;
@@ -10,6 +13,7 @@ import tkitem.backend.domain.tour.vo.TourDetailSchedule;
 import tkitem.backend.domain.tour.vo.TourPackage;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -54,4 +58,12 @@ public interface TourMapper {
     void insertTourCity(TourCity tourCity);
 
     Set<String> findPackageDateCodesByTourId(Long tourId);
+
+    List<TourCandidateRowDto> selectTourCandidates(
+            @Param("req") TourRecommendationRequestDto tourRecommendationRequestDto,
+            @Param("kTop") Integer kTop);
+
+    List<Map<String, Object>> selectTourMetaByIds(List<Long> tourIds);
+
+    List<Map<String, Object>> selectTdsByTourIds(List<Long> tourIds);
 }

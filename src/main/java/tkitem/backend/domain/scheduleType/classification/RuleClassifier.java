@@ -15,6 +15,9 @@ import static java.util.stream.Collectors.*;
 /**
  * 규칙(키워드/가중치) 기반의 1차 분류
  */
+// TODO :
+//  1. 기내식 없음 같은 경우가 MEAL 점수가 그대로 들어감
+//  2. default_type 에 따른 분류가 제대로 되지 않음
 @Component
 public class RuleClassifier {
 

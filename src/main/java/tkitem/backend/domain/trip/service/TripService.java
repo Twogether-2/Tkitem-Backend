@@ -4,6 +4,7 @@ import java.util.List;
 
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.trip.dto.TripInfoResponse;
+import tkitem.backend.domain.trip.dto.UpcomingTripResponse;
 import tkitem.backend.domain.trip.vo.Trip;
 
 public interface TripService {
@@ -14,4 +15,7 @@ public interface TripService {
 	);
 
 	TripInfoResponse getTripInfo(Long tripId);
+
+	List<UpcomingTripResponse> getUpcomingTrips(Member member);
+
 }

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import tkitem.backend.domain.scheduleType.dto.TourDetailScheduleRowDto;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * ES KNN Top-N 재정렬, LLM Top-3 폐쇄 라벨 보완
@@ -38,7 +39,7 @@ public class GenerativeLabelService {
      * @return
      */
     public Map<Long, List<Result>> classifyBatchByLLM(List<TourDetailScheduleRowDto> rows){
-        Map<Long, List<Result>> out = new HashMap<>();
+        Map<Long, List<Result>> out = new ConcurrentHashMap<>();
         if(rows == null || rows.isEmpty()) return out;
 
         for (TourDetailScheduleRowDto r : rows) {
@@ -61,7 +62,7 @@ public class GenerativeLabelService {
      * @return
      */
     public Map<Long, List<Result>> classifyBatchByKNN(List<TourDetailScheduleRowDto> rows){
-        Map<Long, List<Result>> out = new HashMap<>();
+        Map<Long, List<Result>> out = new ConcurrentHashMap<>();
         if(rows == null || rows.isEmpty()) return out;
 
         for(TourDetailScheduleRowDto r : rows){
