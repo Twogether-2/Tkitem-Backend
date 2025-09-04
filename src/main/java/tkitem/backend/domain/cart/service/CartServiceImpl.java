@@ -6,10 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.cart.dto.*;
 import tkitem.backend.domain.cart.dto.request.CartItemQuantityUpdateRequest;
 import tkitem.backend.domain.cart.dto.request.CartItemsCreateRequest;
-import tkitem.backend.domain.cart.dto.response.CartItemUpdateResponse;
-import tkitem.backend.domain.cart.dto.response.CartItemsCreateResponse;
-import tkitem.backend.domain.cart.dto.response.CartListResponse;
-import tkitem.backend.domain.cart.dto.response.CartTripListResponse;
+import tkitem.backend.domain.cart.dto.response.*;
 import tkitem.backend.domain.cart.mapper.CartItemMapper;
 import tkitem.backend.domain.cart.mapper.CartMapper;
 import tkitem.backend.domain.trip.dto.TripInfoResponse;
@@ -82,13 +79,12 @@ public class CartServiceImpl implements CartService {
 
         // 장바구니 자체가 없을 때
         if (cartId == null) {
-            sections.add(buildSection(tripIdOrNull, defaultTitle(tripIdOrNull), List.of()));
             return new CartListResponse(sections);
         }
 
         // 데이터 조회
-        List<CartItemRowWithTripDto> rows = cartItemMapper
-                .findPendingItemsWithProduct(cartId, tripIdOrNull, hasTripParam);
+        List<CartItemRowWithTripDto> rows =
+                cartItemMapper.findPendingItemsWithProduct(cartId, tripIdOrNull, hasTripParam);
 
         // 아이템 -> 단순 아이템 DTO
         List<CartItemDto> items = rows.stream()
@@ -96,7 +92,9 @@ public class CartServiceImpl implements CartService {
                 .toList();
 
         if (hasTripParam) {
-            // 파라미터가 있으면 해당 섹션만
+            if (items.isEmpty()) {
+                return new CartListResponse(sections);
+            }
             sections.add(buildSection(tripIdOrNull, defaultTitle(tripIdOrNull), items));
             return new CartListResponse(sections);
         }
@@ -107,7 +105,9 @@ public class CartServiceImpl implements CartService {
                 .filter(r -> r.getTripId() == null)
                 .map(this::toItem)
                 .toList();
-        sections.add(buildSection(null, DEFAULT_CART_TITLE, baseItems));
+        if (!baseItems.isEmpty()) {
+            sections.add(buildSection(null, DEFAULT_CART_TITLE, baseItems));
+        }
 
         // 2) tripId별 그룹핑 (null 제외)
         Map<Long, List<CartItemDto>> byTrip = rows.stream()
@@ -167,6 +167,17 @@ public class CartServiceImpl implements CartService {
     public CartTripListResponse getTripsForCart(Long memberId) {
         List<CartTripDto> trips = cartMapper.findTripsByMemberId(memberId);
         return new CartTripListResponse(trips);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CartProductTripListResponse getTripIdsByProduct(Long memberId, Long productId) {
+        Long cartId = cartMapper.findCartIdByMemberId(memberId);
+        if (cartId == null) {
+            return new CartProductTripListResponse(List.of());
+        }
+        List<CartProductTripItemDto> rows = cartItemMapper.findTripEntriesByProduct(cartId, productId);
+        return new CartProductTripListResponse(rows);
     }
 
     private CartItemDto toItem(CartItemRowWithTripDto r) {
