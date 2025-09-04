@@ -34,10 +34,10 @@ public class EmbeddingService {
         );
 
         // 설정 확인 로그
-        log.info("[OPENAI] base-url={}", env.getProperty("spring.ai.openai.base-url"));
-        log.info("[OPENAI] api-key startsWith=sk-{}",
-                Optional.ofNullable(env.getProperty("spring.ai.openai.api-key"))
-                        .map(s -> s.startsWith("sk-")).orElse(false));
+//        log.info("[OPENAI] base-url={}", env.getProperty("spring.ai.openai.base-url"));
+//        log.info("[OPENAI] api-key startsWith=sk-{}",
+//                Optional.ofNullable(env.getProperty("spring.ai.openai.api-key"))
+//                        .map(s -> s.startsWith("sk-")).orElse(false));
 
         EmbeddingResponse res = embeddingModel.call(req);
         return res.getResults().get(0).getOutput();

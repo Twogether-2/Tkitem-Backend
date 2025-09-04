@@ -42,6 +42,10 @@ spring:
 #    endpoint: ${ELASTICSEARCH_HOST}
 #    apiKey: ${ELASTIC_API_KEY}
 
+pipeline:
+  index:
+    enabled: false
+
 logging:
   level:
     org.springframework.web.client: WARN

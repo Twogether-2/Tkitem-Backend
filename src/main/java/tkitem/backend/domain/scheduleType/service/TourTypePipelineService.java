@@ -1,9 +1,11 @@
 package tkitem.backend.domain.scheduleType.service;
 
+import co.elastic.clients.elasticsearch._types.Refresh;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.scheduleType.classification.RuleClassifier;
@@ -14,6 +16,7 @@ import tkitem.backend.domain.scheduleType.mapper.TourScheduleTypeMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -32,8 +35,13 @@ public class TourTypePipelineService {
     private static final int PENDING_FLUSH = 2000;
     private static final String ES_INDEX = "tour_detail_schedule_v1";
 
+    private static final Set<String> MOVE = Set.of("FLIGHT", "TRANSFER");
+    private static final Set<String> VIEW = Set.of("SIGHTSEEING","LANDMARK", "MUSEUM_HERITAGE","PARK_NATURE","SHOW");
+
     // TODO :
     //  2. 함께가는 사람에 대한 분류도 고민할거리다.
+    @Value("${pipeline.index.enabled:false}")//테스트용삭제필요
+    private boolean INDEX_ENABLED;//테스트용삭제필요
 
     // 한번만 돌리는 메인 엔트리
     @Transactional
@@ -64,16 +72,20 @@ public class TourTypePipelineService {
                 String title = r.getTitle() == null ? "" : r.getTitle();
                 String desc = r.getDescription() == null ? "" : r.getDescription();
                 String combined = (title + " " +desc).replaceAll("\\s+", " ").trim();
-                float[] vec = embeddingService.embed(combined);
+                //테스트주석
+//                float[] vec = embeddingService.embed(combined);
+                float[] vec = null;//테스트용삭제필요
 
                 // ES 문서 전송 (대상 인덱스/별칭은 설정값)
-                Map<String, Object> d = toEsDoc(r, title, desc, combined, vec);
+                if(INDEX_ENABLED) {//테스트용삭제필요
+                    Map<String, Object> d = toEsDoc(r, title, desc, combined, vec);
 
-                bulk.operations(op -> op.index(idx -> idx
-                        .index(ES_INDEX)
-                        .id(String.valueOf(r.getTourDetailScheduleId()))
-                        .document(d)
-                ));
+                    bulk.operations(op -> op.index(idx -> idx
+                            .index(ES_INDEX)
+                            .id(String.valueOf(r.getTourDetailScheduleId()))
+                            .document(d)
+                    ));
+                }
 
                 // defaultType 기반 분류 제어: PLACE는 분류 생략
                 String dt = r.getDefaultType();
@@ -84,26 +96,45 @@ public class TourTypePipelineService {
                 // 3) 룰 1차 분류 → 확신 낮으면 pending
                 var scores = rule.score(r.getTitle(), r.getDescription(), r.getDefaultType());
                 var top = rule.top2(scores);
+
                 if (top.top1Type != null) {
                     ruleTried++;
                     double top1 = top.top1Score;
                     double top2 = top.top2Type==null? 0.0 : top.top2Score;
                     double margin = top1 - top2;
 
-                    if (top1 >= MIN_SCORE && margin >= MIN_MARGIN) {
-                        // 4) 확신 충분 → DB UPSERT + ES 업데이트 예약
-                        Long typeId = tstMapper.findScheduleTypeIdByName(top.top1Type);
-                        if (typeId != null) {
-                            tstMapper.upsertTourScheduleType(r.getTourDetailScheduleId(), typeId, top1);
-                            ruleSuccess++;
+                    if (top1 >= MIN_SCORE) {
+                        if(margin >= MIN_MARGIN) {
+                            // 4) 확신 충분 → DB UPSERT + ES 업데이트 예약
+                            Long typeId = tstMapper.findScheduleTypeIdByName(top.top1Type);
+                            if (typeId != null) {
+                                tstMapper.upsertTourScheduleType(r.getTourDetailScheduleId(), typeId, top1);
+                                ruleSuccess++;
+                            }
+                        } else {
+                            // 근소차이 : 상충 계열이면 KNN/LLM
+                            if(isConflict(top.top1Type, top.top2Type)) {
+                                knnTargets.add(r);
+                                knnNeeded++;
+                            } else { // 동일 계열이면 채택
+                                Long typeId = tstMapper.findScheduleTypeIdByName(top.top1Type);
+                                if (typeId != null) {
+                                    tstMapper.upsertTourScheduleType(r.getTourDetailScheduleId(), typeId, top1);
+                                    ruleSuccess++;
+                                }
+                            }
                         }
                     } else {
-                        knnTargets.add(r); // 생성형 분류로 넘길 대기 목록
+                        // top1 자체가 낮으면 생성형으로 보완
+                        knnTargets.add(r);
                         knnNeeded++;
                     }
                 }
 
                 lastProcessedId = r.getTourDetailScheduleId(); // 체크포인트 갱신
+            }
+            if(INDEX_ENABLED) { //테스트용삭제필요
+                BulkResponse resp = esService.bulk(bulk.refresh(Refresh.WaitFor).build()); // 대량 색인/업데이트 실행
             }
 
             // 4) KNN Top-3 저장 -> 미달 항목은 LLM 보완 대상으로 이동
@@ -143,8 +174,6 @@ public class TourTypePipelineService {
                 llmPending.clear();
             }
 
-            BulkResponse resp = esService.bulk(bulk.build()); // 대량 색인/업데이트 실행
-
             offset += rows.size();
             countTest += rows.size();
             log.info("[BATCH] rows={}, lastId={}", rows.size(), lastProcessedId);
@@ -160,6 +189,11 @@ public class TourTypePipelineService {
 
         // 6) 남은 llmPending 최종 플러시
         if (!llmPending.isEmpty()) flushPendingWithGen(llmPending);
+        if (!llmPending.isEmpty()) {
+            int added = flushPendingWithGen(llmPending);
+            llmSuccess += added;
+            llmPending.clear();
+        }
 
         log.info("[SUMMARY] RULE: tried={} success={} rate={}%",
                 ruleTried, ruleSuccess,
@@ -186,7 +220,8 @@ public class TourTypePipelineService {
         doc.put("title", title);
         doc.put("description", desc);
         doc.put("combined_text", combined);
-        doc.put("embedding", vec);
+        // 테스트주석
+//        doc.put("embedding", vec);
 
         return doc;
     }
@@ -221,5 +256,9 @@ public class TourTypePipelineService {
         return successCount;
     }
 
-
+    // 계열 충돌 판정
+    private boolean isConflict(String a, String b) {
+        if (a == null || b == null) return false;
+        return (MOVE.contains(a) && VIEW.contains(b)) || (MOVE.contains(b) && VIEW.contains(a));
+    }
 }

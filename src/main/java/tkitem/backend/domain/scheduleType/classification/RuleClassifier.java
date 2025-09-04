@@ -120,17 +120,12 @@ public class RuleClassifier {
             }
         }
 
-        // defaultType 별 보정
-        if (defaultType != null) {
-            String dt = defaultType.trim().toUpperCase();
-
-            switch (dt) {
+        switch (defaultType) {
                 case "ACCOMMODATION": // HOTEL/HOTEL_STAY 가중 + 평점 신호 반영
                     base.put("REST", parseHotelRating(td));
                     break;
                 default: // 기타: 보정 없음
                     break;
-            }
         }
 
         return base;

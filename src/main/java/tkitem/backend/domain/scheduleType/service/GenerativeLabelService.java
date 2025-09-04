@@ -14,6 +14,7 @@ import tkitem.backend.domain.scheduleType.dto.TourDetailScheduleRowDto;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * ES KNN Top-N 재정렬, LLM Top-3 폐쇄 라벨 보완
@@ -45,7 +46,11 @@ public class GenerativeLabelService {
         for (TourDetailScheduleRowDto r : rows) {
             try {
                 String text = (safe(r.getTitle()) + " " + safe(r.getDescription())).replaceAll("\\s+"," ").trim();
+                log.info("[LLM][TRY] tdsId={} model={} textLen={}", r.getTourDetailScheduleId(), OPENAI_MODEL, text.length());
+
                 List<Result> res = classifyTopKByLLM(text); // LLM 호출
+                log.info("[LLM][RES] tdsId={} topK={}", r.getTourDetailScheduleId(), formatResults(res));
+
                 if (res != null && !res.isEmpty()) {
                     out.put(r.getTourDetailScheduleId(), res);
                 }
@@ -68,7 +73,13 @@ public class GenerativeLabelService {
         for(TourDetailScheduleRowDto r : rows){
             try{
                 String text = (safe(r.getTitle()) + " " + safe(r.getDescription())).replaceAll("\\s+"," ").trim();
+
+                log.info("[KNN][TRY] tdsId={} textLen={}", r.getTourDetailScheduleId(), text.length());
+
                 List<Result> topK = classifyTopKByKNN(text);
+
+                log.info("[KNN][RES] tdsId={} topK={}", r.getTourDetailScheduleId(), formatResults(topK));
+
                 if(topK != null && !topK.isEmpty()) out.put(r.getTourDetailScheduleId(), topK);
             } catch (Exception e) {
                 log.warn("classifyBatchByKnn failed: tdsId={} err={}", r.getTourDetailScheduleId(), e.toString());
@@ -96,7 +107,7 @@ public class GenerativeLabelService {
               ]
               규칙:
               - 최대 3개, confidence 내림차순
-              - 분류가 불가한 경우 label : ETC, confidence: 0.00 으로 분류
+              - 분류가 불가한 경우 label : ETC, confidence: 0.00 으로 분류. 다른 분류가 있는 TDS일 경우 ETC 가 추가적으로 들어갈 수 없음.
               - confidence는 0.0~1.0
               - 여분 텍스트/설명 금지
         """.formatted(String.join(",", ALLOWED_TYPES));
@@ -119,6 +130,7 @@ public class GenerativeLabelService {
 
         // JSON 파싱 → 라벨/점수
         List<Result> topK = parseJson(json);
+        log.info("[LLM][TOPK] textLen={} parsedTopK={}", cleaned.length(), formatResults(topK));
         return (topK == null) ? java.util.Collections.emptyList() : topK;
     }
 
@@ -161,7 +173,9 @@ public class GenerativeLabelService {
         out.sort((a, b) -> Double.compare(b.score(), a.score()));
         LinkedHashMap<String, Result> dedup = new LinkedHashMap<>();
         for(Result r : out) dedup.putIfAbsent(r.typeName(), r);
-        return new ArrayList<>(dedup.values()).subList(0, Math.min(3, dedup.size()));
+        List<Result> top3 = new ArrayList<>(dedup.values()).subList(0, Math.min(3, dedup.size()));
+        log.info("[KNN][TOPK] out top3={}", formatResults(top3));
+        return top3;
     }
 
 
@@ -203,7 +217,7 @@ public class GenerativeLabelService {
             return null;
         }
 
-        // [추가] 점수 내림차순 정렬 + 중복 라벨 제거(첫 등장 우선)
+        // 점수 내림차순 정렬 + 중복 라벨 제거(첫 등장 우선)
         out.sort((a, b) -> Double.compare(b.score(), a.score()));
         LinkedHashMap<String, Result> dedup = new LinkedHashMap<>();
         for (Result r : out) dedup.putIfAbsent(r.typeName(), r);
@@ -226,5 +240,13 @@ public class GenerativeLabelService {
             return f;
         }
         return new float[0];
+    }
+
+    //결과 포맷 유틸(로그용)
+    private static String formatResults(List<Result> list){
+        if (list == null || list.isEmpty()) return "[]";
+        return list.stream()
+                .map(r -> r.typeName() + "=" + String.format(Locale.ROOT, "%.2f", r.score()))
+                .collect(Collectors.joining(", ", "[", "]"));
     }
 }
