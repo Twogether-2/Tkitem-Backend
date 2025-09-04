@@ -67,5 +67,5 @@ public interface TourMapper {
 
     List<Map<String, Object>> selectTdsByTourIds(List<Long> tourIds);
 
-    void insertTourRecommendationBatch(@Param("items") List<TourRecommendationResponseDto> items);
+    void insertTourRecommendationBatch(@Param("items") List<TourRecommendationResponseDto> items, @Param("memberId") Long memberId);
 }

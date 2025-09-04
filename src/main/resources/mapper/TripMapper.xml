@@ -98,7 +98,8 @@
             tp.departure_date AS departureDate,
             tp.return_date AS arrivalDate,
             'PKG' AS type,
-            t.img_url AS imgUrl
+            t.img_url AS imgUrl,
+            tp.PRICE AS price
         FROM TOUR_PACKAGE tp join TOUR t on tp.tour_id = t.tour_id
         WHERE tp.tour_package_id = #{tourPackageId}
     </select>

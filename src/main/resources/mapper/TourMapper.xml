@@ -247,8 +247,8 @@
                 updated_at )
             VALUES (
                 #{it.tourId},
-                #{it.outrPackageId},
-                #{it.memberId},
+                #{it.tourPackageId},
+                #{memberId},
                 SYSTIMESTAMP,
                 SYSTIMESTAMP )
         </foreach>

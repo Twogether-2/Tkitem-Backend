@@ -20,4 +20,5 @@ public class TripCreateResponseDto {
     private Date arrivalDate;
     private String type;
     private String imgUrl;
+    private Integer price;
 }
