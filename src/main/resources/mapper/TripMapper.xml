@@ -6,26 +6,24 @@
         SELECT *
         FROM (
             SELECT
-                t.trip_id       AS tripId,
-                t.tour_package_id AS tourPackageId,
-                tour.img_url       AS imgUrl,
-                t.title,
-                TO_CHAR(NVL(t.departure_date, tp.departure_date), 'YYYY-MM-DD') AS departureDate,
-                TO_CHAR(NVL(t.arrival_date,   tp.return_date),   'YYYY-MM-DD')   AS arrivalDate,
-                t.type,
+                trip_id       AS tripId,
+                tour_package_id AS tourPackageId,
+                img_url    AS imgUrl,
+                title,
+                TO_CHAR(departure_date, 'YYYY-MM-DD') AS departureDate,
+                TO_CHAR(arrival_date, 'YYYY-MM-DD')   AS arrivalDate,
+                type,
                 CASE
-                    WHEN TRUNC(SYSDATE) &lt; TRUNC(NVL(t.departure_date, tp.departure_date)) THEN 'UPCOMING'
-                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(NVL(t.departure_date, tp.departure_date)) AND TRUNC(NVL(t.arrival_date, tp.return_date)) THEN 'ONGOING'
-                    WHEN TRUNC(SYSDATE) &gt; TRUNC(NVL(t.arrival_date, tp.return_date)) THEN 'PAST'
+                    WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN 'UPCOMING'
+                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN 'ONGOING'
+                    WHEN TRUNC(SYSDATE) &gt; TRUNC(arrival_date) THEN 'PAST'
                 END AS status
-            FROM TRIP t
-            LEFT JOIN TOUR_PACKAGE tp ON t.tour_package_id = tp.tour_package_id
-            LEFT JOIN TOUR tour ON tp.tour_id = tour.tour_id
+            FROM TRIP
             WHERE member_id = #{memberId}
             <if test="cursorDepartureDate != null and cursorTripId != null">
                 AND (
-                    NVL(t.departure_date, tp.departure_date) &lt; TO_DATE(#{cursorDepartureDate}, 'YYYY-MM-DD')
-                    OR (NVL(t.departure_date, tp.departure_date) = TO_DATE(#{cursorDepartureDate}, 'YYYY-MM-DD') AND t.trip_id &lt; #{cursorTripId})
+                    departure_date &lt; TO_DATE(#{cursorDepartureDate}, 'YYYY-MM-DD')
+                    OR (departure_date = TO_DATE(#{cursorDepartureDate}, 'YYYY-MM-DD') AND trip_id &lt; #{cursorTripId})
                 )
             </if>
             <if test="cursorDepartureDate == null or cursorTripId == null">
@@ -33,40 +31,39 @@
             </if>
             ORDER BY
                 CASE
-                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(NVL(t.departure_date, tp.departure_date)) AND TRUNC(NVL(t.arrival_date, tp.return_date)) THEN 1
-                    WHEN TRUNC(SYSDATE) &lt; TRUNC(NVL(t.departure_date, tp.departure_date)) THEN 2
-                    WHEN TRUNC(SYSDATE) &gt; TRUNC(NVL(t.arrival_date, tp.return_date)) THEN 3
+                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN 1
+                    WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN 2
+                    WHEN TRUNC(SYSDATE) > TRUNC(arrival_date) THEN 3
                 END,
                 CASE
-                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(NVL(t.departure_date, tp.departure_date)) AND TRUNC(NVL(t.arrival_date, tp.return_date)) THEN TRUNC(NVL(t.departure_date, tp.departure_date))
-                    WHEN TRUNC(SYSDATE) &lt; TRUNC(NVL(t.departure_date, tp.departure_date)) THEN TRUNC(NVL(t.departure_date, tp.departure_date))
-                    WHEN TRUNC(SYSDATE) &gt; TRUNC(NVL(t.arrival_date, tp.return_date)) THEN NULL
+                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN TRUNC(departure_date)
+                    WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN TRUNC(departure_date)
+                    WHEN TRUNC(SYSDATE) > TRUNC(arrival_date) THEN NULL
                 END ASC,
                 CASE
-                    WHEN TRUNC(SYSDATE) &gt; TRUNC(NVL(t.arrival_date, tp.return_date)) THEN TRUNC(NVL(t.arrival_date, tp.return_date))
+                    WHEN TRUNC(SYSDATE) > TRUNC(arrival_date) THEN TRUNC(arrival_date)
                     ELSE NULL
                 END DESC,
-                t.trip_id DESC
+                trip_id DESC
         )
         WHERE ROWNUM &lt;= #{limit}
     </select>
+
     <select id="selectTripInfoByTripId" resultType="tkitem.backend.domain.trip.vo.Trip">
         SELECT
-            t.trip_id       AS tripId,
-            tour.img_url       AS imgUrl,
-            t.tour_package_id AS tourPackageId,
-            t.title,
-            t.type,
-            TO_CHAR(NVL(t.departure_date, tp.departure_date), 'YYYY-MM-DD') AS departureDate,
-            TO_CHAR(NVL(t.arrival_date, tp.return_date),   'YYYY-MM-DD')   AS arrivalDate,
+            trip_id       AS tripId,
+            img_url       AS imgUrl,
+            tour_package_id AS tourPackageId,
+            title,
+            type,
+            TO_CHAR(departure_date, 'YYYY-MM-DD') AS departureDate,
+            TO_CHAR(arrival_date, 'YYYY-MM-DD')   AS arrivalDate,
             CASE
-                WHEN TRUNC(SYSDATE) &lt; TRUNC(NVL(t.departure_date, tp.departure_date)) THEN 'UPCOMING'
-                WHEN TRUNC(SYSDATE) BETWEEN TRUNC(NVL(t.departure_date, tp.departure_date)) AND TRUNC(NVL(t.arrival_date, tp.return_date)) THEN 'ONGOING'
-                WHEN TRUNC(SYSDATE) &gt; TRUNC(NVL(t.arrival_date, tp.return_date)) THEN 'PAST'
+                WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN 'UPCOMING'
+                WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN 'ONGOING'
+                WHEN TRUNC(SYSDATE) &gt; TRUNC(arrival_date) THEN 'PAST'
             END AS status
-        FROM TRIP t
-        LEFT JOIN TOUR_PACKAGE tp ON t.tour_package_id = tp.tour_package_id
-        LEFT JOIN TOUR tour ON tp.tour_id = tour.tour_id
-        WHERE t.trip_id = #{tripId}
+        FROM TRIP
+        WHERE trip_id = #{tripId}
     </select>
 </mapper>
