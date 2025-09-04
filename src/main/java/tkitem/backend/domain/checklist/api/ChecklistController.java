@@ -4,14 +4,14 @@ import io.swagger.v3.oas.annotations.Operation;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import tkitem.backend.domain.checklist.dto.request.ChecklistCreateRequestDto;
+import tkitem.backend.domain.checklist.dto.response.AiReasonResponse;
 import tkitem.backend.domain.checklist.dto.response.ChecklistAiResponseDto;
 import tkitem.backend.domain.checklist.dto.response.ChecklistListResponseDto;
+import tkitem.backend.domain.checklist.service.AiReasonService;
 import tkitem.backend.domain.checklist.service.ChecklistService;
 import tkitem.backend.domain.member.vo.Member;
 
@@ -21,6 +21,7 @@ import tkitem.backend.domain.member.vo.Member;
 public class ChecklistController {
 
     private final ChecklistService checklistService;
+    private final AiReasonService aiReasonService;
 
     @PostMapping("/ai/{tripId}")
     @Operation(summary = "체크리스트 자동 세팅", description = "trip_id에 따른 체크리스트 자동 세팅")
@@ -106,6 +107,12 @@ public class ChecklistController {
     @Operation(summary = "여행 총 일수 조회", description = "출발~도착일 차이(+1)를 반환")
     public ResponseEntity<Integer> getTripTotalDays(@PathVariable Long tripId) {
         return ResponseEntity.ok(checklistService.getTripTotalDays(tripId));
+    }
+
+    @GetMapping("/{tripId}/ai/reason")
+    @Operation(summary = "AI 체크리스트 이유 생성", description = "tripId 기반으로 CHECKLIST_ITEM(AI)만 읽어 이유 JSON 반환")
+    public ResponseEntity<AiReasonResponse> getAiReason(@PathVariable long tripId) {
+        return ResponseEntity.ok(aiReasonService.generate(tripId));
     }
 
 

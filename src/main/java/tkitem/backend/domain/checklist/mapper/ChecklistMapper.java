@@ -2,6 +2,9 @@ package tkitem.backend.domain.checklist.mapper;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import tkitem.backend.domain.checklist.dto.ChecklistItemRow;
+import tkitem.backend.domain.checklist.dto.TripMeta;
+import tkitem.backend.domain.checklist.dto.TripPlace;
 import tkitem.backend.domain.checklist.vo.ChecklistItemVo;
 
 import java.util.List;
@@ -43,4 +46,13 @@ public interface ChecklistMapper {
 
     // 여행 총 일 수 조회
     Integer getTripTotalDays(@Param("tripId") Long tripId);
+
+    //여행의 AI체크리스트 조회
+    List<ChecklistItemRow> selectChecklistItemsByTrip(@Param("tripId") Long tripId);
+
+    // 여행 메타(월/일수)
+    TripMeta selectTripMeta(@Param("tripId") Long tripId);
+
+    // 일정의 도시/국가 목록
+    List<TripPlace> selectTripPlaces(@Param("tripId") Long tripId);
 }
