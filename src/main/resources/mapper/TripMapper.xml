@@ -93,25 +93,13 @@
     </select>
 
     <select id="selectTripforCreate" resultType="tkitem.backend.domain.trip.dto.TripCreateResponseDto">
-        WITH city_list AS(
-            SELECT DISTINCT c.city_name
-            FROM TOUR_PACKAGE tp
-                JOIN TOUR t ON t.tour_id = tp.tour_id
-                JOIN TOUR_CITY tc ON tc.tour_id = t.tour_id
-                JOIN CITY c ON c.city_id = tc.city_id
-            WHERE tp.tour_package_id = #{tourPackageId}
-        )
         SELECT
-            SEQ_TRIP.NEXTVAL AS tripId,
             tp.tour_package_id AS tourPackageId,
-            (SELECT LISTAGG(city_name, ', ')
-                WITHIN GROUP (ORDER BY city_name)
-                FROM city_list) || ' 여행' AS title,
             tp.departure_date AS departureDate,
             tp.return_date AS arrivalDate,
             'PKG' AS type,
-            tp.img_url AS imgUrl
-        FROM TOUR_PACKAGE tp
+            t.img_url AS imgUrl
+        FROM TOUR_PACKAGE tp join TOUR t on tp.tour_id = t.tour_id
         WHERE tp.tour_package_id = #{tourPackageId}
     </select>
 
@@ -129,7 +117,7 @@
             updated_at
         )
         VALUES (
-            #{tripId},
+            SEQ_TRIP.NEXTVAL,
             #{memberId},
             #{tourPackageId},
             #{title},
@@ -140,5 +128,8 @@
             SYSDATE,
             SYSDATE
         )
+        <selectKey keyProperty="tripId" resultType="long" order="AFTER">
+            SELECT SEQ_TRIP.CURRVAL FROM dual
+        </selectKey>
     </insert>
 </mapper>
