@@ -28,6 +28,8 @@ public class TourFacadeServiceImpl implements TourFacadeService {
     private static final int    ES_MTOP = 3;        // 투어별 상위 m개 평균
     private static final int    DB_STAGE_TOP = 200; // 최소 1차 후보 확보량
 
+    private static final int    SEEN_WINDOW_DAYS = 1; // 최근 노출 제외기간(일)
+
     @Override
     @Transactional(readOnly = true)
     public List<TourRecommendationResponseDto> recommend(TourRecommendationRequestDto req, String queryText, int topN) throws Exception {
@@ -37,7 +39,7 @@ public class TourFacadeServiceImpl implements TourFacadeService {
         if(!useEs){
             List<TourRecommendationResponseDto> trrDtoList = tourRecommendService.recommendDbOnly(req, topN);
 
-            // ===================== [추가 시작] =====================
+            // ===================== 로그 확인 =====================
             int total = (trrDtoList == null) ? 0 : trrDtoList.size();
             int show = Math.min(total, topN);
             log.info("[DB-ONLY] totalCandidates={}, willShowTopN={}", total, show);
@@ -58,9 +60,18 @@ public class TourFacadeServiceImpl implements TourFacadeService {
             if (show == 0) {
                 log.info("[DB-ONLY] no candidates.");
             }
-            // ===================== [추가 끝] =====================
+            // ===================== [로그 끝] =====================
 
-            return tourRecommendService.enrichRecommendationDetails(trrDtoList.subList(0, Math.min(trrDtoList.size(), topN)));
+
+            List<TourRecommendationResponseDto> dtos = tourRecommendService.enrichRecommendationDetails(trrDtoList.subList(0, Math.min(trrDtoList.size(), topN)));
+            for(TourRecommendationResponseDto.TdsItem tdsItem : dtos.get(0).getSchedules()){
+                log.info("title = {}, sortOrder = {}, scheduleDay = {}, defaultType = {}", tdsItem.getTitle(), tdsItem.getSortOrder(), tdsItem.getScheduleDay(), tdsItem.getDefaultType());
+            }
+
+            // 사용자에게 표시된 결과를 저장
+            tourRecommendService.saveShownRecommendations(dtos);
+
+            return dtos;
         }
 
         // 1. DB-only 1차 후보군 뽑기, S_DB_ROW 조회

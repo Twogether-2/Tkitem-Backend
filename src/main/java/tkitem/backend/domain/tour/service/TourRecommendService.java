@@ -109,6 +109,7 @@ public class TourRecommendService {
                     .description((String) r.get("description"))
                     .sortOrder(r.get("sortOrder") == null ? null : ((Number) r.get("sortOrder")).intValue())
                     .defaultType((String) r.get("defaultType"))
+                    .scheduleDay(r.get("scheduleDay") == null ? 0 : ((Number) r.get("scheduleDay")).intValue())
                     .build();
             schedulesByTour.computeIfAbsent(tourId, k -> new ArrayList<>()).add(item);
         }
@@ -119,6 +120,13 @@ public class TourRecommendService {
 
 
         return items;
+    }
+
+    @Transactional
+    public void saveShownRecommendations(List<TourRecommendationResponseDto> items){
+        if(items == null || items.isEmpty()) return;
+
+        tourMapper.insertTourRecommendationBatch(items);
     }
 
 }

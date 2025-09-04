@@ -204,7 +204,7 @@
             tds.description              AS "description",
             tds.sort_order               AS "sortOrder",
             tds.default_type             AS "defaultType",
-            tds.schedule_date            AS "scheduleDate"
+            tds.schedule_date            AS "scheduleDay"
         FROM TOUR_DETAIL_SCHEDULE tds
             LEFT JOIN CITY c ON c.city_id = tds.city_id
         WHERE tds.tour_id IN
@@ -235,4 +235,23 @@
         LEFT JOIN TOUR t ON tp.tour_id = t.tour_id
         WHERE tp.tour_package_id = #{tourPackageId}
     </select>
+
+    <insert id="insertTourRecommendationBatch" parameterType="map">
+        INSERT ALL
+        <foreach collection="items" item="it">
+            INTO TOUR_RECOMMENDATION (
+                tour_id,
+                tour_package_id,
+                member_id,
+                created_at,
+                updated_at )
+            VALUES (
+                #{it.tourId},
+                #{it.outrPackageId},
+                #{it.memberId},
+                SYSTIMESTAMP,
+                SYSTIMESTAMP )
+        </foreach>
+        SELECT 1 FROM DUAL
+    </insert>
 </mapper>
