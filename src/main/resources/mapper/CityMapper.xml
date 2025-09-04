@@ -23,4 +23,23 @@
         FROM city
         WHERE city_name = #{name} and country_name = #{countryName}
     </select>
+
+    <select id="findCitiesByTourPackageId" resultType="tkitem.backend.domain.city.vo.City">
+        SELECT
+            c.city_id AS cityId,
+            c.country_group_name AS countryGroupName,
+            c.country_name AS countryName,
+            c.city_name AS cityName,
+            c.created_at AS createdAt,
+            c.created_by AS createdBy,
+            c.updated_at AS updatedAt,
+            c.updated_by AS updatedBy
+        FROM tour_package tp
+            join tour t ON t.tour_id = tp.tour_id
+            join tour_city tc ON tc.tour_id = t.tour_id
+            join city c ON c.city_id = tc.city_id
+        WHERE
+            tp.tour_package_id = #{tourPackageId}
+        ORDER BY tc.tour_city_id
+    </select>
 </mapper>

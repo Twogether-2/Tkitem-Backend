@@ -3,9 +3,10 @@ package tkitem.backend.domain.tour.api;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.service.DataLoadService;
@@ -42,7 +43,8 @@ public class TourController {
     public ResponseEntity<List<TourRecommendationResponseDto>> recommend(
             @RequestBody TourRecommendationRequestDto req,
             @RequestParam(name = "text", required = false) String queryText,
-            @RequestParam(name = "topN", defaultValue = "5") int topN
+            @RequestParam(name = "topN", defaultValue = "5") int topN,
+            @AuthenticationPrincipal Member member
             ) throws Exception{
         log.info("접근");
         // [추가] 요청 파라미터 요약 로그
@@ -67,7 +69,7 @@ public class TourController {
                         loc.getCity());
             }
         }
-        List<TourRecommendationResponseDto> responseDtodList = tourFacadeService.recommend(req, queryText, topN);
+        List<TourRecommendationResponseDto> responseDtodList = tourFacadeService.recommend(req, queryText, topN, member);
         log.info("성공");
         log.info("[RES] size={}", responseDtodList == null ? null : responseDtodList.size());
         return ResponseEntity.ok(responseDtodList);

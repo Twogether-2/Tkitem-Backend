@@ -4,11 +4,7 @@ import java.util.List;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -17,6 +13,7 @@ import io.swagger.v3.oas.annotations.Parameters;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import tkitem.backend.domain.member.vo.Member;
+import tkitem.backend.domain.trip.dto.TripCreateResponseDto;
 import tkitem.backend.domain.trip.dto.TripInfoResponse;
 import tkitem.backend.domain.trip.dto.UpcomingTripResponse;
 import tkitem.backend.domain.trip.service.TripService;
@@ -71,6 +68,19 @@ public class TripController {
 			@AuthenticationPrincipal Member member) {
 
 		List<UpcomingTripResponse> result = tripService.getUpcomingTrips(member);
+		return ResponseEntity.ok(result);
+	}
+
+	@Operation(
+			summary = "여행 등록",
+			description = "TOUR_PACKAGE id 를 기준으로 여행 내 일정에 등록"
+	)
+	@PostMapping("/{tourPackageId}")
+	public ResponseEntity<TripCreateResponseDto> createTrip(
+			@PathVariable Long tourPackageId,
+			@AuthenticationPrincipal Member member) {
+
+		TripCreateResponseDto result = tripService.createTrip(tourPackageId, member);
 		return ResponseEntity.ok(result);
 	}
 
