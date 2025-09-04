@@ -82,13 +82,12 @@ public class CartServiceImpl implements CartService {
 
         // 장바구니 자체가 없을 때
         if (cartId == null) {
-            sections.add(buildSection(tripIdOrNull, defaultTitle(tripIdOrNull), List.of()));
             return new CartListResponse(sections);
         }
 
         // 데이터 조회
-        List<CartItemRowWithTripDto> rows = cartItemMapper
-                .findPendingItemsWithProduct(cartId, tripIdOrNull, hasTripParam);
+        List<CartItemRowWithTripDto> rows =
+                cartItemMapper.findPendingItemsWithProduct(cartId, tripIdOrNull, hasTripParam);
 
         // 아이템 -> 단순 아이템 DTO
         List<CartItemDto> items = rows.stream()
@@ -96,7 +95,9 @@ public class CartServiceImpl implements CartService {
                 .toList();
 
         if (hasTripParam) {
-            // 파라미터가 있으면 해당 섹션만
+            if (items.isEmpty()) {
+                return new CartListResponse(sections);
+            }
             sections.add(buildSection(tripIdOrNull, defaultTitle(tripIdOrNull), items));
             return new CartListResponse(sections);
         }
@@ -107,7 +108,9 @@ public class CartServiceImpl implements CartService {
                 .filter(r -> r.getTripId() == null)
                 .map(this::toItem)
                 .toList();
-        sections.add(buildSection(null, DEFAULT_CART_TITLE, baseItems));
+        if (!baseItems.isEmpty()) {
+            sections.add(buildSection(null, DEFAULT_CART_TITLE, baseItems));
+        }
 
         // 2) tripId별 그룹핑 (null 제외)
         Map<Long, List<CartItemDto>> byTrip = rows.stream()
