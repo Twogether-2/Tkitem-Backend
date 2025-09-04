@@ -41,4 +41,9 @@ public interface CartItemMapper {
 
     Optional<CartItemUpdateResponse> findCartItemSnapshot(@Param("memberId") Long memberId,
                                                           @Param("cartItemId") Long cartItemId);
+
+    int markPendingToOrderedExactOne(@Param("memberId") Long memberId,
+                                     @Param("productId") Long productId,
+                                     @Param("tripId") Long tripId,
+                                     @Param("quantity") Integer quantity);
 }
