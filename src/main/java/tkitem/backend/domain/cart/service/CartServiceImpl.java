@@ -173,8 +173,8 @@ public class CartServiceImpl implements CartService {
         if (cartId == null) {
             return new CartProductTripListResponse(List.of());
         }
-        List<Long> tripIds = cartItemMapper.findTripIdsByProduct(cartId, productId);
-        return new CartProductTripListResponse(tripIds);
+        List<CartProductTripItemDto> rows = cartItemMapper.findTripEntriesByProduct(cartId, productId);
+        return new CartProductTripListResponse(rows);
     }
 
     private CartItemDto toItem(CartItemRowWithTripDto r) {
