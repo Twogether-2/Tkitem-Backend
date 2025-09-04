@@ -41,4 +41,6 @@ public interface CartItemMapper {
 
     Optional<CartItemUpdateResponse> findCartItemSnapshot(@Param("memberId") Long memberId,
                                                           @Param("cartItemId") Long cartItemId);
+
+    List<Long> findTripIdsByProduct(@Param("cartId") Long cartId, @Param("productId") Long productId);
 }

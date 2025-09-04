@@ -97,4 +97,14 @@
         WHERE ci.cart_item_id = #{cartItemId}
           AND ci.cart_id = (SELECT c.cart_id FROM CART c WHERE c.member_id = #{memberId})
     </select>
+
+    <select id="findTripIdsByProduct" parameterType="map" resultType="long">
+        SELECT DISTINCT NVL(TRIP_ID, 0) AS TRIP_ID
+        FROM CART_ITEM
+        WHERE CART_ID    = #{cartId}
+          AND PRODUCT_ID = #{productId}
+          AND STATUS     = 'PENDING'
+        ORDER BY TRIP_ID DESC
+    </select>
+
 </mapper>
