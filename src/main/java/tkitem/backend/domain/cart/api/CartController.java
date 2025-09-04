@@ -9,10 +9,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import tkitem.backend.domain.cart.dto.request.CartItemQuantityUpdateRequest;
 import tkitem.backend.domain.cart.dto.request.CartItemsCreateRequest;
-import tkitem.backend.domain.cart.dto.response.CartItemUpdateResponse;
-import tkitem.backend.domain.cart.dto.response.CartItemsCreateResponse;
-import tkitem.backend.domain.cart.dto.response.CartListResponse;
-import tkitem.backend.domain.cart.dto.response.CartTripListResponse;
+import tkitem.backend.domain.cart.dto.response.*;
 import tkitem.backend.domain.cart.service.CartService;
 import tkitem.backend.domain.member.vo.Member;
 
@@ -72,4 +69,19 @@ public class CartController {
     ) {
         return ResponseEntity.ok(cartService.getTripsForCart(member.getMemberId()));
     }
+
+    @Operation(
+            summary = "상품이 담긴 여행 섹션 조회",
+            description = "사용자의 장바구니에서 지정한 상품이 담긴 여행 섹션(tripId) 목록을 반환합니다. (PENDING 상태만)"
+    )
+    @GetMapping("/item/trips")
+    public ResponseEntity<CartProductTripListResponse> listTripsByProduct(
+            @AuthenticationPrincipal Member member,
+            @RequestParam("productId") Long productId
+    ) {
+        return ResponseEntity.ok(
+                cartService.getTripIdsByProduct(member.getMemberId(), productId)
+        );
+    }
+
 }

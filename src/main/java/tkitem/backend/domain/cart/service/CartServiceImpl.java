@@ -6,10 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.cart.dto.*;
 import tkitem.backend.domain.cart.dto.request.CartItemQuantityUpdateRequest;
 import tkitem.backend.domain.cart.dto.request.CartItemsCreateRequest;
-import tkitem.backend.domain.cart.dto.response.CartItemUpdateResponse;
-import tkitem.backend.domain.cart.dto.response.CartItemsCreateResponse;
-import tkitem.backend.domain.cart.dto.response.CartListResponse;
-import tkitem.backend.domain.cart.dto.response.CartTripListResponse;
+import tkitem.backend.domain.cart.dto.response.*;
 import tkitem.backend.domain.cart.mapper.CartItemMapper;
 import tkitem.backend.domain.cart.mapper.CartMapper;
 import tkitem.backend.domain.trip.dto.TripInfoResponse;
@@ -167,6 +164,17 @@ public class CartServiceImpl implements CartService {
     public CartTripListResponse getTripsForCart(Long memberId) {
         List<CartTripDto> trips = cartMapper.findTripsByMemberId(memberId);
         return new CartTripListResponse(trips);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CartProductTripListResponse getTripIdsByProduct(Long memberId, Long productId) {
+        Long cartId = cartMapper.findCartIdByMemberId(memberId);
+        if (cartId == null) {
+            return new CartProductTripListResponse(List.of());
+        }
+        List<CartProductTripItemDto> rows = cartItemMapper.findTripEntriesByProduct(cartId, productId);
+        return new CartProductTripListResponse(rows);
     }
 
     private CartItemDto toItem(CartItemRowWithTripDto r) {
