@@ -118,4 +118,24 @@
         AND ROWNUM        = 1
     </update>
 
+    <resultMap id="TripEntryMap" type="tkitem.backend.domain.cart.dto.CartProductTripItemDto">
+        <constructor>
+            <arg column="TRIP_ID"     javaType="long"/>
+            <arg column="CART_ITEM_ID" javaType="long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findTripEntriesByProduct"
+            parameterType="map"
+            resultMap="TripEntryMap">
+        SELECT
+            NVL(TRIP_ID, 0) AS TRIP_ID,
+            CART_ITEM_ID     AS CART_ITEM_ID
+        FROM CART_ITEM
+        WHERE CART_ID    = #{cartId}
+          AND PRODUCT_ID = #{productId}
+          AND STATUS     = 'PENDING'
+        ORDER BY NVL(TRIP_ID, 0) DESC
+    </select>
+
 </mapper>

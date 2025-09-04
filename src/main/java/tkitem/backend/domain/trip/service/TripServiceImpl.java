@@ -29,7 +29,7 @@ public class TripServiceImpl implements TripService{
 
 	@Override
 	public List<Trip> getMyTripList(Member member, String cursorDepartureDate, Long cursorTripId, int limit) {
-		log.info("[TripService] getMyTripList");
+		log.info("[TripService] getMyTripList : cursorTripId = {}, limit = {}", cursorTripId, limit);
 
 		if(member == null){
 			throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND);
