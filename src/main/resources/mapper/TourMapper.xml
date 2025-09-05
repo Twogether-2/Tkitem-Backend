@@ -236,22 +236,18 @@
         WHERE tp.tour_package_id = #{tourPackageId}
     </select>
 
-    <insert id="insertTourRecommendationBatch" parameterType="map">
-        INSERT ALL
-        <foreach collection="items" item="it">
-            INTO TOUR_RECOMMENDATION (
-                tour_id,
-                tour_package_id,
-                member_id,
-                created_at,
-                updated_at )
-            VALUES (
-                #{it.tourId},
-                #{it.tourPackageId},
-                #{memberId},
-                SYSTIMESTAMP,
-                SYSTIMESTAMP )
-        </foreach>
-        SELECT 1 FROM DUAL
+    <insert id="insertTourRecommendation" parameterType="map">
+        INTO TOUR_RECOMMENDATION (
+            tour_id,
+            tour_package_id,
+            member_id,
+            created_at,
+            updated_at )
+        VALUES (
+            #{item.tourId},
+            #{item.tourPackageId},
+            #{memberId},
+            SYSTIMESTAMP,
+            SYSTIMESTAMP )
     </insert>
 </mapper>

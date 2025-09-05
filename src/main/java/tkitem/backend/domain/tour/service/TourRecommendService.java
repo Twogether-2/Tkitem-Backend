@@ -1,6 +1,9 @@
 package tkitem.backend.domain.tour.service;
 
 import lombok.RequiredArgsConstructor;
+import org.apache.ibatis.session.ExecutorType;
+import org.apache.ibatis.session.SqlSession;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.member.vo.Member;
@@ -21,6 +24,7 @@ public class TourRecommendService {
     private final TourMapper tourMapper;
 
     private static final Integer kTop = 10;
+    private final SqlSessionFactory sqlSessionFactory;
 
     /**
      * DB 점수만으로 Top-N 추천
@@ -125,9 +129,11 @@ public class TourRecommendService {
 
     @Transactional
     public void saveShownRecommendations(List<TourRecommendationResponseDto> items, Member member){
-        if(items == null || items.isEmpty()) return;
+        if (items == null || items.isEmpty()) return;
 
-        tourMapper.insertTourRecommendationBatch(items, member.getMemberId());
+        for (TourRecommendationResponseDto it : items) {
+            tourMapper.insertTourRecommendation(it, member.getMemberId());
+        }
     }
 
 }
