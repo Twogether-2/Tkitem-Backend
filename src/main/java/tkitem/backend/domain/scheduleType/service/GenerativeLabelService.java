@@ -134,7 +134,7 @@ public class GenerativeLabelService {
         return (topK == null) ? java.util.Collections.emptyList() : topK;
     }
 
-    // 단건 KNN Top-3 출력 : 라벨 인덱스에서 임베딩 KNN -> 코사인 유사도 정렬 상위 최대 3개까지 return
+    // 단건 KNN Top-3 출력 : 라벨 인덱스에서 임베딩 KNN -> (코사인 유사도 * 가중치) 정렬 상위 최대 3개까지 return
     public List<Result> classifyTopKByKNN(String text) throws Exception{
         String cleaned = (text == null ? "" : text).replaceAll("\\s+", " ").trim();
 
@@ -156,23 +156,37 @@ public class GenerativeLabelService {
 
         SearchResponse<Map> resp = esClient.search(request, Map.class);
 
-        // 3. 코사인으로 재정렬 -> 상위 3개
+        // 3. (코사인 유사도 * 가중치)로 최종 점수 계산
         List<Result> out = new ArrayList<>();
         if(resp.hits() != null && resp.hits().hits() != null){
             for(var h : resp.hits().hits()){
                 Map<String, Object> src = h.source();
                 if(src == null) continue;
-                String label = String.valueOf(src.getOrDefault("label", "ETC"));
-                if(!ALLOWED_TYPES.contains(label)) continue;
+
                 float[] ev = toFloatArray(src.get("embedding"));
-                double cos = cosine(qv, ev);
-                out.add(new Result(label, Math.max(0.0, Math.min(1.0, cos))));
+                double cos = cosine(qv, ev); // 쿼리 벡터와 문서 벡터 간의 유사도
+
+                Object labelObj = src.get("label");
+                if (labelObj instanceof List<?> labelList) {
+                    for (Object item : labelList) {
+                        if (item instanceof Map<?, ?> labelMap) {
+                            String name = (String) labelMap.get("name");
+                            double weight = (double) labelMap.get("weight");
+
+                            if (name != null && ALLOWED_TYPES.contains(name)) {
+                                double finalScore = cos * weight; // 최종 점수 = 유사도 * 가중치
+                                out.add(new Result(name, Math.max(0.0, Math.min(1.0, finalScore))));
+                            }
+                        }
+                    }
+                }
             }
         }
 
+        // 4. 최종 점수 기준 정렬 및 상위 3개 추출
         out.sort((a, b) -> Double.compare(b.score(), a.score()));
         LinkedHashMap<String, Result> dedup = new LinkedHashMap<>();
-        for(Result r : out) dedup.putIfAbsent(r.typeName(), r);
+        for(Result r : out) dedup.putIfAbsent(r.typeName(), r); // 동일 타입이면 높은 점수 유지
         List<Result> top3 = new ArrayList<>(dedup.values()).subList(0, Math.min(3, dedup.size()));
         log.info("[KNN][TOPK] out top3={}", formatResults(top3));
         return top3;

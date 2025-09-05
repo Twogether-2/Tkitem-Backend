@@ -77,18 +77,68 @@ public class RuleClassifier {
     public Map<String, Double> score(String title, String description, String defaultType){
         String t = normalize(title);
         String d = normalize(description);
-        String td = (t + " " + d).trim();
 
-        // defaultType=MEAL일 때만 MEAL 라벨을 활성화
-        boolean allowMeal = defaultType != null && defaultType.equalsIgnoreCase("MEAL");
-
-        // 기존 키워드 매칭 스코어링
         Map<String, Double> base = new HashMap<>();
 
-        for (var e : dict.entrySet()) {
+        if (defaultType != null) {
+            // MEAL 타입 특별 처리
+            if (defaultType.equalsIgnoreCase("MEAL")) {
+                // 부정 키워드("없음", "불포함") 확인
+                if (t.contains("없음") || d.contains("없음") || t.contains("불포함") || d.contains("불포함")) {
+                    base.put("MEAL", 0.0);
+                    return base;
+                }
 
-            // defaultType 이 MEAL 아니면 MEAL 라벨 스킵
-            if (!allowMeal && "MEAL".equals(e.getKey())) continue;
+                // MEAL 라벨에 대해서만 점수 계산 후 즉시 반환
+                List<KW> mealKeywords = dict.get("MEAL");
+                if (mealKeywords != null) {
+                    double best = 0.0;
+                    boolean blocked = false;
+                    for (var kw : mealKeywords) {
+                        double sKw = 0.0;
+                        if (!kw.isAnd()) { // 단일 키워드
+                            boolean hitT = kw.p.matcher(t).find();
+                            boolean hitD = kw.p.matcher(d).find();
+                            if ((hitT && kw.wTitle == 0.0) || (hitD && kw.wDesc == 0.0)) {
+                                blocked = true; best = 0.0; break;
+                            }
+                            if (hitT) sKw = Math.max(sKw, kw.wTitle);
+                            if (hitD) sKw = Math.max(sKw, kw.wDesc);
+                        } else { // AND 키워드
+                            String td = (t + " " + d).trim();
+                            boolean allInTD = kw.and.stream().allMatch(p -> p.matcher(td).find());
+                            if (allInTD) {
+                                if (kw.wTitle == 0.0 || kw.wDesc == 0.0) {
+                                    blocked = true; best = 0.0; break;
+                                }
+                                sKw = Math.max(kw.wTitle, kw.wDesc);
+                            }
+                        }
+                        if (sKw > best) best = sKw;
+                    }
+                    if (blocked) {
+                        base.put("MEAL", 0.0);
+                    } else if (best > 0.0) {
+                        base.put("MEAL", Math.min(1.0, best));
+                    }
+                }
+                return base; // MEAL 처리 후 종료
+            }
+
+            // ACCOMMODATION 타입 특별 처리
+            if (defaultType.equalsIgnoreCase("ACCOMMODATION")) {
+                // parseHotelRating 로직만 실행 후 즉시 반환
+                base.put("REST", parseHotelRating(d)); // description(d) 사용
+                return base; // ACCOMMODATION 처리 후 종료
+            }
+        }
+
+        // --- 기본 로직 (defaultType이 MEAL이나 ACCOMMODATION이 아닌 경우) ---
+        String td = (t + " " + d).trim();
+
+        for (var e : dict.entrySet()) {
+            // MEAL 라벨은 defaultType=MEAL일 때만 처리되었으므로 여기서는 항상 스킵
+            if ("MEAL".equals(e.getKey())) continue;
 
             double best = 0.0;
             boolean blocked = false;
@@ -118,14 +168,6 @@ public class RuleClassifier {
             } else if (best > 0.0){
                 base.put(e.getKey(), Math.min(1.0, best));
             }
-        }
-
-        switch (defaultType) {
-                case "ACCOMMODATION": // HOTEL/HOTEL_STAY 가중 + 평점 신호 반영
-                    base.put("REST", parseHotelRating(td));
-                    break;
-                default: // 기타: 보정 없음
-                    break;
         }
 
         return base;
