@@ -10,4 +10,7 @@ public class FashionType {
 	private String fashionTypeName;
 	private String description;
 	private String imgUrl;
+	private String gifUrl;
+	private String longDescription;
+	private String type;
 }
