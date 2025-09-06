@@ -4,9 +4,9 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
-import org.apache.ibatis.annotations.Param;
 
 import tkitem.backend.domain.tour.dto.TourPackageInfo;
+import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.vo.Tour;
 import tkitem.backend.domain.tour.vo.TourCity;
 import tkitem.backend.domain.tour.vo.TourDetailSchedule;
@@ -66,4 +66,6 @@ public interface TourMapper {
     List<Map<String, Object>> selectTourMetaByIds(List<Long> tourIds);
 
     List<Map<String, Object>> selectTdsByTourIds(List<Long> tourIds);
+
+    void insertTourRecommendationBatch(@Param("items") List<TourRecommendationResponseDto> items, @Param("memberId") Long memberId);
 }

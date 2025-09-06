@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
+import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.global.util.NumberUtil;
@@ -28,16 +28,18 @@ public class TourFacadeServiceImpl implements TourFacadeService {
     private static final int    ES_MTOP = 3;        // 투어별 상위 m개 평균
     private static final int    DB_STAGE_TOP = 200; // 최소 1차 후보 확보량
 
+    private static final int    SEEN_WINDOW_DAYS = 1; // 최근 노출 제외기간(일)
+
     @Override
     @Transactional(readOnly = true)
-    public List<TourRecommendationResponseDto> recommend(TourRecommendationRequestDto req, String queryText, int topN) throws Exception {
+    public List<TourRecommendationResponseDto> recommend(TourRecommendationRequestDto req, String queryText, int topN, Member member) throws Exception {
 
         // 1. 사용자 입력 없으면 DB score 랭킹 상위 topN 개 반환
         boolean useEs = queryText != null && !queryText.isBlank();
         if(!useEs){
             List<TourRecommendationResponseDto> trrDtoList = tourRecommendService.recommendDbOnly(req, topN);
 
-            // ===================== [추가 시작] =====================
+            // ===================== 로그 확인 =====================
             int total = (trrDtoList == null) ? 0 : trrDtoList.size();
             int show = Math.min(total, topN);
             log.info("[DB-ONLY] totalCandidates={}, willShowTopN={}", total, show);
@@ -58,9 +60,18 @@ public class TourFacadeServiceImpl implements TourFacadeService {
             if (show == 0) {
                 log.info("[DB-ONLY] no candidates.");
             }
-            // ===================== [추가 끝] =====================
+            // ===================== [로그 끝] =====================
 
-            return tourRecommendService.enrichRecommendationDetails(trrDtoList.subList(0, Math.min(trrDtoList.size(), topN)));
+
+            List<TourRecommendationResponseDto> dtos = tourRecommendService.enrichRecommendationDetails(trrDtoList.subList(0, Math.min(trrDtoList.size(), topN)));
+            for(TourRecommendationResponseDto.TdsItem tdsItem : dtos.get(0).getSchedules()){
+                log.info("title = {}, sortOrder = {}, scheduleDay = {}, defaultType = {}", tdsItem.getTitle(), tdsItem.getSortOrder(), tdsItem.getScheduleDay(), tdsItem.getDefaultType());
+            }
+
+            // 사용자에게 표시된 결과를 저장
+            tourRecommendService.saveShownRecommendations(dtos, member);
+
+            return dtos;
         }
 
         // 1. DB-only 1차 후보군 뽑기, S_DB_ROW 조회

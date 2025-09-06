@@ -39,6 +39,8 @@ public enum ErrorCode {
     CART_CONCURRENCY_CONFLICT(409, "CART002", "Concurrency Conflict"),
     CART_NOT_FOUND(404, "CART003", "Cart Not Found"),
     CART_ITEM_NOT_FOUND(404, "CART004", "Cart Item Not Found"),
+    CART_MISMATCH(409, "CART005", "Cart Mismatch"),
+    RESERVE_FAILED(409, "CART006", "Cart Reserve Failed"),
 
     /* TRIP / CHECKLIST */
     TRIP_NOT_FOUND(404, "TRIP001", "Trip Not Found"),

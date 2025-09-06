@@ -8,9 +8,8 @@ import tkitem.backend.domain.order.dto.request.OrderCreateRequest;
 import tkitem.backend.domain.order.dto.response.OrderCreateResponse;
 import tkitem.backend.domain.order.dto.response.OrderDetailResponse;
 import tkitem.backend.domain.order.dto.response.OrderSummaryResponse;
+import tkitem.backend.domain.order.enums.CheckoutMode;
 import tkitem.backend.domain.order.service.OrderService;
-
-import java.util.List;
 
 @RequiredArgsConstructor
 @RequestMapping("/order")
@@ -21,8 +20,9 @@ public class OrderController {
 
     @PostMapping
     public OrderCreateResponse create(@AuthenticationPrincipal Member member,
-                                      @RequestBody OrderCreateRequest request) {
-        return orderService.createOrder(member.getMemberId(), request);
+                                      @RequestBody OrderCreateRequest request,
+                                      @RequestParam CheckoutMode mode) {
+        return orderService.createOrder(member.getMemberId(), request, mode);
     }
 
     @GetMapping

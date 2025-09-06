@@ -49,5 +49,6 @@ public class TourRecommendationResponseDto {
         private String description;
         private Integer sortOrder;
         private String defaultType;
+        private int scheduleDay;
     }
 }

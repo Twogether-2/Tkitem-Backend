@@ -3,6 +3,7 @@ package tkitem.backend.domain.tour.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
@@ -109,6 +110,7 @@ public class TourRecommendService {
                     .description((String) r.get("description"))
                     .sortOrder(r.get("sortOrder") == null ? null : ((Number) r.get("sortOrder")).intValue())
                     .defaultType((String) r.get("defaultType"))
+                    .scheduleDay(r.get("scheduleDay") == null ? 0 : ((Number) r.get("scheduleDay")).intValue())
                     .build();
             schedulesByTour.computeIfAbsent(tourId, k -> new ArrayList<>()).add(item);
         }
@@ -119,6 +121,13 @@ public class TourRecommendService {
 
 
         return items;
+    }
+
+    @Transactional
+    public void saveShownRecommendations(List<TourRecommendationResponseDto> items, Member member){
+        if(items == null || items.isEmpty()) return;
+
+        tourMapper.insertTourRecommendationBatch(items, member.getMemberId());
     }
 
 }

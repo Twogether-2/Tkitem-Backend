@@ -3,11 +3,12 @@ package tkitem.backend.domain.order.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tkitem.backend.domain.order.dto.OrderItemDetail;
+import tkitem.backend.domain.cart.mapper.CartItemMapper;
 import tkitem.backend.domain.order.dto.request.OrderCreateRequest;
 import tkitem.backend.domain.order.dto.response.OrderCreateResponse;
 import tkitem.backend.domain.order.dto.response.OrderDetailResponse;
 import tkitem.backend.domain.order.dto.response.OrderSummaryResponse;
+import tkitem.backend.domain.order.enums.CheckoutMode;
 import tkitem.backend.domain.order.enums.OrderItemStatus;
 import tkitem.backend.domain.order.enums.OrderStatus;
 import tkitem.backend.domain.order.mapper.OrderItemMapper;
@@ -17,7 +18,6 @@ import tkitem.backend.domain.payment.mapper.PaymentMapper;
 import tkitem.backend.domain.product.service.ProductService;
 import tkitem.backend.domain.product.vo.ProductVo;
 import tkitem.backend.global.error.ErrorCode;
-import tkitem.backend.global.error.exception.BusinessException;
 import tkitem.backend.global.error.exception.EntityNotFoundException;
 
 import java.util.List;
@@ -31,20 +31,20 @@ public class OrderServiceImpl implements OrderService {
     private static final String TOSS_PROVIDER = "TOSS";
 
     private final ProductService productService;
+    private final CartItemMapper cartItemMapper;
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
     private final PaymentMapper paymentMapper;
 
     @Override
-    public OrderCreateResponse createOrder(Long memberId, OrderCreateRequest req) {
+    public OrderCreateResponse createOrder(Long memberId, OrderCreateRequest req, CheckoutMode mode) {
         // 1) 주문 헤더
         orderMapper.insertOrder(memberId, OrderStatus.PENDING.name());
         Long orderId = orderMapper.currOrderId();
 
         // 2) 아이템 (가격/스냅샷 고정)
         String firstName = null;
-        for (int i=0; i<req.getItems().size(); i++) {
-
+        for (int i = 0; i < req.getItems().size(); i++) {
             OrderCreateRequest.OrderItemRequest item = req.getItems().get(i);
             ProductVo product = productService.getProductById(item.getProductId());
 
@@ -61,6 +61,10 @@ public class OrderServiceImpl implements OrderService {
             );
             if (i == 0) {
                 firstName = (product.getName() != null ? product.getName() : "주문상품");
+            }
+
+            if (mode == CheckoutMode.CART) {
+                cartItemMapper.markPendingToOrderedExactOne(memberId, item.getProductId(), item.getTripId(), item.getQuantity());
             }
         }
 
