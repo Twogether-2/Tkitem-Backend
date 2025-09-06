@@ -8,7 +8,6 @@ import tkitem.backend.domain.checklist.vo.ReasonContext;
 
 import java.util.*;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Component
 public class ReasonContextBuilder {
