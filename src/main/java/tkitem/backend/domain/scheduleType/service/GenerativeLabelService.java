@@ -128,7 +128,7 @@ public class GenerativeLabelService {
               - 가산 후 confidence는 1.0을 넘지 않게 클램프.
               - MEAL 이외 라벨의 confidence는 텍스트 근거가 약하면 낮춰 판단.
               - “ETC”는 다른 라벨이 존재할 때 함께 넣지 말 것.
-              - 여분 텍스트/설명 출력 금지(반드시 JSON 배열 한 줄).
+              - 여분 텍스트/설명 출력 금지(반드시 JSON 형식의 배열 한 줄).
         """.formatted(String.join(",", ALLOWED_TYPES));
 
         String user = """
@@ -153,8 +153,11 @@ public class GenerativeLabelService {
                 .call()
                 .content();
 
+        json = extractJson(json);
+
         // JSON 파싱 → 라벨/점수
         List<Result> topK = parseJson(json);
+        log.info("[LLM][RAW] {}", json);
         log.info("[LLM][TOPK] textLen={} parsedTopK={}", cleaned.length(), formatResults(topK));
         return (topK == null) ? java.util.Collections.emptyList() : topK;
     }
@@ -288,5 +291,22 @@ public class GenerativeLabelService {
         return list.stream()
                 .map(r -> r.typeName() + "=" + String.format(Locale.ROOT, "%.2f", r.score()))
                 .collect(Collectors.joining(", ", "[", "]"));
+    }
+
+    private static String extractJson(String s) {
+        if (s == null) return "";
+        String t = s.trim();
+        // ```json ... ``` 형태 제거
+        if (t.startsWith("```")) {
+            int firstNL = t.indexOf('\n');
+            if (firstNL > 0) t = t.substring(firstNL + 1);
+            if (t.endsWith("```")) t = t.substring(0, t.length() - 3);
+            t = t.trim();
+        }
+        // 배열만 골라내기(가장 안전)
+        int l = t.indexOf('['), r = t.lastIndexOf(']');
+        if (l >= 0 && r > l) return t.substring(l, r + 1).trim();
+        // 혹시 객체로 올 수도 있으니 원본 반환
+        return t;
     }
 }
