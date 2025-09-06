@@ -137,6 +137,18 @@ public class ChecklistController {
                 .body(env);
     }
 
+    @PostMapping("/{tripId}/ai/reason/regenerate")
+    @Operation(
+            summary = "AI 체크리스트 이유 재생성(전용)",
+            description = "기존 활성본(is_deleted='F')을 soft delete 하고 비동기 재생성 트리거. 체크리스트는 변경하지 않음."
+    )
+    public ResponseEntity<AiReasonEnvelope> regenerateAiReason(@PathVariable long tripId) {
+        aiReasonService.regenerate(tripId);
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .cacheControl(CacheControl.noStore())
+                .body(AiReasonEnvelope.processing());
+    }
+
 
 
 }
