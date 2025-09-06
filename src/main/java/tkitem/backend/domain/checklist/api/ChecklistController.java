@@ -4,14 +4,17 @@ import io.swagger.v3.oas.annotations.Operation;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import tkitem.backend.domain.checklist.dto.request.ChecklistCreateRequestDto;
+import tkitem.backend.domain.checklist.dto.response.AiReasonEnvelope;
+import tkitem.backend.domain.checklist.dto.response.AiReasonResponse;
 import tkitem.backend.domain.checklist.dto.response.ChecklistAiResponseDto;
 import tkitem.backend.domain.checklist.dto.response.ChecklistListResponseDto;
+import tkitem.backend.domain.checklist.service.AiReasonService;
 import tkitem.backend.domain.checklist.service.ChecklistService;
 import tkitem.backend.domain.member.vo.Member;
 
@@ -21,14 +24,17 @@ import tkitem.backend.domain.member.vo.Member;
 public class ChecklistController {
 
     private final ChecklistService checklistService;
+    private final AiReasonService aiReasonService;
 
     @PostMapping("/ai/{tripId}")
-    @Operation(summary = "체크리스트 자동 세팅", description = "trip_id에 따른 체크리스트 자동 세팅")
+    @Operation(summary = "체크리스트 자동 세팅", description = "trip_id에 따른 체크리스트 자동 세팅 + AI 이유 재생성 트리거")
     public ResponseEntity<ChecklistAiResponseDto> generateAiChecklist(
             @PathVariable Long tripId,
             @AuthenticationPrincipal Member member
     ) {
-        return ResponseEntity.ok(checklistService.generateAiChecklist(tripId, member.getMemberId()));
+        ChecklistAiResponseDto resp = checklistService.generateAiChecklist(tripId, member.getMemberId());
+        aiReasonService.regenerate(tripId);
+        return ResponseEntity.ok(resp);
     }
 
     @GetMapping("/{tripId}")
@@ -107,6 +113,30 @@ public class ChecklistController {
     public ResponseEntity<Integer> getTripTotalDays(@PathVariable Long tripId) {
         return ResponseEntity.ok(checklistService.getTripTotalDays(tripId));
     }
+
+    @GetMapping("/{tripId}/ai/reason")
+    @Operation(
+            summary = "AI 체크리스트 이유 조회",
+            description = "is_deleted='F' 최신본 상태를 반환(READY/PROCESSING/ERROR). 기본적으로 없으면 생성 트리거 후 PROCESSING 반환."
+    )
+    public ResponseEntity<AiReasonEnvelope> getAiReason(
+            @PathVariable long tripId,
+            @RequestParam(defaultValue = "true") boolean triggerIfMissing
+    ) {
+        AiReasonEnvelope env = aiReasonService.getOrTrigger(tripId, triggerIfMissing);
+
+        if ("READY".equals(env.getStatus())) {
+            return ResponseEntity.ok()
+                    .cacheControl(CacheControl.noStore())
+                    .body(env);
+        }
+        // PROCESSING 또는 ERROR → 202로 내려주면 프런트에서 폴링/재시도 UI 가능
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .header("Retry-After", "2")
+                .cacheControl(CacheControl.noStore())
+                .body(env);
+    }
+
 
 
 }

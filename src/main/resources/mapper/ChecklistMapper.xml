@@ -181,4 +181,45 @@
         FROM trip t
         WHERE t.trip_id = #{tripId}
     </select>
+
+    <!-- 여행의 AI체크리스트 조회-->
+    <select id="selectChecklistItemsByTrip" resultType="tkitem.backend.domain.checklist.dto.ChecklistItemRow">
+        SELECT checklist_item_id, trip_id, product_category_sub_id, item_name,
+        schedule_date, score, tier, notes, source
+        FROM CHECKLIST_ITEM
+        WHERE trip_id = #{tripId}
+        AND is_deleted = 'F'
+        AND source = 'AI'
+        ORDER BY NVL(schedule_date, 0), score DESC, item_name
+    </select>
+
+    <!-- Trip 메타(월/일수) -->
+    <select id="selectTripMeta" resultType="tkitem.backend.domain.checklist.dto.TripMeta">
+        SELECT
+            EXTRACT(MONTH FROM tp.departure_date) AS month_num,
+            (SELECT COUNT(DISTINCT tds.schedule_date)
+             FROM TOUR_DETAIL_SCHEDULE tds
+             WHERE tds.tour_id = tp.tour_id)     AS trip_days
+        FROM TRIP tr
+                 JOIN TOUR_PACKAGE tp ON tp.tour_package_id = tr.tour_package_id
+        WHERE tr.trip_id = #{tripId}
+    </select>
+
+    <!-- 일정의 도시/국가 목록 -->
+    <select id="selectTripPlaces" resultType="tkitem.backend.domain.checklist.dto.TripPlace">
+  <![CDATA[
+        SELECT DISTINCT
+            ci.city_name    AS city_name,
+            ci.country_name AS country_name
+        FROM TRIP tr
+                 JOIN TOUR_PACKAGE tp ON tp.tour_package_id = tr.tour_package_id
+                 JOIN TOUR_CITY tc     ON tc.tour_id = tp.tour_id
+                 JOIN CITY ci          ON ci.city_id = tc.city_id
+        WHERE tr.trip_id = #{tripId}
+          AND ci.country_name <> '대한민국'
+        ORDER BY ci.country_name, ci.city_name
+        ]]>
+</select>
+
+
 </mapper>
