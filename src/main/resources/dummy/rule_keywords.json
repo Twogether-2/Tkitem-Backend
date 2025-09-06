@@ -60,6 +60,7 @@
   {"label":"SIGHTSEEING","word":"동물원","wTitle":0.8,"wDesc":0.8},
   {"label":"SIGHTSEEING","word":"절경","wTitle":1.0,"wDesc":1.0},
   {"label":"SIGHTSEEING","word":"야시장","wTitle":1.0,"wDesc":1.0},
+  {"label":"SIGHTSEEING","word":"투어","wTitle":1.0,"wDesc":1.0},
 
   {"label":"LANDMARK","word":"랜드마크","wTitle":1.0,"wDesc":1.0},
   {"label":"LANDMARK","word":"타워","wTitle":1.0,"wDesc":1.0},

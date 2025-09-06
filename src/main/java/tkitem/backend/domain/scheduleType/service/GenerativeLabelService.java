@@ -7,8 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import tkitem.backend.domain.scheduleType.dto.TourDetailScheduleRowDto;
 
@@ -26,12 +25,14 @@ public class GenerativeLabelService {
 
     public record Result(String typeName, double score) {}
 
-    private final ChatModel chatModel;
+    @Qualifier("geminiChatClient")
+    private final ChatClient chatClient;
+
     private final ObjectMapper objectMapper;
     private final EmbeddingService embeddingService;
     private final ElasticsearchClient esClient;
 
-    private final String OPENAI_MODEL = "gpt-4o-mini";
+    private final String GEMINI_MODEL = "gemini-2.0-flash-latest";
     private static final String LABEL_INDEX = "schedule_type_labels_v1";
 
     /**
@@ -45,10 +46,10 @@ public class GenerativeLabelService {
 
         for (TourDetailScheduleRowDto r : rows) {
             try {
-                String text = (safe(r.getTitle()) + " " + safe(r.getDescription())).replaceAll("\\s+"," ").trim();
-                log.info("[LLM][TRY] tdsId={} model={} textLen={}", r.getTourDetailScheduleId(), OPENAI_MODEL, text.length());
+                String text = (safe(r.getTitle()) + " " + safe(r.getDescription())).replaceAll("\\s+", " ").trim();
+                log.info("[LLM][TRY] tdsId={} model={} textLen={}", r.getTourDetailScheduleId(), GEMINI_MODEL, text.length());
 
-                List<Result> res = classifyTopKByLLM(text); // LLM 호출
+                List<Result> res = classifyTopKByLLM(text, r); // LLM 호출
                 log.info("[LLM][RES] tdsId={} topK={}", r.getTourDetailScheduleId(), formatResults(res));
 
                 if (res != null && !res.isEmpty()) {
@@ -72,7 +73,7 @@ public class GenerativeLabelService {
 
         for(TourDetailScheduleRowDto r : rows){
             try{
-                String text = (safe(r.getTitle()) + " " + safe(r.getDescription())).replaceAll("\\s+"," ").trim();
+                String text = (safe(r.getTitle()) + " " + safe(r.getDescription())).replaceAll("\\s+", " ").trim();
 
                 log.info("[KNN][TRY] tdsId={} textLen={}", r.getTourDetailScheduleId(), text.length());
 
@@ -89,12 +90,11 @@ public class GenerativeLabelService {
     }
 
     // 단건 분류: LLM JSON 응답 기반으로 분류 (실패 시 ETC). 0~3개까지 분류됨
-    private List<Result> classifyTopKByLLM(String text) throws Exception {
+    private List<Result> classifyTopKByLLM(String text, TourDetailScheduleRowDto tdsRowDto) throws Exception {
 
         String cleaned = (text == null ? "" : text).replaceAll("\\s+", " ").trim();
 
         // LLM 프롬프트 (허용 라벨만, JSON 한 줄만 반환 강제)
-        // TODO : 분류 하는거 보고 프롬프트 조정 필요
         String system = """
                 당신은 여행 일정(TDS)을 분류하는 분류기입니다.
               아래 허용 라벨 중에서만 고르세요: %s
@@ -107,24 +107,43 @@ public class GenerativeLabelService {
               ]
               규칙:
               - 최대 3개, confidence 내림차순
-              - 분류가 불가한 경우 label : ETC, confidence: 0.00 으로 분류. 다른 분류가 있는 TDS일 경우 ETC 가 추가적으로 들어갈 수 없음.
+              - 분류가 불가한 경우 인터넷 검색을 통해 분류가 무엇인지 인터넷 검색으로 판단
+              - 검색 결과로도 분류가 불가한 경우 단일 요소 [{"label":"ETC","confidence":0.00}]로만 반환(다른 라벨과 혼용 금지).
               - confidence는 0.0~1.0
               - 여분 텍스트/설명 금지
+              
+              특수 규칙(중요):
+              - 입력의 default_type이 "MEAL"이면, 최상위 라벨은 반드시 "MEAL"이어야 함.
+              - default_type=MEAL인 경우, 다음 요인에 따라 MEAL의 confidence를 가산:
+                - 지역 특산품(예: 해당 지역 고유 음식/재료/대표 메뉴) 언급: +0.15
+                - “현지 분위기에 어울림”을 강하게 시사(로컬 맛집, 현지 인기, 지역 축제 음식 등): +0.10
+                - 프리미엄(파인다이닝/고급/미쉐린급/고가 코스/고가 재료 등)인 경우: +0.20
+                - 한국에서도 흔하게 맛볼 수 있는 음식이면 -0.10
+              - 가산 후 confidence는 1.0을 넘지 않게 클램프.
+              - MEAL 이외 라벨의 confidence는 텍스트 근거가 약하면 낮춰 판단.
+              - “ETC”는 다른 라벨이 존재할 때 함께 넣지 말 것.
+              - 여분 텍스트/설명 출력 금지(반드시 JSON 배열 한 줄).
         """.formatted(String.join(",", ALLOWED_TYPES));
 
         String user = """
-        제목+설명:
-        %s
-        """.formatted(cleaned);
+        다음은 분류 대상 텍스트와 컨텍스트입니다.
+        [text]
+        제목+설명: %s
+        
+        [context]
+        default_Type: %s,
+        region_contry: %s,
+        region_city: %s
+        """.formatted(
+                cleaned,
+                tdsRowDto.getDefaultType(),
+                tdsRowDto.getCountryName(),
+                tdsRowDto.getCityName()
+        );
 
-        ChatClient chat = ChatClient.builder(chatModel).build();
-        String json = chat.prompt()
+        String json = chatClient.prompt()
                 .system(system)
                 .user(user)
-                .options(OpenAiChatOptions.builder()
-                        .model(OPENAI_MODEL)   // 경량·저비용 모델
-                        .temperature(0.1)       // 일관성↑
-                        .build())
                 .call()
                 .content();
 
@@ -133,6 +152,7 @@ public class GenerativeLabelService {
         log.info("[LLM][TOPK] textLen={} parsedTopK={}", cleaned.length(), formatResults(topK));
         return (topK == null) ? java.util.Collections.emptyList() : topK;
     }
+
 
     // 단건 KNN Top-3 출력 : 라벨 인덱스에서 임베딩 KNN -> (코사인 유사도 * 가중치) 정렬 상위 최대 3개까지 return
     public List<Result> classifyTopKByKNN(String text) throws Exception{
@@ -197,7 +217,7 @@ public class GenerativeLabelService {
     private static final Set<String> ALLOWED_TYPES = Set.of(
             "FLIGHT","TRANSFER","GUIDE","HOTEL","HOTEL_STAY","SIGHTSEEING","LANDMARK",
             "MUSEUM_HERITAGE","PARK_NATURE","ACTIVITY","HIKING_TREKKING","SHOW",
-            "SPA_MASSAGE","SHOPPING","MEAL","CAFE","FREE_TIME","SNORKELING", "SWIM", "REST", "ETC"
+            "SPA_MASSAGE","SHOPPING","MEAL","CAFE","FREE_TIME","SNORKELING", "SWIM", "REST"
     );
 
     private String safe(String s){

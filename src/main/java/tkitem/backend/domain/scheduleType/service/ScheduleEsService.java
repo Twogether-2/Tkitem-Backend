@@ -3,7 +3,6 @@ package tkitem.backend.domain.scheduleType.service;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
-import co.elastic.clients.elasticsearch.core.IndexRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -61,23 +60,39 @@ public class ScheduleEsService {
         return esClient.indices().exists(b -> b.index(LABEL_INDEX)).value();
     }
 
-    /**
-     * 신뢰도 높은 분류 결과를 라벨 인덱스에 저장 (다중 레이블 지원)
-     */
-    public void saveLabel(List<Map<String, Object>> labels, String text, float[] embedding) {
-        try {
-            Map<String, Object> doc = new HashMap<>();
-            doc.put("label", labels);
-            doc.put("text", text);
-            doc.put("embedding", embedding);
+    public record LearningData(List<Map<String, Object>> labels, String text, float[] embedding) {}
 
-            IndexRequest<Map<String, Object>> request = IndexRequest.of(i -> i
+    /**
+     * 신뢰도 높은 분류 결과(학습 데이터)를 라벨 인덱스에 대량으로 저장합니다.
+     * @param learningDataList 저장할 학습 데이터 리스트
+     */
+    public void saveLabel(List<LearningData> learningDataList) {
+        if (learningDataList == null || learningDataList.isEmpty()) {
+            return;
+        }
+
+        BulkRequest.Builder bulk = new BulkRequest.Builder();
+        for (LearningData data : learningDataList) {
+            Map<String, Object> doc = new HashMap<>();
+            doc.put("label", data.labels());
+            doc.put("text", data.text());
+            doc.put("embedding", data.embedding());
+
+            bulk.operations(op -> op.index(idx -> idx
                     .index(LABEL_INDEX)
                     .document(doc)
-            );
-            esClient.index(request);
+            ));
+        }
+
+        try {
+            BulkResponse response = esClient.bulk(bulk.build());
+            if (response.errors()) {
+                log.error("Bulk saving labels failed for some items.");
+            } else {
+                log.info("[LEARN] Bulk saved {} learning data items to ES.", learningDataList.size());
+            }
         } catch (IOException e) {
-            log.error("Failed to save labels to Elasticsearch", e);
+            log.error("Failed to bulk save labels to Elasticsearch", e);
         }
     }
 }

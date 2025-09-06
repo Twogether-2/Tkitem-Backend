@@ -237,7 +237,7 @@
     </select>
 
     <insert id="insertTourRecommendation" parameterType="map">
-        INTO TOUR_RECOMMENDATION (
+        INSERT INTO TOUR_RECOMMENDATION (
             tour_id,
             tour_package_id,
             member_id,

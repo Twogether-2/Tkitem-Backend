@@ -9,6 +9,7 @@ import tkitem.backend.domain.scheduleType.classification.RuleClassifier;
 import tkitem.backend.domain.scheduleType.dto.TourDetailScheduleRowDto;
 import tkitem.backend.domain.scheduleType.mapper.TourDetailScheduleMapper;
 import tkitem.backend.domain.scheduleType.mapper.TourScheduleTypeMapper;
+import tkitem.backend.domain.scheduleType.service.ScheduleEsService.LearningData;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,30 +46,34 @@ public class TourTypePipelineService {
         List<TourDetailScheduleRowDto> knnTargets = new ArrayList<>();
         List<TourDetailScheduleRowDto> llmPending = new ArrayList<>();
         long lastProcessedId = -1;
-        int forTest = 10;
-        int countTest = 0;
 
         // 분류 통계 카운터
         int ruleTried = 0, ruleSuccess = 0;
         int knnNeeded = 0, knnSuccess = 0;
         int llmNeeded = 0, llmSuccess = 0;
 
-        while (countTest < forTest) {
+        while (true) {
             // 1) DB 배치 조회
             List<TourDetailScheduleRowDto> rows = tdsMapper.selectBatchForIndexing(offset, batchSize);
             if (rows == null || rows.isEmpty()) break;
 
-            BulkRequest.Builder bulk = new BulkRequest.Builder();
-            for (var r : rows) {
+            // 2) 임베딩 일괄 생성
+            List<String> textsToEmbed = rows.stream()
+                    .map(r -> (r.getTitle() == null ? "" : r.getTitle()) + " " + (r.getDescription() == null ? "" : r.getDescription()))
+                    .map(s -> s.replaceAll("\\s+", " ").trim())
+                    .toList();
+            List<float[]> embeddings = embeddingService.embedAll(textsToEmbed);
 
-                // 2) 임베딩 생성 + ES 문서 추가
-                String title = r.getTitle() == null ? "" : r.getTitle();
-                String desc = r.getDescription() == null ? "" : r.getDescription();
-                String combined = (title + " " + desc).replaceAll("\\s+", " ").trim();
-                float[] vec = embeddingService.embed(combined);
+
+            List<LearningData> learningDataToSave = new ArrayList<>();
+            BulkRequest.Builder bulk = new BulkRequest.Builder();
+            for (int i = 0; i < rows.size(); i++) {
+                var r = rows.get(i);
+                String combined = textsToEmbed.get(i);
+                float[] vec = embeddings.get(i);
 
                 // ES 문서 전송 (대상 인덱스/별칭은 설정값)
-                Map<String, Object> d = toEsDoc(r, title, desc, combined, vec);
+                Map<String, Object> d = toEsDoc(r, r.getTitle(), r.getDescription(), combined, vec);
                 bulk.operations(op -> op.index(idx -> idx
                         .index(ES_INDEX)
                         .id(String.valueOf(r.getTourDetailScheduleId()))
@@ -86,6 +91,8 @@ public class TourTypePipelineService {
                 var top = rule.top2(scores);
 
                 if (top.top1Type == null) {
+                    log.warn("[RULE-FAIL] No rule match for tdsId={}. Adding to KNN queue. Title='{}', Desc='{}', DefaultType='{}'",
+                            r.getTourDetailScheduleId(), r.getTitle(), r.getDescription(), r.getDefaultType());
                     knnTargets.add(r);
                     knnNeeded++;
                 } else {
@@ -106,7 +113,7 @@ public class TourTypePipelineService {
                             tstMapper.upsertTourScheduleType(r.getTourDetailScheduleId(), typeId, top.top1Score);
                             ruleSuccess++;
                             var result = List.of(new GenerativeLabelService.Result(top.top1Type, top.top1Score));
-                            saveResultToLearningIndex(result, combined, vec, false); // 룰 기반은 항상 저장
+                            accumulateLearningData(learningDataToSave, result, combined, vec, false); // 룰 기반은 항상 저장
                         }
                         continue;
                     }
@@ -123,11 +130,13 @@ public class TourTypePipelineService {
                                 tstMapper.upsertTourScheduleType(r.getTourDetailScheduleId(), typeId, top1);
                                 ruleSuccess++;
                                 var result = List.of(new GenerativeLabelService.Result(top.top1Type, top1));
-                                saveResultToLearningIndex(result, combined, vec, false); // 룰 기반은 항상 저장
+                                accumulateLearningData(learningDataToSave, result, combined, vec, false); // 룰 기반은 항상 저장
                             }
                         } else {
                             // 근소차이 : 상충 계열이면 KNN/LLM
                             if(isConflict(top.top1Type, top.top2Type)) {
+                                log.warn("[RULE-FAIL] Conflict detected for tdsId={}. Top1='{}', Top2='{}'. Adding to KNN queue. Title='{}', Desc='{}', DefaultType='{}'",
+                                        r.getTourDetailScheduleId(), top.top1Type, top.top2Type, r.getTitle(), r.getDescription(), r.getDefaultType());
                                 knnTargets.add(r);
                                 knnNeeded++;
                             } else { // 동일 계열이면 채택
@@ -136,24 +145,33 @@ public class TourTypePipelineService {
                                     tstMapper.upsertTourScheduleType(r.getTourDetailScheduleId(), typeId, top1);
                                     ruleSuccess++;
                                     var result = List.of(new GenerativeLabelService.Result(top.top1Type, top1));
-                                    saveResultToLearningIndex(result, combined, vec, false); // 룰 기반은 항상 저장
+                                    accumulateLearningData(learningDataToSave, result, combined, vec, false); // 룰 기반은 항상 저장
                                 }
                             }
                         }
                     } else {
                         // top1 자체가 낮으면 생성형으로 보완
+                        log.warn("[RULE-FAIL] Low score for tdsId={}. Top1='{}'({}), Score < {}. Adding to KNN queue. Title='{}', Desc='{}', DefaultType='{}'",
+                                r.getTourDetailScheduleId(), top.top1Type, String.format("%.2f", top.top1Score), MIN_SCORE, r.getTitle(), r.getDescription(), r.getDefaultType());
                         knnTargets.add(r);
                         knnNeeded++;
                     }
                 }
                 lastProcessedId = r.getTourDetailScheduleId();
+
             }
 
             esService.bulk(bulk.build());
+            esService.saveLabel(learningDataToSave); // 룰 기반 학습 데이터 일괄 저장
+            learningDataToSave.clear();
 
             // 4) KNN Top-3 저장 -> 미달 항목은 LLM 보완 대상으로 이동
             if(!knnTargets.isEmpty()){
                 Map<Long, List<GenerativeLabelService.Result>> knnMap = genSvc.classifyBatchByKNN(knnTargets);
+
+                // KNN 성공 건에 대한 임베딩도 일괄 생성
+                List<TourDetailScheduleRowDto> knnSuccessRows = new ArrayList<>();
+                Map<Long, List<GenerativeLabelService.Result>> knnSuccessResults = new HashMap<>();
 
                 for (var r : knnTargets) {
                     Long tdsId = r.getTourDetailScheduleId();
@@ -164,9 +182,8 @@ public class TourTypePipelineService {
                         llmNeeded++;
                     } else {
                         knnSuccess++;
-                        String combined = (r.getTitle() + " " + r.getDescription()).replaceAll("\\s+", " ").trim();
-                        float[] vec = embeddingService.embed(combined);
-                        saveResultToLearningIndex(list, combined, vec, true); // KNN 결과는 임계값 적용
+                        knnSuccessRows.add(r);
+                        knnSuccessResults.put(tdsId, list);
                         for (var res : list) {
                             Long typeId = tstMapper.findScheduleTypeIdByName(res.typeName());
                             if (typeId != null) {
@@ -175,10 +192,26 @@ public class TourTypePipelineService {
                         }
                     }
                 }
+
+                if (!knnSuccessRows.isEmpty()) {
+                    List<String> knnTextsToEmbed = knnSuccessRows.stream()
+                            .map(r -> (r.getTitle() == null ? "" : r.getTitle()) + " " + (r.getDescription() == null ? "" : r.getDescription()))
+                            .map(s -> s.replaceAll("\\s+", " ").trim())
+                            .toList();
+                    List<float[]> knnEmbeddings = embeddingService.embedAll(knnTextsToEmbed);
+
+                    for (int i = 0; i < knnSuccessRows.size(); i++) {
+                        var r = knnSuccessRows.get(i);
+                        var list = knnSuccessResults.get(r.getTourDetailScheduleId());
+                        accumulateLearningData(learningDataToSave, list, knnTextsToEmbed.get(i), knnEmbeddings.get(i), true);
+                    }
+                }
+
+                esService.saveLabel(learningDataToSave); // KNN 기반 학습 데이터 일괄 저장
                 knnTargets.clear();
             }
 
-            // 5) pending 임계치 도달 시 즉시 생성형 분류 → DB/ES 반영
+            // 5) pending 임계치 도달 시 즉시 생성형 분류 -> DB/ES 반영
             if (llmPending.size() >= PENDING_FLUSH) {
                 int added = flushPendingWithGen(llmPending);
                 llmSuccess += added;
@@ -186,7 +219,7 @@ public class TourTypePipelineService {
             }
 
             offset += rows.size();
-            countTest += rows.size();
+
             log.info("[BATCH] rows={}, lastId={}", rows.size(), lastProcessedId);
             log.info("[RULE] tried={} success={} rate={}%", ruleTried, ruleSuccess, ruleTried == 0 ? 0.0 : Math.round((ruleSuccess * 10000.0 / ruleTried)) / 100.0);
             log.info("[KNN ] needed={} success={} rate={}%", knnNeeded, knnSuccess, knnNeeded == 0 ? 0.0 : Math.round((knnSuccess * 10000.0 / knnNeeded)) / 100.0);
@@ -213,8 +246,8 @@ public class TourTypePipelineService {
         doc.put("sort_order", r.getSortOrder());
         doc.put("country_name", r.getCountryName());
         doc.put("city_name", r.getCityName());
-        doc.put("title", title);
-        doc.put("description", desc);
+        doc.put("title", title == null ? "" : title);
+        doc.put("description", desc == null ? "" : desc);
         doc.put("combined_text", combined);
         doc.put("embedding", vec);
         return doc;
@@ -227,16 +260,23 @@ public class TourTypePipelineService {
         // LLM 보조 분류 (배치 호출)
         Map<Long, List<GenerativeLabelService.Result>> results = genSvc.classifyBatchByLLM(pending);
         int successCount = 0;
+        List<LearningData> learningDataToSave = new ArrayList<>();
 
-        for (var r : pending) {
+        // LLM 분류 건에 대한 임베딩 일괄 생성
+        List<String> llmTextsToEmbed = pending.stream()
+                .map(r -> (r.getTitle() == null ? "" : r.getTitle()) + " " + (r.getDescription() == null ? "" : r.getDescription()))
+                .map(s -> s.replaceAll("\\s+", " ").trim())
+                .toList();
+        List<float[]> llmEmbeddings = embeddingService.embedAll(llmTextsToEmbed);
+
+        for (int i = 0; i < pending.size(); i++) {
+            var r = pending.get(i);
             Long tdsId = r.getTourDetailScheduleId();
             var list = results.getOrDefault(tdsId, List.of());
             if (list.isEmpty()) continue;
 
             successCount++;
-            String combined = (r.getTitle() + " " + r.getDescription()).replaceAll("\\s+", " ").trim();
-            float[] vec = embeddingService.embed(combined);
-            saveResultToLearningIndex(list, combined, vec, true); // LLM 결과는 임계값 적용
+            accumulateLearningData(learningDataToSave, list, llmTextsToEmbed.get(i), llmEmbeddings.get(i), true); // LLM 결과는 임계값 적용
 
             for (var res : list) {
                 Long typeId = tstMapper.findScheduleTypeIdByName(res.typeName());
@@ -245,10 +285,11 @@ public class TourTypePipelineService {
                 }
             }
         }
+        esService.saveLabel(learningDataToSave); // LLM 기반 학습 데이터 일괄 저장
         return successCount;
     }
 
-    private void saveResultToLearningIndex(List<GenerativeLabelService.Result> results, String text, float[] embedding, boolean applyThreshold) {
+    private void accumulateLearningData(List<LearningData> learningDataList, List<GenerativeLabelService.Result> results, String text, float[] embedding, boolean applyThreshold) {
         if (results == null || results.isEmpty()) {
             return;
         }
@@ -268,8 +309,7 @@ public class TourTypePipelineService {
                 .collect(Collectors.toList());
 
         if (!labelsToSave.isEmpty()) {
-            esService.saveLabel(labelsToSave, text, embedding);
-            log.info("[LEARN] Saved result to ES. text='{}', labels={}, applyThreshold={}", text.substring(0, Math.min(text.length(), 20)), labelsToSave, applyThreshold);
+            learningDataList.add(new LearningData(labelsToSave, text, embedding));
         }
     }
 

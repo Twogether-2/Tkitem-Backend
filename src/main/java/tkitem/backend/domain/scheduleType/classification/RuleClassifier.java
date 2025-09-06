@@ -15,28 +15,25 @@ import static java.util.stream.Collectors.*;
 /**
  * 규칙(키워드/가중치) 기반의 1차 분류
  */
-// TODO :
-//  1. 기내식 없음 같은 경우가 MEAL 점수가 그대로 들어감
-//  2. default_type 에 따른 분류가 제대로 되지 않음
 @Component
 public class RuleClassifier {
 
-    // 가중치 키워드 구조체
+    // 가중치 키워드 구조체 (String.contains 기반으로 변경)
     private static class KW {
-        final Pattern p;
-        final List<Pattern> and; // and 그룹용(null 가능)
+        final String word;
+        final List<String> and; // and 그룹용(null 가능)
         final double wTitle;
         final double wDesc;
+
         KW(String word, double wTitle, double wDesc) {
-            this.p = Pattern.compile(word, Pattern.CASE_INSENSITIVE);
+            this.word = word; // 원본 키워드 저장
             this.and = null;
             this.wTitle = wTitle; this.wDesc = wDesc;
         }
+
         KW(List<String> andWords, double wTitle, double wDesc) {
-            this.p = null;
-            this.and = andWords.stream()
-                    .map(w -> Pattern.compile(w, Pattern.CASE_INSENSITIVE))
-                    .toList();
+            this.word = null;
+            this.and = andWords; // 원본 키워드 리스트 저장
             this.wTitle = wTitle; this.wDesc = wDesc;
         }
         boolean isAnd() { return and != null && !and.isEmpty(); }
@@ -75,8 +72,8 @@ public class RuleClassifier {
 
     // 1차 룰 스코어링
     public Map<String, Double> score(String title, String description, String defaultType){
-        String t = normalize(title);
-        String d = normalize(description);
+        String t = (title == null) ? "" : title;
+        String d = (description == null) ? "" : description;
 
         Map<String, Double> base = new HashMap<>();
 
@@ -97,16 +94,16 @@ public class RuleClassifier {
                     for (var kw : mealKeywords) {
                         double sKw = 0.0;
                         if (!kw.isAnd()) { // 단일 키워드
-                            boolean hitT = kw.p.matcher(t).find();
-                            boolean hitD = kw.p.matcher(d).find();
+                            boolean hitT = t.contains(kw.word);
+                            boolean hitD = d.contains(kw.word);
                             if ((hitT && kw.wTitle == 0.0) || (hitD && kw.wDesc == 0.0)) {
                                 blocked = true; best = 0.0; break;
                             }
                             if (hitT) sKw = Math.max(sKw, kw.wTitle);
                             if (hitD) sKw = Math.max(sKw, kw.wDesc);
                         } else { // AND 키워드
-                            String td = (t + " " + d).trim();
-                            boolean allInTD = kw.and.stream().allMatch(p -> p.matcher(td).find());
+                            String td = t + " " + d;
+                            boolean allInTD = kw.and.stream().allMatch(td::contains);
                             if (allInTD) {
                                 if (kw.wTitle == 0.0 || kw.wDesc == 0.0) {
                                     blocked = true; best = 0.0; break;
@@ -134,7 +131,7 @@ public class RuleClassifier {
         }
 
         // --- 기본 로직 (defaultType이 MEAL이나 ACCOMMODATION이 아닌 경우) ---
-        String td = (t + " " + d).trim();
+        String td = t + " " + d;
 
         for (var e : dict.entrySet()) {
             // MEAL 라벨은 defaultType=MEAL일 때만 처리되었으므로 여기서는 항상 스킵
@@ -145,15 +142,15 @@ public class RuleClassifier {
             for (var kw : e.getValue()) {
                 double sKw = 0.0;
                 if(!kw.isAnd()) { // 단일 키워드 조합이면
-                    boolean hitT = kw.p.matcher(t).find();
-                    boolean hitD = kw.p.matcher(d).find();
+                    boolean hitT = t.contains(kw.word);
+                    boolean hitD = d.contains(kw.word);
                     if ((hitT && kw.wTitle == 0.0) || (hitD && kw.wDesc == 0.0)) {
                         blocked = true; best = 0.0; break; // 가중치값 0.0 으로 매칭시 종료
                     }
                     if (hitT) sKw = Math.max(sKw, kw.wTitle);
                     if (hitD) sKw = Math.max(sKw, kw.wDesc);
                 } else {
-                    boolean allInTD = kw.and.stream().allMatch(p -> p.matcher(td).find());
+                    boolean allInTD = kw.and.stream().allMatch(td::contains);
                     if (allInTD){
                         if (kw.wTitle == 0.0 || kw.wDesc == 0.0) {
                             blocked = true; best = 0.0; break; // AND에도 0.0 규칙 적용 (둘 중 하나라도 0.0이면 차단)
@@ -176,20 +173,15 @@ public class RuleClassifier {
     // 호텔 평점 파싱 → 1.0 ~ 0.0 가중 반환. REST 타입을 위해서
     private double parseHotelRating(String text) {
         if (text == null) return 0.0;
-        // 숫자에 붙은 소수 방지: 앞뒤가 숫자가 아닌 경우만 (예: 15.0 방지)
-        Matcher m = Pattern
-                .compile("(?<!\\d)([0-5]\\.0)(?!\\d)")
-                .matcher(text);
 
-        if(!m.find()) return 0.0;
-
-        return switch (m.group(1)) {
+        return switch (text) {
             case "5.0" -> 1.00;
             case "4.0" -> 0.80;
             case "3.0" -> 0.60;
             case "2.0" -> 0.40;
             case "1.0" -> 0.20;
-            default -> 0.50;
+            case "0.0" -> 0.00;
+            default -> 0.50; // 예상 외의 값이 들어올 경우 0.0 처리
         };
     }
 
@@ -227,10 +219,5 @@ public class RuleClassifier {
                             }
                         },
                         (a,b)->{});
-    }
-
-    public static String normalize(String s){
-        if(s == null || s.isEmpty()) return "";
-        return s.toLowerCase().replaceAll("\\s+"," ").trim();
     }
 }
