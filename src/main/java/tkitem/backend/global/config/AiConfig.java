@@ -27,11 +27,11 @@ public class AiConfig {
 	// Gemini(Developer API, OpenAI 호환) 전용 ChatClient
 	@Bean(name = "geminiChatClient")
 	ChatClient geminiChatClient(@Value("${gemini.api.key}") String geminiApiKey) {
-
+		// Google AI(OpenAI 호환) 엔드포인트로 라우팅
 		OpenAiApi geminiApi = OpenAiApi.builder()
-				.baseUrl("https://generativelanguage.googleapis.com/v1beta/openai")
+				.baseUrl("https://generativelanguage.googleapis.com/v1beta")
 				.apiKey(geminiApiKey)
-				.completionsPath("/chat/completions") // v1 붙지 않게 명시
+				.completionsPath("/openai/chat/completions")
 				.build();
 
 		OpenAiChatOptions geminiOptions = OpenAiChatOptions.builder()

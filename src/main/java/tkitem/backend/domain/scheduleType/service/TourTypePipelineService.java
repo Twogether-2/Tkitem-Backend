@@ -30,7 +30,7 @@ public class TourTypePipelineService {
     private static final double MIN_SCORE = 0.65;
     private static final double MIN_MARGIN = 0.10;
     private static final double CONFIDENCE_THRESHOLD = 0.80; // 학습 데이터 축적을 위한 신뢰도 임계값 (KNN, LLM용)
-    private static final int PENDING_FLUSH = 2000;
+    private static final int PENDING_FLUSH = 500;
     private static final String ES_INDEX = "tour_detail_schedule_v1";
 
     private static final Set<String> MOVE = Set.of("FLIGHT", "TRANSFER");

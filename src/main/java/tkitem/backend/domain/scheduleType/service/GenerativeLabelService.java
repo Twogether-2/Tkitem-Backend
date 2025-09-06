@@ -20,8 +20,14 @@ import java.util.stream.Collectors;
  */
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class GenerativeLabelService {
+
+    public GenerativeLabelService(@Qualifier("geminiChatClient") ChatClient chatClient, ObjectMapper objectMapper, EmbeddingService embeddingService, ElasticsearchClient esClient) {
+        this.chatClient = chatClient;
+        this.objectMapper = objectMapper;
+        this.embeddingService = embeddingService;
+        this.esClient = esClient;
+    }
 
     public record Result(String typeName, double score) {}
 
@@ -32,7 +38,7 @@ public class GenerativeLabelService {
     private final EmbeddingService embeddingService;
     private final ElasticsearchClient esClient;
 
-    private final String GEMINI_MODEL = "gemini-2.0-flash-latest";
+    private final String GEMINI_MODEL = "gemini-2.0-flash";
     private static final String LABEL_INDEX = "schedule_type_labels_v1";
 
     /**
