@@ -152,14 +152,11 @@
     </update>
 
     <!-- 멤버아이디로 닉네임, 프로필 이미지 업데이트 -->
-    <update id="updateNicknameAndImgUrl">
+    <update id="updateNickname">
         UPDATE MEMBER
         <set>
             <if test="nickname != null">
                 NICKNAME = #{nickname},
-            </if>
-            <if test="imgUrl != null">
-                IMG_URL = #{imgUrl},
             </if>
             UPDATED_AT = SYSDATE,
             UPDATED_BY = #{memberId}
