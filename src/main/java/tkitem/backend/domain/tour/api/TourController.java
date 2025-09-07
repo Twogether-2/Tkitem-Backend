@@ -8,6 +8,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
+import tkitem.backend.domain.tour.dto.response.TourCommonRecommendDto;
 import tkitem.backend.domain.tour.dto.response.TourPackageDetailDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.service.DataLoadService;
@@ -76,7 +77,6 @@ public class TourController {
         return ResponseEntity.ok(responseDtodList);
     }
 
-
     @GetMapping("/{tourPackageId}")
     @Operation(
             summary = "투어 패키지 조회",
@@ -89,5 +89,20 @@ public class TourController {
         TourPackageDetailDto responseDto = tourService.getTourPackageDetail(tourPackageId);
 
         return ResponseEntity.ok(responseDto);
+    }
+
+    @GetMapping("/recentRecommend")
+    @Operation(
+            summary = "최근에 추천받았던 패키지 목록조회",
+            description = "recommend 요청으로 받았으나 내 여행에 담지 않았던 여행 조회"
+    )
+    public ResponseEntity<List<TourCommonRecommendDto>> recentRecommend(
+            @AuthenticationPrincipal Member member
+    ){
+        List<TourCommonRecommendDto> tourCommonRecommendDtos = tourService.getRecentRecommendedTours(member);
+        for(TourCommonRecommendDto dto : tourCommonRecommendDtos){
+            log.info("tourId={}, title={}, tourPackageId={}, price={}", dto.getTourId(), dto.getTitle(), dto.getTourPackageId(), dto.getPrice());
+        }
+        return ResponseEntity.ok(tourCommonRecommendDtos);
     }
 }

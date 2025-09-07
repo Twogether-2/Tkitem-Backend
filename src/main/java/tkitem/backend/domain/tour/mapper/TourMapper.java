@@ -7,6 +7,7 @@ import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 
 import tkitem.backend.domain.tour.dto.TourPackageInfo;
+import tkitem.backend.domain.tour.dto.response.TourCommonRecommendDto;
 import tkitem.backend.domain.tour.dto.response.TourPackageDetailDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.vo.Tour;
@@ -77,4 +78,6 @@ public interface TourMapper {
     List<TourDetailScheduleDto> selectTourDetailScheduleListByTourId(@Param("tourId") Long tourId);
 
     Long selectNextGroupId();
+
+    List<TourCommonRecommendDto> selectTourMetaByMemberId(@Param("memberId") Long memberId);
 }
