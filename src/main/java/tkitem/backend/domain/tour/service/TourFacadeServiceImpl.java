@@ -38,7 +38,7 @@ public class TourFacadeServiceImpl implements TourFacadeService {
 
         // DB 후보 1차 계산
         int baseCount = useEs ? Math.max(DB_STAGE_TOP, topN) : topN;
-        List<TourRecommendationResponseDto> base = tourRecommendService.recommendDbOnly(req, baseCount);
+        List<TourRecommendationResponseDto> base = tourRecommendService.recommendDbOnly(req, baseCount, member);
         if (base == null || base.isEmpty()) return Collections.emptyList();
 
         // ES 없을 때. DB 로만 계산

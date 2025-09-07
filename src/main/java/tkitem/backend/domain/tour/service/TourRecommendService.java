@@ -30,9 +30,9 @@ public class TourRecommendService {
      * @return
      */
     @Transactional(readOnly = true)
-    public List<TourRecommendationResponseDto> recommendDbOnly(TourRecommendationRequestDto req, int topN) {
+    public List<TourRecommendationResponseDto> recommendDbOnly(TourRecommendationRequestDto req, int topN, Member member) {
 
-        List<TourCandidateRowDto> tourCandidateRowDtos = tourMapper.selectTourCandidates(req, kTop);
+        List<TourCandidateRowDto> tourCandidateRowDtos = tourMapper.selectTourCandidates(req, kTop, member.getMemberId());
 
         if(tourCandidateRowDtos.isEmpty()) return Collections.emptyList();
 

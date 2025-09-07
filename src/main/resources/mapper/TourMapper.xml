@@ -63,6 +63,14 @@
                     AND tr.group_id = #{req.groupId}
                     )
                 </if>
+                <if test="memberId != null">
+                    AND NOT EXISTS (
+                    SELECT 1
+                    FROM TRIP t
+                    WHERE t.tour_package_id = tp.tour_package_id
+                    AND t.member_id = #{memberId}
+                    )
+                </if>
                 <if test="req != null and req.departureDate != null">
                     AND tp.departure_date &gt;= TRUNC(#{req.departureDate, jdbcType=DATE})
                 </if>

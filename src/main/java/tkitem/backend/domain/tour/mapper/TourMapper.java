@@ -63,7 +63,8 @@ public interface TourMapper {
 
     List<TourCandidateRowDto> selectTourCandidates(
             @Param("req") TourRecommendationRequestDto tourRecommendationRequestDto,
-            @Param("kTop") Integer kTop);
+            @Param("kTop") Integer kTop,
+            @Param("memberId") Long memberId);
 
     List<Map<String, Object>> selectTourMetaByIds(List<Long> tourIds);
 
