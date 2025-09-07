@@ -49,13 +49,12 @@ public class TourController {
             @RequestParam(name = "topN", defaultValue = "5") int topN,
             @AuthenticationPrincipal Member member
             ) throws Exception{
-        log.info("접근");
         // [추가] 요청 파라미터 요약 로그
-        log.info("[REQ] text={}, topN={}", queryText, topN); // [추가]
-        log.info("[REQ] date {} ~ {}, price {} ~ {}, tags={}",            // [추가]
+        log.info("[REQ] text={}, topN={}", queryText, topN);
+        log.info("[REQ] date {} ~ {}, price {} ~ {}, tags={}, groupId={}",
                 req.getDepartureDate(), req.getReturnDate(),
                 req.getPriceMin(), req.getPriceMax(),
-                req.getTagIdList());
+                req.getTagIdList(), req.getGroupId());
 
         // locations 상세 로그 (null-safe)
         if (req.getLocations() == null) {
@@ -73,7 +72,6 @@ public class TourController {
             }
         }
         List<TourRecommendationResponseDto> responseDtodList = tourFacadeService.recommend(req, queryText, topN, member);
-        log.info("성공");
         log.info("[RES] size={}", responseDtodList == null ? null : responseDtodList.size());
         return ResponseEntity.ok(responseDtodList);
     }

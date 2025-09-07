@@ -6,7 +6,6 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
