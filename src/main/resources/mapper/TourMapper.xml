@@ -252,7 +252,7 @@
     </insert>
 
     <resultMap id="TourPackageDetailMap"
-               type="tkitem.backend.domain.tour.dto.TourDetailScheduleRowDto">
+               type="tkitem.backend.domain.tour.dto.response.TourPackageDetailDto">
         <!-- 투어 정보 -->
         <id     property="tourId"           column="tour_id"/>
         <result property="title"            column="title"/>
@@ -271,7 +271,7 @@
 
         <!-- 스케줄 목록: tour_id를 column으로 넘겨 nested select 실행 -->
         <collection property="schedules"
-                    ofType="tkitem.backend.domain.scheduleType.dto.TourDetailScheduleDto"
+                    ofType="tkitem.backend.domain.tour.dto.TourDetailScheduleDto"
                     select="selectSchedulesByTourId"
                     column="tour_id"/>
     </resultMap>
@@ -298,10 +298,10 @@
         WHERE tp.tour_package_id = #{tourPackageId}
     </select>
 
-    <!-- [ADD] 동일 tour_id의 전체 세부일정 조회 -->
+    <!-- 동일 tour_id의 전체 세부일정 조회 -->
     <select id="selectSchedulesByTourId"
             parameterType="long"
-            resultType="tkitem.backend.domain.scheduleType.dto.TourDetailScheduleDto">
+            resultType="tkitem.backend.domain.tour.dto.TourDetailScheduleDto">
         SELECT
         s.tour_detail_schedule_id AS tourDetailScheduleId,
         s.city_id                 AS cityId,
