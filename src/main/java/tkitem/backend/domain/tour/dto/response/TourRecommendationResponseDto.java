@@ -28,6 +28,9 @@ public class TourRecommendationResponseDto {
     private String departureAirline;
     private String returnAirline;
 
+    // 추천된 투어 그룹 정보
+    private Long groupId;
+
     // 투어 세부 일정 정보
     List<TourDetailScheduleDto> schedules;
 

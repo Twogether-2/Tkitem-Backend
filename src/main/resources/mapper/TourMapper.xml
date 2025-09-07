@@ -55,6 +55,14 @@
                 tp.return_airline
             FROM TOUR_PACKAGE tp
             WHERE 1=1
+                <if test="req.groupId != null and req.groupId &gt; 0">
+                    AND NOT EXISTS (
+                    SELECT 1
+                    FROM TOUR_RECOMMENDATION tr
+                    WHERE tr.tour_package_id = tp.tour_package_id
+                    AND tr.group_id = #{req.groupId}
+                    )
+                </if>
                 <if test="req != null and req.departureDate != null">
                     AND tp.departure_date &gt;= TRUNC(#{req.departureDate, jdbcType=DATE})
                 </if>
@@ -179,7 +187,7 @@
         ORDER BY "dbScore" DESC, fs."minPrice" ASC, fs."latestDeparture" ASC
     </select>
 
-    <select id="selectTourMetaByIds" parameterType="map" resultType="map">
+    <select id="selectTourMetaByIds" parameterType="list" resultType="map">
         SELECT
             t.tour_id AS "tourId",
             t.title AS "title",
@@ -188,7 +196,7 @@
             t.provider AS "provider"
         FROM TOUR t
         WHERE t.tour_id IN
-        <foreach collection="tourIds" item="id" open="(" close=")" separator=",">
+        <foreach collection="list" item="id" open="(" close=")" separator=",">
             #{id}
         </foreach>
     </select>
@@ -241,12 +249,14 @@
             tour_id,
             tour_package_id,
             member_id,
+            group_id,
             created_at,
             updated_at )
         VALUES (
             #{item.tourId},
             #{item.tourPackageId},
             #{memberId},
+            #{item.groupId},
             SYSTIMESTAMP,
             SYSTIMESTAMP )
     </insert>
@@ -331,8 +341,14 @@
             tds.schedule_date           AS scheduleDay
         FROM
             TOUR_DETAIL_SCHEDULE tds LEFT JOIN CITY c ON c.city_id = tds.city_id
-        WHERE t.tour_id = #{tourId}
+        WHERE tds.tour_id = #{tourId}
         ORDER BY tds.sort_order
+    </select>
+
+    <!--  tour_receommendation 테이블의 다음으로 생성돼야할 groupId 찾기  -->
+    <select id="selectNextGroupId" resultType="long">
+        SELECT NVL(MAX(group_id), 0) + 1 AS nextGroupId
+        FROM TOUR_RECOMMENDATION
     </select>
 
 </mapper>

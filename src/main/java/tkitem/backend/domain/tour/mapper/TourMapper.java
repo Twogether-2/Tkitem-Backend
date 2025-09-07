@@ -74,4 +74,6 @@ public interface TourMapper {
     Optional<TourPackageDetailDto> selectTourPackageDetail(@Param("tourPackageId") Long tourPackageId);
 
     List<TourDetailScheduleDto> selectTourDetailScheduleListByTourId(@Param("tourId") Long tourId);
+
+    Long selectNextGroupId();
 }

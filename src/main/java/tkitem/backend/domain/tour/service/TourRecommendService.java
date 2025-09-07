@@ -1,7 +1,6 @@
 package tkitem.backend.domain.tour.service;
 
 import lombok.RequiredArgsConstructor;
-import org.apache.ibatis.session.SqlSessionFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.member.vo.Member;
@@ -47,8 +46,6 @@ public class TourRecommendService {
 
             return TourRecommendationResponseDto.builder()
                     .tourId(r.getTourId())
-//                    .price(r.getMinPrice())
-//                    .departureDate(r.getLatestDeparture())
                     .dbScore(dbNorm) // DB 정규화 점수
                     .esScore(0.0) // ES 하기 전이라 아직 0.0
                     .finalScore(dbNorm) // 최종점수에 아직 DB 점수만 활용함
@@ -126,10 +123,15 @@ public class TourRecommendService {
     }
 
     @Transactional
-    public void saveShownRecommendations(List<TourRecommendationResponseDto> items, Member member){
+    public void saveShownRecommendations(Long groupId, List<TourRecommendationResponseDto> items, Member member){
         if (items == null || items.isEmpty()) return;
 
+        // 신규추천이면(groupId가 null 또는 0 이면 MAX+1 생성
+        if(groupId == null || groupId == 0L) groupId = tourMapper.selectNextGroupId();
+
         for (TourRecommendationResponseDto it : items) {
+            if(it == null || it.getTourId() == null) continue;
+            it.setGroupId(groupId);
             tourMapper.insertTourRecommendation(it, member.getMemberId());
         }
     }
