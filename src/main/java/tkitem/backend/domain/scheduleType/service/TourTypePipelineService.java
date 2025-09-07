@@ -4,7 +4,6 @@ import co.elastic.clients.elasticsearch.core.BulkRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.scheduleType.classification.RuleClassifier;
 import tkitem.backend.domain.scheduleType.dto.TourDetailScheduleRowDto;
 import tkitem.backend.domain.scheduleType.mapper.TourDetailScheduleMapper;
@@ -26,6 +25,7 @@ public class TourTypePipelineService {
     private final RuleClassifier rule;
     private final TourScheduleTypeMapper tstMapper;
     private final GenerativeLabelService genSvc;
+    private final TourLabelWriter tourLabelWriter;
 
     private static final double MIN_SCORE = 0.65;
     private static final double MIN_MARGIN = 0.10;
@@ -36,9 +36,9 @@ public class TourTypePipelineService {
     private static final Set<String> MOVE = Set.of("FLIGHT", "TRANSFER");
     private static final Set<String> VIEW = Set.of("SIGHTSEEING","LANDMARK", "MUSEUM_HERITAGE","PARK_NATURE","SHOW");
 
+    private static final int DB_UPSERT_FLUSH = 500; // 필요 시 조정
 
     // 한번만 돌리는 메인 엔트리
-    @Transactional
     public void runOnce(int batchSize) throws Exception {
         esService.ensureIndexExistsOrThrow();
 
@@ -52,6 +52,9 @@ public class TourTypePipelineService {
         int knnNeeded = 0, knnSuccess = 0;
         int llmNeeded = 0, llmSuccess = 0;
 
+        // [ADD] DB upsert 버퍼
+        List<Map<String, Object>> dbUpserts = new ArrayList<>();
+
         while (true) {
             // 1) DB 배치 조회
             List<TourDetailScheduleRowDto> rows = tdsMapper.selectBatchForIndexing(offset, batchSize);
@@ -63,7 +66,6 @@ public class TourTypePipelineService {
                     .map(s -> s.replaceAll("\\s+", " ").trim())
                     .toList();
             List<float[]> embeddings = embeddingService.embedAll(textsToEmbed);
-
 
             List<LearningData> learningDataToSave = new ArrayList<>();
             BulkRequest.Builder bulk = new BulkRequest.Builder();
@@ -101,7 +103,7 @@ public class TourTypePipelineService {
                     if (dt != null && dt.equalsIgnoreCase("MEAL") && top.top1Score == 0.0) {
                         Long typeId = tstMapper.findScheduleTypeIdByName("MEAL");
                         if (typeId != null) {
-                            tstMapper.upsertTourScheduleType(r.getTourDetailScheduleId(), typeId, 0.0);
+                            enqueueDbUpsert(dbUpserts, r.getTourDetailScheduleId(), typeId, 0.0);
                             ruleSuccess++;
                         }
                         continue;
@@ -110,7 +112,7 @@ public class TourTypePipelineService {
                     if (dt != null && (dt.equalsIgnoreCase("MEAL") || dt.equalsIgnoreCase("ACCOMMODATION"))) {
                         Long typeId = tstMapper.findScheduleTypeIdByName(top.top1Type);
                         if (typeId != null) {
-                            tstMapper.upsertTourScheduleType(r.getTourDetailScheduleId(), typeId, top.top1Score);
+                            enqueueDbUpsert(dbUpserts, r.getTourDetailScheduleId(), typeId, top.top1Score);
                             ruleSuccess++;
                             var result = List.of(new GenerativeLabelService.Result(top.top1Type, top.top1Score));
                             accumulateLearningData(learningDataToSave, result, combined, vec, false); // 룰 기반은 항상 저장
@@ -127,7 +129,7 @@ public class TourTypePipelineService {
                             // 4) 확신 충분 → DB UPSERT + ES 업데이트 예약
                             Long typeId = tstMapper.findScheduleTypeIdByName(top.top1Type);
                             if (typeId != null) {
-                                tstMapper.upsertTourScheduleType(r.getTourDetailScheduleId(), typeId, top1);
+                                enqueueDbUpsert(dbUpserts, r.getTourDetailScheduleId(), typeId, top1);
                                 ruleSuccess++;
                                 var result = List.of(new GenerativeLabelService.Result(top.top1Type, top1));
                                 accumulateLearningData(learningDataToSave, result, combined, vec, false); // 룰 기반은 항상 저장
@@ -142,7 +144,7 @@ public class TourTypePipelineService {
                             } else { // 동일 계열이면 채택
                                 Long typeId = tstMapper.findScheduleTypeIdByName(top.top1Type);
                                 if (typeId != null) {
-                                    tstMapper.upsertTourScheduleType(r.getTourDetailScheduleId(), typeId, top1);
+                                    enqueueDbUpsert(dbUpserts, r.getTourDetailScheduleId(), typeId, top1);
                                     ruleSuccess++;
                                     var result = List.of(new GenerativeLabelService.Result(top.top1Type, top1));
                                     accumulateLearningData(learningDataToSave, result, combined, vec, false); // 룰 기반은 항상 저장
@@ -187,7 +189,7 @@ public class TourTypePipelineService {
                         for (var res : list) {
                             Long typeId = tstMapper.findScheduleTypeIdByName(res.typeName());
                             if (typeId != null) {
-                                tstMapper.upsertTourScheduleType(tdsId, typeId, res.score());
+                                enqueueDbUpsert(dbUpserts, tdsId, typeId, res.score());
                             }
                         }
                     }
@@ -205,17 +207,30 @@ public class TourTypePipelineService {
                         var list = knnSuccessResults.get(r.getTourDetailScheduleId());
                         accumulateLearningData(learningDataToSave, list, knnTextsToEmbed.get(i), knnEmbeddings.get(i), true);
                     }
+
+                    if (!learningDataToSave.isEmpty()) { // [ADDED] 132685 이상만 저장
+                        esService.saveLabel(learningDataToSave);
+                    }
+                    learningDataToSave.clear();
                 }
 
-                esService.saveLabel(learningDataToSave); // KNN 기반 학습 데이터 일괄 저장
                 knnTargets.clear();
             }
 
             // 5) pending 임계치 도달 시 즉시 생성형 분류 -> DB/ES 반영
             if (llmPending.size() >= PENDING_FLUSH) {
-                int added = flushPendingWithGen(llmPending);
+                int added = flushPendingWithGen(llmPending, learningDataToSave, dbUpserts);
+                if (!learningDataToSave.isEmpty()) {
+                    esService.saveLabel(learningDataToSave);
+                    learningDataToSave.clear();
+                }
                 llmSuccess += added;
                 llmPending.clear();
+            }
+
+            if (!dbUpserts.isEmpty()) {
+                tourLabelWriter.saveLabelsChunk(dbUpserts);
+                dbUpserts.clear();
             }
 
             offset += rows.size();
@@ -227,9 +242,19 @@ public class TourTypePipelineService {
         }
 
         if (!llmPending.isEmpty()) {
-            int added = flushPendingWithGen(llmPending);
+            List<LearningData> leftoverLearningData = new ArrayList<>();
+            int added = flushPendingWithGen(llmPending, leftoverLearningData, dbUpserts);
+            if (!leftoverLearningData.isEmpty()) {
+                esService.saveLabel(leftoverLearningData);
+            }
+
             llmSuccess += added;
             llmPending.clear();
+        }
+
+        if (!dbUpserts.isEmpty()) {
+            tourLabelWriter.saveLabelsChunk(dbUpserts);
+            dbUpserts.clear();
         }
 
         log.info("[SUMMARY] RULE: tried={} success={} rate={}%", ruleTried, ruleSuccess, ruleTried == 0 ? 0.0 : Math.round((ruleSuccess * 10000.0 / ruleTried)) / 100.0);
@@ -242,25 +267,27 @@ public class TourTypePipelineService {
         Map<String, Object> doc = new ConcurrentHashMap<>();
         doc.put("tour_detail_schedule_id", r.getTourDetailScheduleId());
         doc.put("tour_id", r.getTourId());
-        doc.put("schedule_date", r.getScheduleDate());
-        doc.put("sort_order", r.getSortOrder());
-        doc.put("country_name", r.getCountryName());
-        doc.put("city_name", r.getCityName());
+        doc.put("schedule_date", r.getScheduleDate() == null ? 0 : r.getScheduleDate());
+        doc.put("sort_order", r.getSortOrder() == null ? 0 : r.getSortOrder());
+        doc.put("country_name", r.getCountryName() == null ? "" : r.getCountryName());
+        doc.put("city_name", r.getCityName() == null ? "" : r.getCityName());
         doc.put("title", title == null ? "" : title);
         doc.put("description", desc == null ? "" : desc);
-        doc.put("combined_text", combined);
-        doc.put("embedding", vec);
+        doc.put("combined_text", combined == null ? "" : combined);
+        doc.put("embedding", vec == null ? new float[0] : vec);
         return doc;
     }
 
     // KNN 분류 -> 부족 시 LLM 분류 -> 라벨 임베딩 → DB 반영
-    private int flushPendingWithGen(List<TourDetailScheduleRowDto> pending) throws Exception {
+    private int flushPendingWithGen(List<TourDetailScheduleRowDto> pending,
+                                    List<LearningData> learningDataToSave,
+                                    List<Map<String, Object>> dbUpserts)
+            throws Exception {
         if (pending == null || pending.isEmpty()) return 0;
 
         // LLM 보조 분류 (배치 호출)
         Map<Long, List<GenerativeLabelService.Result>> results = genSvc.classifyBatchByLLM(pending);
         int successCount = 0;
-        List<LearningData> learningDataToSave = new ArrayList<>();
 
         // LLM 분류 건에 대한 임베딩 일괄 생성
         List<String> llmTextsToEmbed = pending.stream()
@@ -276,16 +303,15 @@ public class TourTypePipelineService {
             if (list.isEmpty()) continue;
 
             successCount++;
-            accumulateLearningData(learningDataToSave, list, llmTextsToEmbed.get(i), llmEmbeddings.get(i), true); // LLM 결과는 임계값 적용
+            accumulateLearningData(learningDataToSave, list, llmTextsToEmbed.get(i), llmEmbeddings.get(i), true);
 
             for (var res : list) {
                 Long typeId = tstMapper.findScheduleTypeIdByName(res.typeName());
                 if (typeId != null) {
-                    tstMapper.upsertTourScheduleType(tdsId, typeId, res.score());
+                    enqueueDbUpsert(dbUpserts, tdsId, typeId, res.score());
                 }
             }
         }
-        esService.saveLabel(learningDataToSave); // LLM 기반 학습 데이터 일괄 저장
         return successCount;
     }
 
@@ -316,5 +342,18 @@ public class TourTypePipelineService {
     private boolean isConflict(String a, String b) {
         if (a == null || b == null) return false;
         return (MOVE.contains(a) && VIEW.contains(b)) || (MOVE.contains(b) && VIEW.contains(a));
+    }
+
+    //DB upsert 버퍼에 적재 + 임계치 도달 시 REQUIRES_NEW로 커밋
+    private void enqueueDbUpsert(List<Map<String, Object>> buf, Long tdsId, Long typeId, double score) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("tdsId", tdsId);
+        m.put("typeId", typeId);
+        m.put("score", score);
+        buf.add(m);
+        if (buf.size() >= DB_UPSERT_FLUSH) {
+            tourLabelWriter.saveLabelsChunk(buf);
+            buf.clear();
+        }
     }
 }
