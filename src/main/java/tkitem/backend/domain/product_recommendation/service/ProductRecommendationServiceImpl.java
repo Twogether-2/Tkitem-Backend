@@ -8,6 +8,7 @@ import tkitem.backend.domain.product_recommendation.dto.*;
 import tkitem.backend.domain.product_recommendation.dto.request.ProductRecommendationRequest;
 import tkitem.backend.domain.product_recommendation.dto.response.CandidateListResponse;
 import tkitem.backend.domain.product_recommendation.dto.response.ProductRecommendationResponse;
+import tkitem.backend.domain.product_recommendation.dto.response.ProductResponse;
 import tkitem.backend.domain.product_recommendation.mapper.ProductRecommendationMapper;
 import tkitem.backend.domain.product_recommendation.util.TagExtractor;
 
@@ -220,6 +221,30 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
 
         // 4) 응답 (tripId 포함해 세팅)
         return CandidateListResponse.of(tripId, it, ctxTagCodes, candidates);
+    }
+
+    /** 1) 최근 본 상품의 연관상품 */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductResponse> relatedToRecent(Long productId, int limit) {
+        if (productId == null) throw new IllegalArgumentException("productId is required");
+        return productRecommendationMapper.selectRelatedToProduct(productId, Math.max(limit, 1));
+    }
+
+    /** 2) 사용자의 가장 가까운 Trip에서 추천 아이템 */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductResponse> nearTripItems(Long memberId, int limit) {
+        if (memberId == null) throw new IllegalArgumentException("memberId is required");
+        return productRecommendationMapper.selectPopularForNearestTrip(memberId, Math.max(limit, 1));
+    }
+
+    /** 3) 사용자의 선호 취향에 맞는 옷 */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductResponse> personalClothing(Long memberId, int limit) {
+        if (memberId == null) throw new IllegalArgumentException("memberId is required");
+        return productRecommendationMapper.selectPersonalClothingForMember(memberId, Math.max(limit, 1));
     }
 
     private List<ChecklistItemDto> applyScheduleDateFilter(List<ChecklistItemDto> items, String scheduleDateParam) {
