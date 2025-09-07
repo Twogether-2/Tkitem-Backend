@@ -22,8 +22,8 @@ configurations {
 repositories {
     mavenCentral()
     google()
-    maven { url 'https://repo.spring.io/milestone' }
-    maven { url 'https://repo.spring.io/snapshot' }
+    maven { url = 'https://repo.spring.io/milestone' }
+    maven { url = 'https://repo.spring.io/snapshot' }
     maven { url = uri("https://jitpack.io") }
 }
 
@@ -62,8 +62,6 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     // AI
     implementation 'org.springframework.ai:spring-ai-starter-model-openai'
-    implementation platform("org.springframework.ai:spring-ai-bom:1.0.1-SNAPSHOT")
-    implementation 'org.springframework.ai:spring-ai-openai'
     // Jackson (JSON 파싱)
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 
@@ -81,9 +79,6 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     implementation 'com.opencsv:opencsv:5.7.1'
-
-    // Spring AI OpenAI 스타터
-    implementation "org.springframework.ai:spring-ai-starter-model-openai"
 
     // ES Java API Client
     implementation 'co.elastic.clients:elasticsearch-java:8.14.0'

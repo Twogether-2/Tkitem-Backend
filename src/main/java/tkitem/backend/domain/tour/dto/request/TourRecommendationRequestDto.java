@@ -30,6 +30,9 @@ public class TourRecommendationRequestDto {
     @Schema(description = "태그 ID 목록(WITH/STYLE 등)", example = "[7,8,10]")
     private List<Long> tagIdList;
 
+    @Schema(description = "재추천 시 같은 추천 그룹 내 항목으로 가져오기. 최초 추천일 시 null 또는 0", example = "0")
+    private Long groupId;
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

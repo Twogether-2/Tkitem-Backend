@@ -8,9 +8,11 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
+import tkitem.backend.domain.tour.dto.response.TourPackageDetailDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.service.DataLoadService;
 import tkitem.backend.domain.tour.service.TourFacadeService;
+import tkitem.backend.domain.tour.service.TourService;
 
 import java.util.List;
 
@@ -21,6 +23,7 @@ import java.util.List;
 public class TourController {
     private final DataLoadService dataLoadService;
     private final TourFacadeService tourFacadeService;
+    private final TourService tourService;
 
     @PostMapping("/init")
     public ResponseEntity<String> initTour(){
@@ -46,13 +49,12 @@ public class TourController {
             @RequestParam(name = "topN", defaultValue = "5") int topN,
             @AuthenticationPrincipal Member member
             ) throws Exception{
-        log.info("접근");
         // [추가] 요청 파라미터 요약 로그
-        log.info("[REQ] text={}, topN={}", queryText, topN); // [추가]
-        log.info("[REQ] date {} ~ {}, price {} ~ {}, tags={}",            // [추가]
+        log.info("[REQ] text={}, topN={}", queryText, topN);
+        log.info("[REQ] date {} ~ {}, price {} ~ {}, tags={}, groupId={}",
                 req.getDepartureDate(), req.getReturnDate(),
                 req.getPriceMin(), req.getPriceMax(),
-                req.getTagIdList());
+                req.getTagIdList(), req.getGroupId());
 
         // locations 상세 로그 (null-safe)
         if (req.getLocations() == null) {
@@ -70,9 +72,22 @@ public class TourController {
             }
         }
         List<TourRecommendationResponseDto> responseDtodList = tourFacadeService.recommend(req, queryText, topN, member);
-        log.info("성공");
         log.info("[RES] size={}", responseDtodList == null ? null : responseDtodList.size());
         return ResponseEntity.ok(responseDtodList);
     }
 
+
+    @GetMapping("/{tourPackageId}")
+    @Operation(
+            summary = "투어 패키지 조회",
+            description = "투어 패키지 PK 값으로 투어 패키지 세부정보 조회가 가능합니다."
+    )
+    public ResponseEntity<TourPackageDetailDto> getTourPackage(
+            @AuthenticationPrincipal Member member,
+            @PathVariable Long tourPackageId){
+
+        TourPackageDetailDto responseDto = tourService.getTourPackageDetail(tourPackageId);
+
+        return ResponseEntity.ok(responseDto);
+    }
 }

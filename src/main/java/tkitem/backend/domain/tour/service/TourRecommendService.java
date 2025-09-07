@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
+import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.mapper.TourMapper;
@@ -29,9 +30,9 @@ public class TourRecommendService {
      * @return
      */
     @Transactional(readOnly = true)
-    public List<TourRecommendationResponseDto> recommendDbOnly(TourRecommendationRequestDto req, int topN) {
+    public List<TourRecommendationResponseDto> recommendDbOnly(TourRecommendationRequestDto req, int topN, Member member) {
 
-        List<TourCandidateRowDto> tourCandidateRowDtos = tourMapper.selectTourCandidates(req, kTop);
+        List<TourCandidateRowDto> tourCandidateRowDtos = tourMapper.selectTourCandidates(req, kTop, member.getMemberId());
 
         if(tourCandidateRowDtos.isEmpty()) return Collections.emptyList();
 
@@ -45,8 +46,6 @@ public class TourRecommendService {
 
             return TourRecommendationResponseDto.builder()
                     .tourId(r.getTourId())
-//                    .price(r.getMinPrice())
-//                    .departureDate(r.getLatestDeparture())
                     .dbScore(dbNorm) // DB 정규화 점수
                     .esScore(0.0) // ES 하기 전이라 아직 0.0
                     .finalScore(dbNorm) // 최종점수에 아직 DB 점수만 활용함
@@ -98,10 +97,10 @@ public class TourRecommendService {
 
         // 3. TDS 조회 및 매핑
         List<Map<String, Object>> tdsRows = tourMapper.selectTdsByTourIds(tourIds);
-        Map<Long, List<TourRecommendationResponseDto.TdsItem>> schedulesByTour = new HashMap<>();
+        Map<Long, List<TourDetailScheduleDto>> schedulesByTour = new HashMap<>();
         for (Map<String, Object> r : tdsRows) {
             Long tourId = ((Number) r.get("tourId")).longValue();
-            TourRecommendationResponseDto.TdsItem item = TourRecommendationResponseDto.TdsItem.builder()
+            TourDetailScheduleDto item = TourDetailScheduleDto.builder()
                     .tourDetailScheduleId(((Number) r.get("tourDetailScheduleId")).longValue())
                     .cityId(r.get("cityId") == null ? null : ((Number) r.get("cityId")).longValue())
                     .countryName((String) r.get("countryName"))
@@ -114,7 +113,7 @@ public class TourRecommendService {
                     .build();
             schedulesByTour.computeIfAbsent(tourId, k -> new ArrayList<>()).add(item);
         }
-        for (Map.Entry<Long, List<TourRecommendationResponseDto.TdsItem>> e : schedulesByTour.entrySet()) {
+        for (Map.Entry<Long, List<TourDetailScheduleDto>> e : schedulesByTour.entrySet()) {
             TourRecommendationResponseDto dto = byId.get(e.getKey());
             if (dto != null) dto.setSchedules(e.getValue());
         }
@@ -124,10 +123,17 @@ public class TourRecommendService {
     }
 
     @Transactional
-    public void saveShownRecommendations(List<TourRecommendationResponseDto> items, Member member){
-        if(items == null || items.isEmpty()) return;
+    public void saveShownRecommendations(Long groupId, List<TourRecommendationResponseDto> items, Member member){
+        if (items == null || items.isEmpty()) return;
 
-        tourMapper.insertTourRecommendationBatch(items, member.getMemberId());
+        // 신규추천이면(groupId가 null 또는 0 이면 MAX+1 생성
+        if(groupId == null || groupId == 0L) groupId = tourMapper.selectNextGroupId();
+
+        for (TourRecommendationResponseDto it : items) {
+            if(it == null || it.getTourId() == null) continue;
+            it.setGroupId(groupId);
+            tourMapper.insertTourRecommendation(it, member.getMemberId());
+        }
     }
 
 }

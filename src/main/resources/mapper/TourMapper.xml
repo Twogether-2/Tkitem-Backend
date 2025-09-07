@@ -55,6 +55,22 @@
                 tp.return_airline
             FROM TOUR_PACKAGE tp
             WHERE 1=1
+                <if test="req.groupId != null and req.groupId &gt; 0">
+                    AND NOT EXISTS (
+                    SELECT 1
+                    FROM TOUR_RECOMMENDATION tr
+                    WHERE tr.tour_package_id = tp.tour_package_id
+                    AND tr.group_id = #{req.groupId}
+                    )
+                </if>
+                <if test="memberId != null">
+                    AND NOT EXISTS (
+                    SELECT 1
+                    FROM TRIP t
+                    WHERE t.tour_package_id = tp.tour_package_id
+                    AND t.member_id = #{memberId}
+                    )
+                </if>
                 <if test="req != null and req.departureDate != null">
                     AND tp.departure_date &gt;= TRUNC(#{req.departureDate, jdbcType=DATE})
                 </if>
@@ -179,7 +195,7 @@
         ORDER BY "dbScore" DESC, fs."minPrice" ASC, fs."latestDeparture" ASC
     </select>
 
-    <select id="selectTourMetaByIds" parameterType="map" resultType="map">
+    <select id="selectTourMetaByIds" parameterType="list" resultType="map">
         SELECT
             t.tour_id AS "tourId",
             t.title AS "title",
@@ -188,7 +204,7 @@
             t.provider AS "provider"
         FROM TOUR t
         WHERE t.tour_id IN
-        <foreach collection="tourIds" item="id" open="(" close=")" separator=",">
+        <foreach collection="list" item="id" open="(" close=")" separator=",">
             #{id}
         </foreach>
     </select>
@@ -236,22 +252,111 @@
         WHERE tp.tour_package_id = #{tourPackageId}
     </select>
 
-    <insert id="insertTourRecommendationBatch" parameterType="map">
-        INSERT ALL
-        <foreach collection="items" item="it">
-            INTO TOUR_RECOMMENDATION (
-                tour_id,
-                tour_package_id,
-                member_id,
-                created_at,
-                updated_at )
-            VALUES (
-                #{it.tourId},
-                #{it.tourPackageId},
-                #{memberId},
-                SYSTIMESTAMP,
-                SYSTIMESTAMP )
-        </foreach>
-        SELECT 1 FROM DUAL
+    <insert id="insertTourRecommendation" parameterType="map">
+        INSERT INTO TOUR_RECOMMENDATION (
+            tour_id,
+            tour_package_id,
+            member_id,
+            group_id,
+            created_at,
+            updated_at )
+        VALUES (
+            #{item.tourId},
+            #{item.tourPackageId},
+            #{memberId},
+            #{item.groupId},
+            SYSTIMESTAMP,
+            SYSTIMESTAMP )
     </insert>
+
+    <resultMap id="TourPackageDetailMap"
+               type="tkitem.backend.domain.tour.dto.response.TourPackageDetailDto">
+        <!-- 투어 정보 -->
+        <id     property="tourId"           column="tour_id"/>
+        <result property="title"            column="title"/>
+        <result property="feature"          column="feature"/>
+        <result property="imgUrl"           column="img_url"/>
+        <result property="provider"         column="provider"/>
+
+        <!-- 패키지 정보 -->
+        <result     property="tourPackageId"    column="tour_package_id"/>
+        <result property="price"            column="price"/>
+        <result property="departureDate"    column="departure_date" jdbcType="DATE"/>
+        <result property="returnDate"       column="return_date"    jdbcType="DATE"/>
+        <result property="bookingUrl"       column="booking_url"/>
+        <result property="departureAirline" column="departure_airline"/>
+        <result property="returnAirline"    column="return_airline"/>
+
+        <!-- 스케줄 목록: tour_id를 column으로 넘겨 nested select 실행 -->
+        <collection property="schedules"
+                    ofType="tkitem.backend.domain.tour.dto.TourDetailScheduleDto"
+                    select="selectSchedulesByTourId"
+                    column="tour_id"/>
+    </resultMap>
+
+    <!-- 패키지 + 투어 1건 조회 -->
+    <select id="selectTourPackageDetail"
+            parameterType="long"
+            resultMap="TourPackageDetailMap">
+        SELECT
+        t.tour_id,
+        t.title,
+        t.feature,
+        t.img_url,
+        t.provider,
+        tp.tour_package_id,
+        tp.price,
+        tp.departure_date,
+        tp.return_date,
+        tp.booking_url,
+        tp.departure_airline,
+        tp.return_airline
+        FROM TOUR_PACKAGE tp
+        JOIN TOUR t ON t.tour_id = tp.tour_id
+        WHERE tp.tour_package_id = #{tourPackageId}
+    </select>
+
+    <!-- 동일 tour_id의 전체 세부일정 조회 -->
+    <select id="selectSchedulesByTourId"
+            parameterType="long"
+            resultType="tkitem.backend.domain.tour.dto.TourDetailScheduleDto">
+        SELECT
+        s.tour_detail_schedule_id AS tourDetailScheduleId,
+        s.city_id                 AS cityId,
+        c.country_name            AS countryName,
+        c.city_name               AS cityName,
+        s.title                   AS title,
+        s.description             AS description,
+        s.sort_order              AS sortOrder,
+        s.default_type            AS defaultType,
+        s.schedule_date           AS scheduleDay
+        FROM TOUR_DETAIL_SCHEDULE s
+            LEFT JOIN CITY c ON c.city_id = s.city_id
+        WHERE s.tour_id = #{value}  <!-- nested select 에서는 #{value} 사용 -->
+        ORDER BY s.sort_order
+    </select>
+
+    <select id="selectTourDetailScheduleListByTourId" resultType="tkitem.backend.domain.tour.dto.TourDetailScheduleDto">
+        SELECT
+            tds.tour_detail_schedule_id AS tourDetailScheduleId,
+            tds.city_id                 AS cityId,
+            c.country_name              AS countryName,
+            c.city_name                 AS cityName,
+            tds.title                   AS title,
+            tds.description             AS description,
+            tds.sort_order              AS sortOrder,
+            tds.default_type            AS defaultType,
+            tds.schedule_date           AS scheduleDay
+        FROM
+            TOUR_DETAIL_SCHEDULE tds LEFT JOIN CITY c ON c.city_id = tds.city_id
+        WHERE tds.tour_id = #{tourId}
+        ORDER BY tds.sort_order
+    </select>
+
+    <!--  tour_receommendation 테이블의 다음으로 생성돼야할 groupId 찾기  -->
+    <select id="selectNextGroupId" resultType="long">
+        SELECT NVL(MAX(group_id), 0) + 1 AS nextGroupId
+        FROM TOUR_RECOMMENDATION
+    </select>
+
 </mapper>
