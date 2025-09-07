@@ -305,18 +305,34 @@
         SELECT
         s.tour_detail_schedule_id AS tourDetailScheduleId,
         s.city_id                 AS cityId,
-        s.country_name            AS countryName,
-        s.city_name               AS cityName,
+        c.country_name            AS countryName,
+        c.city_name               AS cityName,
         s.title                   AS title,
         s.description             AS description,
         s.sort_order              AS sortOrder,
-        s.end_time                AS endTime,
         s.default_type            AS defaultType,
-        s.day_no                  AS scheduleDay
+        s.schedule_date           AS scheduleDay
         FROM TOUR_DETAIL_SCHEDULE s
-            LEFT JOIN CITY c ON city_id = s.city_id
+            LEFT JOIN CITY c ON c.city_id = s.city_id
         WHERE s.tour_id = #{value}  <!-- nested select 에서는 #{value} 사용 -->
-        ORDER BY s.day_no, s.start_time NULLS FIRST, s.tour_detail_schedule_id
+        ORDER BY s.sort_order
+    </select>
+
+    <select id="selectTourDetailScheduleListByTourId" resultType="tkitem.backend.domain.tour.dto.TourDetailScheduleDto">
+        SELECT
+            tds.tour_detail_schedule_id AS tourDetailScheduleId,
+            tds.city_id                 AS cityId,
+            c.country_name              AS countryName,
+            c.city_name                 AS cityName,
+            tds.title                   AS title,
+            tds.description             AS description,
+            tds.sort_order              AS sortOrder,
+            tds.default_type            AS defaultType,
+            tds.schedule_date           AS scheduleDay
+        FROM
+            TOUR_DETAIL_SCHEDULE tds LEFT JOIN CITY c ON c.city_id = tds.city_id
+        WHERE t.tour_id = #{tourId}
+        ORDER BY tds.sort_order
     </select>
 
 </mapper>

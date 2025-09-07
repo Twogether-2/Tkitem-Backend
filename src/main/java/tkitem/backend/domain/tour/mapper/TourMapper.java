@@ -3,6 +3,7 @@ package tkitem.backend.domain.tour.mapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
+import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 
 import tkitem.backend.domain.tour.dto.TourPackageInfo;
@@ -71,4 +72,6 @@ public interface TourMapper {
     void insertTourRecommendation(@Param("item") TourRecommendationResponseDto item, @Param("memberId") Long memberId);
 
     Optional<TourPackageDetailDto> selectTourPackageDetail(@Param("tourPackageId") Long tourPackageId);
+
+    List<TourDetailScheduleDto> selectTourDetailScheduleListByTourId(@Param("tourId") Long tourId);
 }

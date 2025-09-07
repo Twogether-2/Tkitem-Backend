@@ -1,5 +1,6 @@
 package tkitem.backend.domain.trip.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -12,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import tkitem.backend.domain.city.mapper.CityMapper;
 import tkitem.backend.domain.city.vo.City;
 import tkitem.backend.domain.member.vo.Member;
+import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.TourPackageInfo;
 import tkitem.backend.domain.tour.mapper.TourMapper;
 import tkitem.backend.domain.trip.dto.TripCreateResponseDto;
@@ -55,12 +57,17 @@ public class TripServiceImpl implements TripService{
 
 		Trip trip = result.get();
 		TourPackageInfo tourPackageInfo = null;
+		List<TourDetailScheduleDto> tourDetailScheduleDto = new ArrayList<>();
 
 		if(result.get().getType().equals("PKG")){
 			tourPackageInfo = tourMapper.findTourPackageInfoByTourPackageId(trip.getTourPackageId()).get();
 		}
 
-		return new TripInfoResponse(trip, tourPackageInfo);
+		if(tourPackageInfo == null){
+			tourDetailScheduleDto = tourMapper.selectTourDetailScheduleListByTourId(tourPackageInfo.getTourId());
+		}
+
+		return new TripInfoResponse(trip, tourPackageInfo, tourDetailScheduleDto);
 	}
 
 	@Override
