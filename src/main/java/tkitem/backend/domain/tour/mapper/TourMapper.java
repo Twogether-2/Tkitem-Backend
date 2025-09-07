@@ -80,4 +80,6 @@ public interface TourMapper {
     Long selectNextGroupId();
 
     List<TourCommonRecommendDto> selectTourMetaByMemberId(@Param("memberId") Long memberId);
+
+    List<TourCommonRecommendDto> selectTourMetaByTripSaved(@Param("memberId") Long memberId);
 }

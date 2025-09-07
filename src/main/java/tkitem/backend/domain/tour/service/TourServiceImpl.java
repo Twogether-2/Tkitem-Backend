@@ -37,6 +37,15 @@ public class TourServiceImpl implements TourService {
         return tourMaps;
     }
 
+    @Override
+    public List<TourCommonRecommendDto> getTopRankedTours(Member member) {
+        List<TourCommonRecommendDto> tourMaps = tourMapper.selectTourMetaByTripSaved(member.getMemberId());
+        for(TourCommonRecommendDto dto : tourMaps) {
+            dto.setRealTitle(createTitle(dto.getLocations()));
+        }
+        return tourMaps;
+    }
+
     private String createTitle(List<LocationInfo> cities){
 
         // 대한민국 포함 거르기

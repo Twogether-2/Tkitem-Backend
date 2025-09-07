@@ -77,7 +77,7 @@ public class TourController {
         return ResponseEntity.ok(responseDtodList);
     }
 
-    @GetMapping("/{tourPackageId}")
+    @GetMapping("/{tourPackageId:\\d+}")
     @Operation(
             summary = "투어 패키지 조회",
             description = "투어 패키지 PK 값으로 투어 패키지 세부정보 조회가 가능합니다."
@@ -103,6 +103,18 @@ public class TourController {
         for(TourCommonRecommendDto dto : tourCommonRecommendDtos){
             log.info("tourId={}, title={}, tourPackageId={}, price={}", dto.getTourId(), dto.getTitle(), dto.getTourPackageId(), dto.getPrice());
         }
+        return ResponseEntity.ok(tourCommonRecommendDtos);
+    }
+
+    @GetMapping("/topRank")
+    @Operation(
+            summary = "가장 저장이 많이 된 패키지 목록 조회",
+            description = "오늘 날짜보다 1일 뒤의 패키지들부터 저장 많이된 순 + 내가 담지 않은 패키지 로 조회"
+    )
+    public ResponseEntity<List<TourCommonRecommendDto>> topRank(
+            @AuthenticationPrincipal Member member
+    ) {
+        List<TourCommonRecommendDto> tourCommonRecommendDtos = tourService.getTopRankedTours(member);
         return ResponseEntity.ok(tourCommonRecommendDtos);
     }
 }

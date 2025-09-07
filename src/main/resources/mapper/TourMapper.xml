@@ -428,4 +428,65 @@
         FETCH FIRST 15 ROWS ONLY
     </select>
 
+    <select id="selectTourMetaByTripSaved" parameterType="long" resultMap="TourCommonRecommendDtoMap">
+        WITH trip_cnt AS (
+            SELECT tp.tour_id, COUNT(*) AS cnt
+            FROM TRIP t
+                JOIN TOUR_PACKAGE tp ON tp.tour_package_id = t.tour_package_id
+            GROUP BY tp.tour_id
+        ),
+        filtered_pkg AS (
+            SELECT
+                tour_id,
+                tour_package_id,
+                price,
+                departure_date,
+                return_date,
+                booking_url,
+                departure_airline,
+                return_airline
+            FROM TOUR_PACKAGE
+            WHERE departure_date &gt;= TRUNC(SYSDATE)
+                AND departure_date &lt; TRUNC(SYSDATE) + 8
+        ),
+        rep_pkg AS (
+            SELECT fp.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY fp.tour_id
+                    ORDER BY fp.price ASC NULLS LAST,
+                        fp.departure_date ASC NULLS LAST,
+                        fp.tour_package_id ASC
+                ) rn
+            FROM filtered_pkg fp
+        )
+        SELECT
+            t.tour_id,
+            t.title,
+            t.feature,
+            t.img_url,
+            t.provider,
+            t.duration_days,
+            t.nights,
+            rp.tour_package_id,
+            rp.price,
+            rp.departure_date,
+            rp.return_date,
+            rp.booking_url,
+            rp.departure_airline,
+            rp.return_airline
+        FROM rep_pkg rp
+            JOIN trip_cnt tc ON tc.tour_id = rp.tour_id
+            JOIN TOUR t      ON t.tour_id  = rp.tour_id
+        WHERE rp.rn = 1
+            AND NOT EXISTS (
+                SELECT 1
+                FROM TRIP t2
+                    JOIN TOUR_PACKAGE tp2 ON tp2.tour_package_id = t2.tour_package_id
+                WHERE t2.member_id = #{memberId}
+                    AND tp2.tour_id  = t.tour_id
+            )
+        ORDER BY tc.cnt DESC, rp.price ASC, rp.departure_date ASC
+        FETCH FIRST 10 ROWS ONLY
+    </select>
+
 </mapper>

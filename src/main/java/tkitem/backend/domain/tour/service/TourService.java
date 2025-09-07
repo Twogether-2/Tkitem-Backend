@@ -10,4 +10,6 @@ public interface TourService {
     TourPackageDetailDto getTourPackageDetail(Long tourPackageId);
 
     List<TourCommonRecommendDto> getRecentRecommendedTours(Member member);
+
+    List<TourCommonRecommendDto> getTopRankedTours(Member member);
 }
