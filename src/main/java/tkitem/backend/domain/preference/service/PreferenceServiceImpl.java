@@ -115,6 +115,8 @@ public class PreferenceServiceImpl implements PreferenceService {
 			fashionTypeInfo.getFashionTypeName(),
 			fashionTypeInfo.getDescription(),
 			fashionTypeInfo.getImgUrl(),
+			fashionTypeInfo.getGifUrl(),
+			fashionTypeInfo.getLongDescription(),
 			preference.getBrightness(),
 			preference.getBoldness(),
 			preference.getFit(),
