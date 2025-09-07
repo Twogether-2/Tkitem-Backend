@@ -6,6 +6,8 @@ public record PreferenceResponse(
 	String fashionTypeName,
 	String description,
 	String imgUrl,
+	String gifUrl,
+	String longDescription,
 	int bPercent,
 	int mPercent,
 	int fPercent,
