@@ -250,4 +250,73 @@
             SYSTIMESTAMP,
             SYSTIMESTAMP )
     </insert>
+
+    <resultMap id="TourPackageDetailMap"
+               type="tkitem.backend.domain.tour.dto.TourDetailScheduleRowDto">
+        <!-- 투어 정보 -->
+        <id     property="tourId"           column="tour_id"/>
+        <result property="title"            column="title"/>
+        <result property="feature"          column="feature"/>
+        <result property="imgUrl"           column="img_url"/>
+        <result property="provider"         column="provider"/>
+
+        <!-- 패키지 정보 -->
+        <result     property="tourPackageId"    column="tour_package_id"/>
+        <result property="price"            column="price"/>
+        <result property="departureDate"    column="departure_date" jdbcType="DATE"/>
+        <result property="returnDate"       column="return_date"    jdbcType="DATE"/>
+        <result property="bookingUrl"       column="booking_url"/>
+        <result property="departureAirline" column="departure_airline"/>
+        <result property="returnAirline"    column="return_airline"/>
+
+        <!-- 스케줄 목록: tour_id를 column으로 넘겨 nested select 실행 -->
+        <collection property="schedules"
+                    ofType="tkitem.backend.domain.scheduleType.dto.TourDetailScheduleDto"
+                    select="selectSchedulesByTourId"
+                    column="tour_id"/>
+    </resultMap>
+
+    <!-- 패키지 + 투어 1건 조회 -->
+    <select id="selectTourPackageDetail"
+            parameterType="long"
+            resultMap="TourPackageDetailMap">
+        SELECT
+        t.tour_id,
+        t.title,
+        t.feature,
+        t.img_url,
+        t.provider,
+        tp.tour_package_id,
+        tp.price,
+        tp.departure_date,
+        tp.return_date,
+        tp.booking_url,
+        tp.departure_airline,
+        tp.return_airline
+        FROM TOUR_PACKAGE tp
+        JOIN TOUR t ON t.tour_id = tp.tour_id
+        WHERE tp.tour_package_id = #{tourPackageId}
+    </select>
+
+    <!-- [ADD] 동일 tour_id의 전체 세부일정 조회 -->
+    <select id="selectSchedulesByTourId"
+            parameterType="long"
+            resultType="tkitem.backend.domain.scheduleType.dto.TourDetailScheduleDto">
+        SELECT
+        s.tour_detail_schedule_id AS tourDetailScheduleId,
+        s.city_id                 AS cityId,
+        s.country_name            AS countryName,
+        s.city_name               AS cityName,
+        s.title                   AS title,
+        s.description             AS description,
+        s.sort_order              AS sortOrder,
+        s.end_time                AS endTime,
+        s.default_type            AS defaultType,
+        s.day_no                  AS scheduleDay
+        FROM TOUR_DETAIL_SCHEDULE s
+            LEFT JOIN CITY c ON city_id = s.city_id
+        WHERE s.tour_id = #{value}  <!-- nested select 에서는 #{value} 사용 -->
+        ORDER BY s.day_no, s.start_time NULLS FIRST, s.tour_detail_schedule_id
+    </select>
+
 </mapper>

@@ -8,9 +8,11 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
+import tkitem.backend.domain.tour.dto.response.TourPackageDetailDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.service.DataLoadService;
 import tkitem.backend.domain.tour.service.TourFacadeService;
+import tkitem.backend.domain.tour.service.TourService;
 
 import java.util.List;
 
@@ -21,6 +23,7 @@ import java.util.List;
 public class TourController {
     private final DataLoadService dataLoadService;
     private final TourFacadeService tourFacadeService;
+    private final TourService tourService;
 
     @PostMapping("/init")
     public ResponseEntity<String> initTour(){
@@ -75,4 +78,18 @@ public class TourController {
         return ResponseEntity.ok(responseDtodList);
     }
 
+
+    @GetMapping("/{tourPackageId}")
+    @Operation(
+            summary = "투어 패키지 조회",
+            description = "투어 패키지 PK 값으로 투어 패키지 세부정보 조회가 가능합니다."
+    )
+    public ResponseEntity<TourPackageDetailDto> getTourPackage(
+            @AuthenticationPrincipal Member member,
+            @PathVariable Long tourPackageId){
+
+        TourPackageDetailDto responseDto = tourService.getTourPackageDetail(tourPackageId);
+
+        return ResponseEntity.ok(responseDto);
+    }
 }

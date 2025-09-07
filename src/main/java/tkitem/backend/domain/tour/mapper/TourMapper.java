@@ -6,6 +6,7 @@ import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 
 import tkitem.backend.domain.tour.dto.TourPackageInfo;
+import tkitem.backend.domain.tour.dto.response.TourPackageDetailDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.vo.Tour;
 import tkitem.backend.domain.tour.vo.TourCity;
@@ -68,4 +69,6 @@ public interface TourMapper {
     List<Map<String, Object>> selectTdsByTourIds(List<Long> tourIds);
 
     void insertTourRecommendation(@Param("item") TourRecommendationResponseDto item, @Param("memberId") Long memberId);
+
+    Optional<TourPackageDetailDto> selectTourPackageDetail(@Param("tourPackageId") Long tourPackageId);
 }

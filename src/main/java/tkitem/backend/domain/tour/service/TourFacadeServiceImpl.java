@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.member.vo.Member;
+import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.global.util.NumberUtil;
@@ -64,7 +65,7 @@ public class TourFacadeServiceImpl implements TourFacadeService {
 
 
             List<TourRecommendationResponseDto> dtos = tourRecommendService.enrichRecommendationDetails(trrDtoList.subList(0, Math.min(trrDtoList.size(), topN)));
-            for(TourRecommendationResponseDto.TdsItem tdsItem : dtos.get(0).getSchedules()){
+            for(TourDetailScheduleDto tdsItem : dtos.get(0).getSchedules()){
                 log.info("title = {}, sortOrder = {}, scheduleDay = {}, defaultType = {}", tdsItem.getTitle(), tdsItem.getSortOrder(), tdsItem.getScheduleDay(), tdsItem.getDefaultType());
             }
 

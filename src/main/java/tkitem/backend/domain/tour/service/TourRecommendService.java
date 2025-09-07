@@ -1,13 +1,12 @@
 package tkitem.backend.domain.tour.service;
 
 import lombok.RequiredArgsConstructor;
-import org.apache.ibatis.session.ExecutorType;
-import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
+import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.mapper.TourMapper;
@@ -24,7 +23,6 @@ public class TourRecommendService {
     private final TourMapper tourMapper;
 
     private static final Integer kTop = 10;
-    private final SqlSessionFactory sqlSessionFactory;
 
     /**
      * DB 점수만으로 Top-N 추천
@@ -102,10 +100,10 @@ public class TourRecommendService {
 
         // 3. TDS 조회 및 매핑
         List<Map<String, Object>> tdsRows = tourMapper.selectTdsByTourIds(tourIds);
-        Map<Long, List<TourRecommendationResponseDto.TdsItem>> schedulesByTour = new HashMap<>();
+        Map<Long, List<TourDetailScheduleDto>> schedulesByTour = new HashMap<>();
         for (Map<String, Object> r : tdsRows) {
             Long tourId = ((Number) r.get("tourId")).longValue();
-            TourRecommendationResponseDto.TdsItem item = TourRecommendationResponseDto.TdsItem.builder()
+            TourDetailScheduleDto item = TourDetailScheduleDto.builder()
                     .tourDetailScheduleId(((Number) r.get("tourDetailScheduleId")).longValue())
                     .cityId(r.get("cityId") == null ? null : ((Number) r.get("cityId")).longValue())
                     .countryName((String) r.get("countryName"))
@@ -118,7 +116,7 @@ public class TourRecommendService {
                     .build();
             schedulesByTour.computeIfAbsent(tourId, k -> new ArrayList<>()).add(item);
         }
-        for (Map.Entry<Long, List<TourRecommendationResponseDto.TdsItem>> e : schedulesByTour.entrySet()) {
+        for (Map.Entry<Long, List<TourDetailScheduleDto>> e : schedulesByTour.entrySet()) {
             TourRecommendationResponseDto dto = byId.get(e.getKey());
             if (dto != null) dto.setSchedules(e.getValue());
         }

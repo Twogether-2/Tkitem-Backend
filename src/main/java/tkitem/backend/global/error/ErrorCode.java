@@ -59,7 +59,10 @@ public enum ErrorCode {
     PRODUCT_QUERY_FAILED(500, "PRODUCT004", "Product query failed"),
     PRODUCT_NOT_FOUND(404, "PRODUCT005", "Product Not Found"),
     CATEGORY_MAIN_NOT_FOUND(404, "CATEGORY001", "Main Category Not Found"),
-    CATEGORY_PARENT_NOT_FOUND(404, "CATEGORY002", "Parent SubCategory Not Found");
+    CATEGORY_PARENT_NOT_FOUND(404, "CATEGORY002", "Parent SubCategory Not Found"),
+
+    /* TOUR */
+    TOUR_NOT_FOUND(404, "TOUR001", "Tour not found");
 
     private final int status;
     private final String code;
