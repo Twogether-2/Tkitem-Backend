@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import tkitem.backend.domain.tour.dto.LocationInfo;
 
 import java.util.Date;
 import java.util.List;
@@ -25,26 +26,11 @@ public class TourRecommendationRequestDto {
     private Long priceMax;
 
     @Schema(description = "지역 정보 리스트", example = "[{\"countryGroup\":\"동남아\", \"country\":\"베트남\", \"city\":\"다낭\"}]")
-    private List<Location> locations;
+    private List<LocationInfo> locations;
 
     @Schema(description = "태그 ID 목록(WITH/STYLE 등)", example = "[7,8,10]")
     private List<Long> tagIdList;
 
     @Schema(description = "재추천 시 같은 추천 그룹 내 항목으로 가져오기. 최초 추천일 시 null 또는 0", example = "0")
     private Long groupId;
-
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class Location {
-
-        @Schema(description = "국가그룹명(한글)", example = "동남아")
-        private String countryGroup;
-
-        @Schema(description = "국가명(한글)", example = "베트남")
-        private String country;
-
-        @Schema(description = "도시명(한글)", example = "다낭")
-        private String city;
-    }
 }
