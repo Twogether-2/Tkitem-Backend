@@ -1,5 +1,8 @@
 package tkitem.backend.domain.preference.service;
 
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -112,6 +115,8 @@ public class PreferenceServiceImpl implements PreferenceService {
 			fashionTypeInfo.getFashionTypeName(),
 			fashionTypeInfo.getDescription(),
 			fashionTypeInfo.getImgUrl(),
+			fashionTypeInfo.getGifUrl(),
+			fashionTypeInfo.getLongDescription(),
 			preference.getBrightness(),
 			preference.getBoldness(),
 			preference.getFit(),
@@ -120,5 +125,23 @@ public class PreferenceServiceImpl implements PreferenceService {
 			preference.getSecondLook()
 		);
 
+	}
+
+	@Override
+	public FashionType getFashionTypeByFashionTypeId(String fashionTypeId) {
+		log.info("[PreferenceService] getFashionTypeByFashionTypeId = {}", fashionTypeId);
+		Optional<FashionType> result = Optional.ofNullable(preferenceMapper.selectFashionTypeById(fashionTypeId));
+		if(result.isEmpty()){
+			throw new BusinessException(ErrorCode.FASHION_TYPE_NOT_FOUND);
+		}
+
+		return result.get();
+	}
+
+	@Override
+	public List<FashionType> getAllFashionTypes() {
+		log.info("[PreferenceService] getAllFashionTypes");
+
+		return preferenceMapper.selectAllFashionTypeByMbti();
 	}
 }

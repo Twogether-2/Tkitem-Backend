@@ -46,11 +46,13 @@ public enum ErrorCode {
     TRIP_NOT_FOUND(404, "TRIP001", "Trip Not Found"),
     TRIP_PACKAGE_REQUIRED(400, "TRIP002", "Trip Package Required"),
     CHECKLIST_AI_FAILED(500, "CHECKLIST001", "Checklist AI Generation Failed"),
+    AI_REASON_NOT_FOUND(404, "AI_REASON001", "AI Reason Not Found"),
 
     /* PREFERENCE ERROR */
     INVALID_IMAGE_URL(400, "PREFERENCE001", "Invalid Image URL"),
     AI_RESPONSE_FAILED(500, "PREFERENCE002", "AI Response Failed"),
     AI_RESPONSE_INVALID(500, "PREFERENCE003", "AI Response Invalid or Empty"),
+    FASHION_TYPE_NOT_FOUND(404, "FASHION_TYPE_001", "Fashion Type Not Found"),
 
     /* PRODUCT */
     INVALID_THEME_KEY(400, "PRODUCT001", "Invalid themeKey"),

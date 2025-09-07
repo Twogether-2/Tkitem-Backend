@@ -59,8 +59,25 @@
             FASHION_TYPE_ID AS fashionTypeId,
             NAME            AS fashionTypeName,
             DESCRIPTION     AS description,
-            IMG_URL         AS imgUrl
+            IMG_URL         AS imgUrl,
+            GIF_URL         AS gifUrl,
+            LONG_DESCRIPTION AS longDescription,
+            TYPE            AS type
         FROM FASHION_TYPE
         WHERE FASHION_TYPE_ID = #{fashionTypeId}
+    </select>
+
+    <!-- 모든 패션 유형 조회 -->
+    <select id="selectAllFashionTypeByMbti" resultType="tkitem.backend.domain.preference.vo.FashionType">
+        SELECT
+        FASHION_TYPE_ID AS fashionTypeId,
+        NAME            AS fashionTypeName,
+        DESCRIPTION     AS description,
+        IMG_URL         AS imgUrl,
+        GIF_URL         AS gifUrl,
+        LONG_DESCRIPTION AS longDescription,
+        TYPE            AS type
+        FROM FASHION_TYPE
+        WHERE TYPE = 'mbti'
     </select>
 </mapper>

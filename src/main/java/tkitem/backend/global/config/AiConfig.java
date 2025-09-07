@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Primary;
 @Configuration
 public class AiConfig {
 	// JSON 응답 고정
-	private static final String SYSTEM = "You are a professional fashion stylist. Return JSON only.";
+	private static final String SYSTEM = "Return JSON only.";
 	private static final String TOUR_PROMPT = "You are a travel schedule-type classifier. Return JSON only.";
 
 	// OpenAI 기본 ChatClient

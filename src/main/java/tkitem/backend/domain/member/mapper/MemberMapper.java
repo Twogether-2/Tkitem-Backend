@@ -31,9 +31,5 @@ public interface MemberMapper {
     );
     void updateIsDeleted(@Param("memberId") Long memberId);
     void updateIsDeletedFalse(@Param("email") String email);
-    void updateNicknameAndImgUrl(
-        @Param("memberId") Long memberId,
-        @Param("imgUrl") String imgUrl,
-        @Param("nickname") String nickname
-    );
+    void updateNickname(@Param("memberId") Long memberId, @Param("nickname") String nickname);
 }
