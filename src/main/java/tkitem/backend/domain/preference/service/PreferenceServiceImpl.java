@@ -20,6 +20,7 @@ import tkitem.backend.domain.survey.vo.SurveyQ;
 import tkitem.backend.global.error.ErrorCode;
 import tkitem.backend.global.error.exception.BusinessException;
 import tkitem.backend.global.error.exception.EntityNotFoundException;
+import tkitem.backend.global.util.CloudFrontUtil;
 
 @Slf4j
 @Service
@@ -114,8 +115,8 @@ public class PreferenceServiceImpl implements PreferenceService {
 			fashionTypeInfo.getFashionTypeId(),
 			fashionTypeInfo.getFashionTypeName(),
 			fashionTypeInfo.getDescription(),
-			fashionTypeInfo.getImgUrl(),
-			fashionTypeInfo.getGifUrl(),
+			CloudFrontUtil.getCloudFrontUrl(fashionTypeInfo.getImgUrl()),
+			CloudFrontUtil.getCloudFrontUrl(fashionTypeInfo.getGifUrl()),
 			fashionTypeInfo.getLongDescription(),
 			preference.getBrightness(),
 			preference.getBoldness(),
@@ -135,13 +136,23 @@ public class PreferenceServiceImpl implements PreferenceService {
 			throw new BusinessException(ErrorCode.FASHION_TYPE_NOT_FOUND);
 		}
 
-		return result.get();
+		FashionType fashionType = result.get();
+		fashionType.setGifUrl(CloudFrontUtil.getCloudFrontUrl(fashionType.getGifUrl()));
+		fashionType.setImgUrl(CloudFrontUtil.getCloudFrontUrl(fashionType.getImgUrl()));
+
+		return fashionType;
 	}
 
 	@Override
 	public List<FashionType> getAllFashionTypes() {
 		log.info("[PreferenceService] getAllFashionTypes");
 
-		return preferenceMapper.selectAllFashionTypeByMbti();
+		List<FashionType> fashionTypeList = preferenceMapper.selectAllFashionTypeByMbti();
+		for(FashionType fashionType : fashionTypeList){
+			fashionType.setGifUrl(CloudFrontUtil.getCloudFrontUrl(fashionType.getGifUrl()));
+			fashionType.setImgUrl(CloudFrontUtil.getCloudFrontUrl(fashionType.getImgUrl()));
+		}
+
+		return fashionTypeList;
 	}
 }
