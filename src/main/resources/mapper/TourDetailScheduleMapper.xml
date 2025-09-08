@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="tkitem.backend.domain.scheduleType.mapper.TourDetailScheduleMapper">
+
+    <select id="selectBatchForIndexing" resultType="tkitem.backend.domain.scheduleType.dto.TourDetailScheduleRowDto">
+        SELECT
+            tds.tour_detail_schedule_id as tourDetailScheduleId,
+            tds.tour_id as tourId,
+            schedule_date AS scheduleDate,
+            c.country_name as countryName,
+            c.city_name as cityName,
+            tds.sort_order as sortOrder,
+            tds.Title as title,
+            tds.Description as description,
+            tds.default_type as defaultType
+        FROM TOUR_DETAIL_SCHEDULE tds left outer join CITY c on tds.city_id = c.city_id
+        WHERE tds.DEFAULT_TYPE != 'PLACE'
+        ORDER BY tds.tour_detail_schedule_id
+        OFFSET #{offset} ROWS FETCH NEXT #{limit} ROWS ONLY
+    </select>
+
+<!--    <select id="selectBatchForIndexing" resultType="tkitem.backend.domain.scheduleType.dto.TourDetailScheduleRowDto">-->
+<!--            SELECT-->
+<!--                tds.tour_detail_schedule_id as tourDetailScheduleId,-->
+<!--                tds.tour_id as tourId,-->
+<!--                schedule_date AS scheduleDate,-->
+<!--                c1.country_name as countryName,-->
+<!--                c1.city_name as cityName,-->
+<!--                tds.sort_order as sortOrder,-->
+<!--                tds.Title as title,-->
+<!--                tds.Description as description,-->
+<!--                tds.default_type as defaultType-->
+<!--            FROM TOUR_DETAIL_SCHEDULE tds-->
+<!--                LEFT JOIN CITY c1 ON tds.city_id = c1.city_id-->
+<!--            WHERE EXISTS(-->
+<!--                SELECT 1-->
+<!--                FROM TOUR_PACKAGE tp-->
+<!--                WHERE tp.tour_id = tds.TOUR_ID-->
+<!--                    AND EXTRACT(MONTH FROM tp.departure_date) = 4-->
+<!--                    AND EXTRACT(MONTH FROM tp.return_date)   = 4-->
+<!--            )-->
+<!--            AND EXISTS (-->
+<!--                SELECT 1-->
+<!--                FROM TOUR_CITY tc-->
+<!--                    JOIN CITY c2 ON c2.city_id = tc.city_id-->
+<!--                WHERE tc.tour_id = tds.tour_id-->
+<!--                    AND LOWER(c2.country_name) = '베트남'-->
+<!--            )-->
+<!--            ORDER BY tds.tour_detail_schedule_id-->
+<!--    </select>-->
+</mapper>

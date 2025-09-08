@@ -95,16 +95,15 @@ public class MemberServiceImpl implements MemberService {
 	}
 
 	@Override
-	public void updateImgUrlAndNickname(Member member, String imgUrl, String nickname) {
+	public void updateImgUrlAndNickname(Member member, String nickname) {
 		// 기존 정보랑 일치하면 null 대입
 		if(nickname != null && nickname.isEmpty()){
 			throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
 		}
 
-		String newImgUrl = imgUrl == null || imgUrl.equals(member.getImgUrl()) ? null : imgUrl;
 		String newNickname = nickname == null || nickname.equals(member.getNickname()) ? null : nickname;
 
-		memberMapper.updateNicknameAndImgUrl(member.getMemberId(), newImgUrl, newNickname);
+		memberMapper.updateNickname(member.getMemberId(), newNickname);
 	}
 
 }

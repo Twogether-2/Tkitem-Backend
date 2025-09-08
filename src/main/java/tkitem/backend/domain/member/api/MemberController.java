@@ -75,17 +75,10 @@ public class MemberController {
 		return ResponseEntity.ok().body("success");
 	}
 
-	@PatchMapping(value = "/me", consumes = "multipart/form-data")
-	@Operation(summary = "회원 정보 수정", description = "Multipart로 프로필 이미지 업로드, 닉네임 수정 가능")
-	public ResponseEntity<String> uploadOne(
-		@RequestPart(value = "file", required = false) MultipartFile file,
-		@RequestPart(value = "nickname", required = false) InfoUpdateRequest request,
-		@AuthenticationPrincipal Member member) throws Exception {
-		String imgUrl = null;
-		if(file != null && !file.isEmpty()){
-			imgUrl = imageService.upload(file);
-		}
-		memberService.updateImgUrlAndNickname(member, imgUrl, request.getNickname());
+	@PatchMapping(value = "/me")
+	@Operation(summary = "회원 정보 수정", description = "닉네임 수정 가능")
+	public ResponseEntity<String> uploadOne(@RequestBody InfoUpdateRequest request, @AuthenticationPrincipal Member member){
+		memberService.updateImgUrlAndNickname(member, request.getNickname());
 		return ResponseEntity.ok("success");
 	}
 

@@ -20,6 +20,7 @@ import tkitem.backend.domain.member.dto.request.LoginRequest;
 import tkitem.backend.domain.member.dto.request.SocialLoginRequest;
 import tkitem.backend.domain.auth.service.EmailService;
 import tkitem.backend.domain.member.vo.Member;
+import tkitem.backend.global.util.CloudFrontUtil;
 
 @Slf4j
 @RestController
@@ -36,7 +37,7 @@ public class AuthController {
 		description = "Multipart로 업로드된 이미지를 S3로 업로드하고 URL을 반환합니다."
 	)
 	public ResponseEntity<String> uploadOne(@RequestPart("file") MultipartFile file) throws Exception {
-		String result = imageService.upload(file);
+		String result = CloudFrontUtil.getCloudFrontUrl(imageService.upload(file));
 		return ResponseEntity.ok(result);
 	}
 

@@ -9,7 +9,15 @@ import java.util.List;
 public interface ChecklistService {
     ChecklistAiResponseDto generateAiChecklist(Long tripId,Long memberId);
 
-    ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day, Boolean checked);
+    ChecklistListResponseDto getChecklistByTrip(Long tripId, Integer day, Boolean checked, Boolean isProduct);
 
     void createChecklist(Long tripId, Long memberId, @NotNull List<Long> productCategorySubIds, Integer scheduleDate);
+
+    void deleteChecklistItem(Long checklistItemId, Long memberId);
+
+    int deleteAllActiveByTrip(Long tripId, Long memberId);
+
+    void setChecked(Long checklistItemId, boolean value, Long memberId);
+
+    Integer getTripTotalDays(Long tripId);
 }

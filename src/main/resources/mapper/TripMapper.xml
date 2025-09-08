@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="tkitem.backend.domain.trip.mapper.TripMapper">
+    <select id="selectTripsByMemberId" resultType="tkitem.backend.domain.trip.vo.Trip">
+        SELECT *
+        FROM (
+            SELECT
+                trip_id       AS tripId,
+                tour_package_id AS tourPackageId,
+                img_url    AS imgUrl,
+                title,
+                TO_CHAR(departure_date, 'YYYY-MM-DD') AS departureDate,
+                TO_CHAR(arrival_date, 'YYYY-MM-DD')   AS arrivalDate,
+                type,
+                CASE
+                    WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN 'UPCOMING'
+                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN 'ONGOING'
+                    WHEN TRUNC(SYSDATE) &gt; TRUNC(arrival_date) THEN 'PAST'
+                END AS status
+            FROM TRIP
+            WHERE member_id = #{memberId}
+            <if test="cursorDepartureDate != null and cursorTripId != null">
+                AND (
+                    departure_date &lt; TO_DATE(#{cursorDepartureDate}, 'YYYY-MM-DD')
+                    OR (departure_date = TO_DATE(#{cursorDepartureDate}, 'YYYY-MM-DD') AND trip_id &lt; #{cursorTripId})
+                )
+            </if>
+            <if test="cursorDepartureDate == null or cursorTripId == null">
+                <!-- No additional cursor condition for first page -->
+            </if>
+            ORDER BY
+                CASE
+                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN 1
+                    WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN 2
+                    WHEN TRUNC(SYSDATE) > TRUNC(arrival_date) THEN 3
+                END,
+                CASE
+                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN TRUNC(departure_date)
+                    WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN TRUNC(departure_date)
+                    WHEN TRUNC(SYSDATE) > TRUNC(arrival_date) THEN NULL
+                END ASC,
+                CASE
+                    WHEN TRUNC(SYSDATE) > TRUNC(arrival_date) THEN TRUNC(arrival_date)
+                    ELSE NULL
+                END DESC,
+                trip_id DESC
+        )
+        WHERE ROWNUM &lt;= #{limit}
+    </select>
+
+    <select id="selectTripInfoByTripId" resultType="tkitem.backend.domain.trip.vo.Trip">
+        SELECT
+            trip_id       AS tripId,
+            img_url       AS imgUrl,
+            tour_package_id AS tourPackageId,
+            title,
+            type,
+            TO_CHAR(departure_date, 'YYYY-MM-DD') AS departureDate,
+            TO_CHAR(arrival_date, 'YYYY-MM-DD')   AS arrivalDate,
+            CASE
+                WHEN TRUNC(SYSDATE) &lt; TRUNC(departure_date) THEN 'UPCOMING'
+                WHEN TRUNC(SYSDATE) BETWEEN TRUNC(departure_date) AND TRUNC(arrival_date) THEN 'ONGOING'
+                WHEN TRUNC(SYSDATE) &gt; TRUNC(arrival_date) THEN 'PAST'
+            END AS status
+        FROM TRIP
+        WHERE trip_id = #{tripId}
+    </select>
+
+    <!-- 오늘 기준 남은 여행 목록 조회(출발일 가까운 순)-->
+    <select id="selectUpcomingTrips" parameterType="map" resultType="tkitem.backend.domain.trip.dto.UpcomingTripResponse">
+        SELECT
+        tr.trip_id            AS tripId,
+        tr.title              AS title,
+        TO_CHAR(tr.departure_date, 'YYYY-MM-DD') AS departureDate,
+        TO_CHAR(tr.arrival_date, 'YYYY-MM-DD')   AS arrivalDate,
+        t.img_url             AS imgUrl,
+        MIN(c.country_name)   AS country,
+        LISTAGG(c.city_name, ',') WITHIN GROUP (ORDER BY c.city_name) AS cities,
+        TRUNC(tr.departure_date) - TRUNC(SYSDATE) AS dDay
+        FROM TRIP tr
+        LEFT JOIN TOUR_PACKAGE tp ON tr.tour_package_id = tp.tour_package_id
+        LEFT JOIN TOUR t ON tp.tour_id = t.tour_id
+        LEFT JOIN TOUR_CITY tc ON t.tour_id = tc.tour_id
+        LEFT JOIN CITY c ON tc.city_id = c.city_id
+        WHERE tr.member_id = #{memberId}
+        AND tr.departure_date > TRUNC(SYSDATE)
+        GROUP BY tr.trip_id, tr.title, tr.departure_date, tr.arrival_date, t.img_url
+        ORDER BY tr.departure_date ASC
+    </select>
+
+    <select id="selectTripforCreate" resultType="tkitem.backend.domain.trip.dto.TripCreateResponseDto">
+        SELECT
+            tp.tour_package_id AS tourPackageId,
+            tp.departure_date AS departureDate,
+            tp.return_date AS arrivalDate,
+            'PKG' AS type,
+            t.img_url AS imgUrl,
+            tp.PRICE AS price
+        FROM TOUR_PACKAGE tp join TOUR t on tp.tour_id = t.tour_id
+        WHERE tp.tour_package_id = #{tourPackageId}
+    </select>
+
+    <insert id="insertTrip" parameterType="tkitem.backend.domain.trip.dto.TripCreateResponseDto">
+        INSERT INTO TRIP(
+            trip_id,
+            member_id,
+            tour_package_id,
+            title,
+            departure_date,
+            arrival_date,
+            type,
+            img_url,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            SEQ_TRIP.NEXTVAL,
+            #{memberId},
+            #{tourPackageId},
+            #{title},
+            #{departureDate},
+            #{arrivalDate},
+            #{type},
+            #{imgUrl},
+            SYSDATE,
+            SYSDATE
+        )
+        <selectKey keyProperty="tripId" resultType="long" order="AFTER">
+            SELECT SEQ_TRIP.CURRVAL FROM dual
+        </selectKey>
+    </insert>
+</mapper>

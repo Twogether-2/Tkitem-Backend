@@ -39,11 +39,32 @@ public enum ErrorCode {
     CART_CONCURRENCY_CONFLICT(409, "CART002", "Concurrency Conflict"),
     CART_NOT_FOUND(404, "CART003", "Cart Not Found"),
     CART_ITEM_NOT_FOUND(404, "CART004", "Cart Item Not Found"),
+    CART_MISMATCH(409, "CART005", "Cart Mismatch"),
+    RESERVE_FAILED(409, "CART006", "Cart Reserve Failed"),
 
     /* TRIP / CHECKLIST */
     TRIP_NOT_FOUND(404, "TRIP001", "Trip Not Found"),
     TRIP_PACKAGE_REQUIRED(400, "TRIP002", "Trip Package Required"),
-    CHECKLIST_AI_FAILED(500, "CHECKLIST001", "Checklist AI Generation Failed");
+    CHECKLIST_AI_FAILED(500, "CHECKLIST001", "Checklist AI Generation Failed"),
+    AI_REASON_NOT_FOUND(404, "AI_REASON001", "AI Reason Not Found"),
+
+    /* PREFERENCE ERROR */
+    INVALID_IMAGE_URL(400, "PREFERENCE001", "Invalid Image URL"),
+    AI_RESPONSE_FAILED(500, "PREFERENCE002", "AI Response Failed"),
+    AI_RESPONSE_INVALID(500, "PREFERENCE003", "AI Response Invalid or Empty"),
+    FASHION_TYPE_NOT_FOUND(404, "FASHION_TYPE_001", "Fashion Type Not Found"),
+
+    /* PRODUCT */
+    INVALID_THEME_KEY(400, "PRODUCT001", "Invalid themeKey"),
+    CATEGORY_IDS_REQUIRED(400, "PRODUCT002", "categoryIds must not be empty"),
+    INVALID_CURSOR(400, "PRODUCT003", "Invalid cursor"),
+    PRODUCT_QUERY_FAILED(500, "PRODUCT004", "Product query failed"),
+    PRODUCT_NOT_FOUND(404, "PRODUCT005", "Product Not Found"),
+    CATEGORY_MAIN_NOT_FOUND(404, "CATEGORY001", "Main Category Not Found"),
+    CATEGORY_PARENT_NOT_FOUND(404, "CATEGORY002", "Parent SubCategory Not Found"),
+
+    /* TOUR */
+    TOUR_NOT_FOUND(404, "TOUR001", "Tour not found");
 
     private final int status;
     private final String code;

@@ -1,5 +1,7 @@
 package tkitem.backend.domain.preference.mapper;
 
+import java.util.List;
+
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -16,4 +18,7 @@ public interface PreferenceMapper {
 
 	// fashionType 으로 패션 유형 정보 조회
 	FashionType selectFashionTypeById(@Param("fashionTypeId") String fashionTypeId);
+
+	// 모든 mbti형 fashionType 조회
+	List<FashionType> selectAllFashionTypeByMbti();
 }

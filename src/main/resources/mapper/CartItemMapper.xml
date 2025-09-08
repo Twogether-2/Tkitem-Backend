@@ -97,4 +97,45 @@
         WHERE ci.cart_item_id = #{cartItemId}
           AND ci.cart_id = (SELECT c.cart_id FROM CART c WHERE c.member_id = #{memberId})
     </select>
+
+    <update id="markPendingToOrderedExactOne">
+        UPDATE CART_ITEM ci
+        SET ci.STATUS     = 'ORDERED',
+        ci.UPDATED_AT = SYSTIMESTAMP
+        WHERE ci.CART_ID IN (SELECT c.CART_ID FROM CART c WHERE c.MEMBER_ID = #{memberId})
+        AND ci.PRODUCT_ID = #{productId}
+        AND
+        <choose>
+            <when test="tripId == null">
+                ci.TRIP_ID IS NULL
+            </when>
+            <otherwise>
+                ci.TRIP_ID = #{tripId,jdbcType=NUMERIC}
+            </otherwise>
+        </choose>
+        AND ci.QUANTITY   = #{quantity}
+        AND ci.STATUS     = 'PENDING'
+        AND ROWNUM        = 1
+    </update>
+
+    <resultMap id="TripEntryMap" type="tkitem.backend.domain.cart.dto.CartProductTripItemDto">
+        <constructor>
+            <arg column="TRIP_ID"     javaType="long"/>
+            <arg column="CART_ITEM_ID" javaType="long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findTripEntriesByProduct"
+            parameterType="map"
+            resultMap="TripEntryMap">
+        SELECT
+            NVL(TRIP_ID, 0) AS TRIP_ID,
+            CART_ITEM_ID     AS CART_ITEM_ID
+        FROM CART_ITEM
+        WHERE CART_ID    = #{cartId}
+          AND PRODUCT_ID = #{productId}
+          AND STATUS     = 'PENDING'
+        ORDER BY NVL(TRIP_ID, 0) DESC
+    </select>
+
 </mapper>

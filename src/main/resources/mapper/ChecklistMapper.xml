@@ -43,8 +43,11 @@
         c.created_at               AS createdAt,
         c.updated_at               AS updatedAt
         FROM CHECKLIST_ITEM c
+        JOIN PRODUCT_CATEGORY_SUB s
+        ON s.product_category_sub_id = c.product_category_sub_id
         WHERE c.trip_id = #{tripId}
         AND c.is_deleted = 'F'
+
         <choose>
             <!-- day=0 → 공통(NULL) -->
             <when test="day != null and day == 0">
@@ -64,8 +67,19 @@
                 <otherwise> 'F' </otherwise>
             </choose>
         </if>
-        ORDER BY createdAt ASC, productCategorySubId ASC
+
+        <!-- isProduct: null=전체, true='T'만, false='F'만 -->
+        <if test="isProduct != null">
+            AND s.is_product =
+            <choose>
+                <when test="isProduct"> 'T' </when>
+                <otherwise> 'F' </otherwise>
+            </choose>
+        </if>
+
+        ORDER BY c.created_at ASC, c.product_category_sub_id ASC
     </select>
+
 
     <!-- 카테고리 존재 개수 -->
     <select id="countProductCategorySubs" parameterType="list" resultType="int">
@@ -119,5 +133,93 @@
         </foreach>
         SELECT 1 FROM DUAL
     </insert>
+
+    <!-- 체크리스트 단건 삭제 -->
+    <update id="softDeleteById">
+        UPDATE CHECKLIST_ITEM
+        SET is_deleted = 'T',
+            updated_by = #{memberId}
+        WHERE checklist_item_id = #{checklistItemId}
+          AND is_deleted = 'F'
+    </update>
+
+    <!-- 체크리스트 전체 삭제(초기화) -->
+    <update id="softDeleteAllActiveByTrip">
+        UPDATE CHECKLIST_ITEM
+        SET is_deleted = 'T',
+            updated_by = #{memberId}
+        WHERE trip_id = #{tripId}
+          AND is_deleted = 'F'
+    </update>
+
+    <!-- 체크리스트 체크(활성/비활성) -->
+    <update id="setCheckedById">
+        UPDATE CHECKLIST_ITEM
+        SET is_checked =
+        <choose>
+            <when test="checked"> 'T' </when>
+            <otherwise> 'F' </otherwise>
+        </choose>,
+        updated_by = #{memberId}
+        WHERE checklist_item_id = #{checklistItemId}
+        AND is_deleted = 'F'
+    </update>
+
+    <!-- 여행 총 일 수 조회 -->
+    <select id="getTripTotalDays" resultType="int">
+        SELECT
+            NVL(
+                    (SELECT MAX(s.schedule_date)
+                     FROM tour_package tp2
+                              JOIN tour_detail_schedule s ON s.tour_id = tp2.tour_id
+                     WHERE tp2.tour_package_id = t.tour_package_id),
+                    CASE
+                        WHEN t.departure_date IS NOT NULL AND t.arrival_date IS NOT NULL
+                            THEN (TRUNC(t.arrival_date) - TRUNC(t.departure_date) + 1)
+                        END
+            ) AS totalDays
+        FROM trip t
+        WHERE t.trip_id = #{tripId}
+    </select>
+
+    <!-- 여행의 AI체크리스트 조회-->
+    <select id="selectChecklistItemsByTrip" resultType="tkitem.backend.domain.checklist.dto.ChecklistItemRow">
+        SELECT checklist_item_id, trip_id, product_category_sub_id, item_name,
+        schedule_date, score, tier, notes, source
+        FROM CHECKLIST_ITEM
+        WHERE trip_id = #{tripId}
+        AND is_deleted = 'F'
+        AND source = 'AI'
+        ORDER BY NVL(schedule_date, 0), score DESC, item_name
+    </select>
+
+    <!-- Trip 메타(월/일수) -->
+    <select id="selectTripMeta" resultType="tkitem.backend.domain.checklist.dto.TripMeta">
+        SELECT
+            EXTRACT(MONTH FROM tp.departure_date) AS month_num,
+            (SELECT COUNT(DISTINCT tds.schedule_date)
+             FROM TOUR_DETAIL_SCHEDULE tds
+             WHERE tds.tour_id = tp.tour_id)     AS trip_days
+        FROM TRIP tr
+                 JOIN TOUR_PACKAGE tp ON tp.tour_package_id = tr.tour_package_id
+        WHERE tr.trip_id = #{tripId}
+    </select>
+
+    <!-- 일정의 도시/국가 목록 -->
+    <select id="selectTripPlaces" resultType="tkitem.backend.domain.checklist.dto.TripPlace">
+  <![CDATA[
+        SELECT DISTINCT
+            ci.city_name    AS city_name,
+            ci.country_name AS country_name
+        FROM TRIP tr
+                 JOIN TOUR_PACKAGE tp ON tp.tour_package_id = tr.tour_package_id
+                 JOIN TOUR_CITY tc     ON tc.tour_id = tp.tour_id
+                 JOIN CITY ci          ON ci.city_id = tc.city_id
+        WHERE tr.trip_id = #{tripId}
+          AND ci.country_name <> '대한민국'
+        ORDER BY ci.country_name, ci.city_name
+        ]]>
+</select>
+
 
 </mapper>

@@ -9,7 +9,7 @@ public interface OrderItemMapper {
                          @Param("productId") Long productId,
                          @Param("tripId") Long tripId,
                          @Param("quantity") Integer quantity,
-                         @Param("unitPrice") Integer unitPrice,
+                         @Param("unitPrice") Long unitPrice,
                          @Param("currency") String currency,
                          @Param("productNameSnapshot") String productNameSnapshot,
                          @Param("productImgSnapshot") String productImgSnapshot,

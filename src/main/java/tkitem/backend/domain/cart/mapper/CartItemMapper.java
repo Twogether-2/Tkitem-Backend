@@ -4,6 +4,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import tkitem.backend.domain.cart.dto.CartItemRowDto;
 import tkitem.backend.domain.cart.dto.CartItemRowWithTripDto;
+import tkitem.backend.domain.cart.dto.CartProductTripItemDto;
 import tkitem.backend.domain.cart.dto.response.CartItemUpdateResponse;
 
 import java.util.List;
@@ -41,4 +42,15 @@ public interface CartItemMapper {
 
     Optional<CartItemUpdateResponse> findCartItemSnapshot(@Param("memberId") Long memberId,
                                                           @Param("cartItemId") Long cartItemId);
+
+    int markPendingToOrderedExactOne(@Param("memberId") Long memberId,
+                                     @Param("productId") Long productId,
+                                     @Param("tripId") Long tripId,
+                                     @Param("quantity") Integer quantity);
+
+    List<CartProductTripItemDto> findTripEntriesByProduct(
+            @Param("cartId") Long cartId,
+            @Param("productId") Long productId
+    );
+
 }

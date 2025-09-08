@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="tkitem.backend.domain.checklist.mapper.AiReasonMapper">
+
+    <resultMap id="ReasonMap" type="tkitem.backend.domain.checklist.vo.AiReasonVo">
+        <id     property="aiReasonId" column="ai_reason_id"/>
+        <result property="tripId"     column="trip_id"/>
+        <result property="status"     column="status"/>
+        <result property="contentJson" column="content_json"/>
+        <result property="ctxHash"    column="ctx_hash"/>
+        <result property="isDeleted"  column="is_deleted"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="createdAt"  column="created_at"/>
+        <result property="updatedAt"  column="updated_at"/>
+    </resultMap>
+
+    <select id="findActiveByTrip" resultMap="ReasonMap">
+        SELECT *
+        FROM AI_REASON
+        WHERE trip_id = #{tripId}
+          AND is_deleted = 'F'
+        ORDER BY created_at DESC
+            FETCH FIRST 1 ROWS ONLY
+    </select>
+
+    <update id="softDeleteActiveByTrip">
+        UPDATE AI_REASON
+        SET is_deleted = 'T',
+            updated_at = SYSTIMESTAMP
+        WHERE trip_id = #{tripId}
+          AND is_deleted = 'F'
+    </update>
+
+    <insert id="insertProcessing" parameterType="tkitem.backend.domain.checklist.vo.AiReasonVo">
+        <selectKey keyProperty="aiReasonId" resultType="long" order="BEFORE">
+            SELECT AI_REASON_SEQ.NEXTVAL FROM DUAL
+        </selectKey>
+        INSERT INTO AI_REASON (
+        ai_reason_id, trip_id, status, content_json, ctx_hash, is_deleted, created_at
+        ) VALUES (
+        #{aiReasonId}, #{tripId}, 'PROCESSING', NULL, #{ctxHash}, 'F', SYSTIMESTAMP
+        )
+    </insert>
+
+    <update id="updateReady">
+        UPDATE AI_REASON
+        SET status = 'READY',
+            content_json = #{contentJson},
+            error_message = NULL,
+            updated_at = SYSTIMESTAMP
+        WHERE ai_reason_id = #{aiReasonId}
+    </update>
+
+    <update id="updateError">
+        UPDATE AI_REASON
+        SET status = 'ERROR',
+            error_message = #{errorMessage},
+            updated_at = SYSTIMESTAMP
+        WHERE ai_reason_id = #{aiReasonId}
+    </update>
+</mapper>

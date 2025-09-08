@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.4'
+    id 'org.springframework.boot' version '3.3.3'
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -21,6 +21,16 @@ configurations {
 
 repositories {
     mavenCentral()
+    google()
+    maven { url = 'https://repo.spring.io/milestone' }
+    maven { url = 'https://repo.spring.io/snapshot' }
+    maven { url = uri("https://jitpack.io") }
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.ai:spring-ai-bom:1.0.1"
+    }
 }
 
 dependencies {
@@ -35,9 +45,8 @@ dependencies {
     implementation 'com.oracle.database.security:oraclepki:21.9.0.0'
     implementation 'com.oracle.database.security:osdt_core:21.9.0.0'
     implementation 'com.oracle.database.security:osdt_cert:21.9.0.0'
-    runtimeOnly 'com.oracle.database.jdbc:ojdbc8'
     // swagger
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
     // AWS S3
     implementation 'org.springframework.cloud:spring-cloud-starter-aws:2.2.6.RELEASE'
     // JWT
@@ -51,17 +60,32 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
     // health check
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // AI
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+    // Jackson (JSON 파싱)
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
 
     // Test용 H2 데이터베이스
     implementation 'com.h2database:h2' // H2 데이터베이스 의존성 추가 (테스트용)
     testRuntimeOnly 'com.h2database:h2'
 
     compileOnly 'org.projectlombok:lombok'
+//    runtimeOnly 'com.oracle.database.jdbc:ojdbc11'
+    runtimeOnly 'com.oracle.database.jdbc:ojdbc11:21.9.0.0'
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter-test:3.0.5'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    implementation 'com.opencsv:opencsv:5.7.1'
+
+    // ES Java API Client
+    implementation 'co.elastic.clients:elasticsearch-java:8.14.0'
+    implementation "org.elasticsearch.client:elasticsearch-rest-client:8.14.0"
+    implementation 'org.apache.httpcomponents.client5:httpclient5:5.2.1'
+    implementation 'jakarta.json:jakarta.json-api:2.1.2'
+    implementation 'org.glassfish:jakarta.json:2.0.1'
 }
 
 tasks.named('test') {
