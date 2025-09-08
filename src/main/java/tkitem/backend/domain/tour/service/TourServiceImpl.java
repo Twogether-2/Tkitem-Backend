@@ -38,8 +38,8 @@ public class TourServiceImpl implements TourService {
     }
 
     @Override
-    public List<TourCommonRecommendDto> getTopRankedTours(Member member) {
-        List<TourCommonRecommendDto> tourMaps = tourMapper.selectTourMetaByTripSaved(member.getMemberId());
+    public List<TourCommonRecommendDto> getTopRankedTours(Member member, Integer topN) {
+        List<TourCommonRecommendDto> tourMaps = tourMapper.selectTourMetaByTripSaved(member.getMemberId(), topN);
         for(TourCommonRecommendDto dto : tourMaps) {
             dto.setRealTitle(createTitle(dto.getLocations()));
         }

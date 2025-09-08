@@ -11,5 +11,5 @@ public interface TourService {
 
     List<TourCommonRecommendDto> getRecentRecommendedTours(Member member);
 
-    List<TourCommonRecommendDto> getTopRankedTours(Member member);
+    List<TourCommonRecommendDto> getTopRankedTours(Member member, Integer topN);
 }

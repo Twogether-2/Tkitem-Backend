@@ -428,7 +428,7 @@
         FETCH FIRST 15 ROWS ONLY
     </select>
 
-    <select id="selectTourMetaByTripSaved" parameterType="long" resultMap="TourCommonRecommendDtoMap">
+    <select id="selectTourMetaByTripSaved" resultMap="TourCommonRecommendDtoMap">
         WITH trip_cnt AS (
             SELECT tp.tour_id, COUNT(*) AS cnt
             FROM TRIP t
@@ -486,7 +486,7 @@
                     AND tp2.tour_id  = t.tour_id
             )
         ORDER BY tc.cnt DESC, rp.price ASC, rp.departure_date ASC
-        FETCH FIRST 10 ROWS ONLY
+        FETCH FIRST #{topN} ROWS ONLY
     </select>
 
 </mapper>
