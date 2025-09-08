@@ -485,6 +485,15 @@
                 WHERE t2.member_id = #{memberId}
                     AND tp2.tour_id  = t.tour_id
             )
+        <if test="countryGroup != null and countryGroup != ''">
+            AND EXISTS (
+                SELECT 1
+                FROM TOUR_CITY tci
+                    JOIN CITY c ON c.city_id = tci.city_id
+                WHERE tci.tour_id = t.tour_id
+                    AND c.country_group_name = #{countryGroup}
+            )
+        </if>
         ORDER BY tc.cnt DESC, rp.price ASC, rp.departure_date ASC
         FETCH FIRST #{topN} ROWS ONLY
     </select>

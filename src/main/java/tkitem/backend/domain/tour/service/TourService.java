@@ -5,6 +5,7 @@ import tkitem.backend.domain.tour.dto.response.TourCommonRecommendDto;
 import tkitem.backend.domain.tour.dto.response.TourPackageDetailDto;
 
 import java.util.List;
+import java.util.Map;
 
 public interface TourService {
     TourPackageDetailDto getTourPackageDetail(Long tourPackageId);
@@ -12,4 +13,6 @@ public interface TourService {
     List<TourCommonRecommendDto> getRecentRecommendedTours(Member member);
 
     List<TourCommonRecommendDto> getTopRankedTours(Member member, Integer topN);
+
+    Map<String, List<TourCommonRecommendDto>> getTopRankedToursInAllRegion(Member member);
 }
