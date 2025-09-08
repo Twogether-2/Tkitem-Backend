@@ -2,11 +2,16 @@ package tkitem.backend.domain.product_recommendation.api;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.product_recommendation.dto.request.ProductRecommendationRequest;
 import tkitem.backend.domain.product_recommendation.dto.response.CandidateListResponse;
 import tkitem.backend.domain.product_recommendation.dto.response.ProductRecommendationResponse;
+import tkitem.backend.domain.product_recommendation.dto.response.ProductResponse;
 import tkitem.backend.domain.product_recommendation.service.ProductRecommendationServiceImpl;
+
+import java.util.List;
 
 @RequiredArgsConstructor
 @RequestMapping("/product-recommendation")
@@ -46,4 +51,27 @@ public class ProductRecommendationController {
         );
     }
 
+    @GetMapping("/related-to-recent")
+    public ResponseEntity<List<ProductResponse>> relatedToRecent(
+            @RequestParam Long productId,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return ResponseEntity.ok(productRecommendationService.relatedToRecent(productId, limit));
+    }
+
+    @GetMapping("/near-trip-items")
+    public ResponseEntity<List<ProductResponse>> nearTripItems(
+            @AuthenticationPrincipal Member member,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return ResponseEntity.ok(productRecommendationService.nearTripItems(member.getMemberId(), limit));
+    }
+
+    @GetMapping("/personal-clothing")
+    public ResponseEntity<List<ProductResponse>> personalClothing(
+            @AuthenticationPrincipal Member member,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return ResponseEntity.ok(productRecommendationService.personalClothing(member.getMemberId(), limit));
+    }
 }

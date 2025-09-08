@@ -89,4 +89,179 @@
             FETCH FIRST #{limit} ROWS ONLY
     </select>
 
+    <!-- =========================================================
+         1) 최근 본 상품(앵커)과 연관상품
+         - 태그 교집합 가중치 + 동일 서브카테고리 + 브랜드 보너스
+         ========================================================= -->
+    <select id="selectRelatedToProduct"
+            resultType="tkitem.backend.domain.product_recommendation.dto.response.ProductResponse">
+        WITH anchor AS (
+            SELECT p.product_id, p.category_id, p.brand_name
+            FROM PRODUCT p
+            WHERE p.product_id = #{productId}
+        ),
+             anchor_tags AS (
+                 SELECT pt.common_tag_id
+                 FROM PRODUCT_TAG pt
+                 WHERE pt.product_id = #{productId}
+             ),
+             scored AS (
+                 SELECT
+                     p.product_id    AS productId,
+                     p.name          AS name,
+                     p.brand_name    AS brandName,
+                     pcs.name        AS category,
+                     p.img_url       AS imgUrl,
+                     p.price         AS price,
+                     /* 점수 계산(매핑에는 사용 안 해도 무방) */
+                     ( NVL(SUM(CASE WHEN pt.common_tag_id IN (SELECT common_tag_id FROM anchor_tags) THEN 1 ELSE 0 END),0) * 2
+                         + CASE WHEN p.category_id = (SELECT category_id FROM anchor) THEN 1 ELSE 0 END
+                         + CASE WHEN p.brand_name = (SELECT brand_name FROM anchor) THEN 0.5 ELSE 0 END
+                         ) AS score
+                 FROM PRODUCT p
+                          LEFT JOIN PRODUCT_TAG pt ON pt.product_id = p.product_id
+                          LEFT JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.product_category_sub_id = p.category_id
+                 WHERE p.product_id &lt;&gt; #{productId}
+                 GROUP BY p.product_id, p.name, p.brand_name, pcs.name, p.img_url, p.price, p.category_id
+             ),
+             ordered AS (
+                 SELECT *
+                 FROM scored
+                 ORDER BY score DESC NULLS LAST, /* 선호 태그 우선 */
+                          name ASC
+             )
+        SELECT *
+        FROM ordered
+        WHERE ROWNUM &lt;= #{limit}
+    </select>
+
+    <!-- =========================================================
+         2) 사용자의 가장 가까운 Trip 도시에서 인기 아이템
+         - 다가오는 일정이 있으면 그 도시, 없으면 최근 과거 일정 1건
+         - 도시 기준 최근 180일 구매 TOP
+         ========================================================= -->
+    <select id="selectPopularForNearestTrip"
+            resultType="tkitem.backend.domain.product_recommendation.dto.response.ProductResponse">
+        <!-- 1) 내 여행 중 '가장 가까운' 한 건 선택: 다가오는 일정 우선, 없으면 가장 최근 과거 -->
+        WITH upcoming AS (
+        SELECT t.trip_id, t.departure_date
+        FROM TRIP t
+        WHERE t.member_id = #{memberId}
+        AND t.departure_date >= TRUNC(SYSDATE)
+        ORDER BY t.departure_date ASC
+        FETCH FIRST 1 ROWS ONLY
+        ),
+        past AS (
+        SELECT t.trip_id, t.departure_date
+        FROM TRIP t
+        WHERE t.member_id = #{memberId}
+        AND t.departure_date &lt; TRUNC(SYSDATE)
+        ORDER BY t.departure_date DESC
+        FETCH FIRST 1 ROWS ONLY
+        ),
+        picked_trip AS (
+        SELECT * FROM upcoming
+        UNION ALL
+        SELECT * FROM past WHERE NOT EXISTS (SELECT 1 FROM upcoming)
+        ),
+        /* 2) 그 여행이 방문하는 모든 도시 목록 */
+        picked_cities AS (
+        SELECT tc.city_id
+        FROM TRIP_CITY tc
+        WHERE tc.trip_id = (SELECT trip_id FROM picked_trip)
+        ),
+        ranked AS (
+        SELECT
+        p.product_id AS productId,
+        p.name       AS name,
+        p.brand_name AS brandName,
+        pcs.name     AS category,
+        p.img_url    AS imgUrl,
+        p.price      AS price,
+        COUNT(*)     AS popularity
+        FROM ORDER_ITEM oi
+        JOIN ORDERS o  ON o.order_id = oi.order_id
+        JOIN PRODUCT p ON p.product_id = oi.product_id
+        LEFT JOIN PRODUCT_CATEGORY_SUB pcs
+        ON pcs.product_category_sub_id = p.category_id
+        JOIN TRIP t_other ON t_other.trip_id = oi.trip_id
+        /* 3) 다른 사람들의 '동일 목적지(들)'에 해당하는 주문만 카운트
+        - TRIP_CITY로 도시 연결, 중복 방지를 위해 EXISTS 사용 */
+        WHERE o.status IN ('PAYMENT_COMPLETED','DELIVERY_COMPLETED')
+        AND oi.created_at >= SYSTIMESTAMP - INTERVAL '99' DAY
+        AND EXISTS (
+        SELECT 1
+        FROM TRIP_CITY tc2
+        WHERE tc2.trip_id = t_other.trip_id
+        AND tc2.city_id IN (SELECT city_id FROM picked_cities)
+        )
+        GROUP BY p.product_id, p.name, p.brand_name, pcs.name, p.img_url, p.price
+        ORDER BY popularity DESC, name ASC
+        )
+        SELECT *
+        FROM ranked
+        WHERE ROWNUM &lt;= #{limit}
+    </select>
+
+    <!-- =========================================================
+         3) 사용자의 선호 취향(태그/브랜드) 기반 의류 추천
+         - 내 과거 주문에서 많이 나온 태그/브랜드 가중치 + 의류 필터
+         - 히스토리 없으면 글로벌 인기/평점으로 폴백
+         ========================================================= -->
+    <select id="selectPersonalClothingForMember"
+            resultType="tkitem.backend.domain.product_recommendation.dto.response.ProductResponse">
+        WITH my_tags AS (
+            SELECT pt.common_tag_id, COUNT(*) AS w
+            FROM ORDERS o
+                     JOIN ORDER_ITEM oi ON oi.order_id = o.order_id
+                     JOIN PRODUCT_TAG pt ON pt.product_id = oi.product_id
+            WHERE o.member_id = #{memberId}
+            GROUP BY pt.common_tag_id
+        ),
+             fav_brands AS (
+                 SELECT p.brand_name, COUNT(*) AS w
+                 FROM ORDERS o
+                          JOIN ORDER_ITEM oi ON oi.order_id = o.order_id
+                          JOIN PRODUCT p ON p.product_id = oi.product_id
+                 WHERE o.member_id = #{memberId}
+                 GROUP BY p.brand_name
+                 ORDER BY w DESC
+                     FETCH FIRST 5 ROWS ONLY
+             ),
+             apparel_subs AS (
+                 SELECT pcs.product_category_sub_id
+                 FROM PRODUCT_CATEGORY_SUB pcs
+                    JOIN PRODUCT_CATEGORY_MAIN pc ON pc.PRODUCT_CATEGORY_MAIN_ID = pcs.PRODUCT_CATEGORY_MAIN_ID
+                 WHERE pc.name = '의류'
+             ),
+             scored AS (
+                 SELECT
+                     p.product_id AS productId,
+                     p.name       AS name,
+                     p.brand_name AS brandName,
+                     pcs.name     AS category,
+                     p.img_url    AS imgUrl,
+                     p.price      AS price,
+                     ( NVL(SUM(mt.w),0)                          /* 내 태그 가중치 합 */
+                         + CASE WHEN p.brand_name IN (SELECT fb.brand_name FROM fav_brands fb) THEN 5 ELSE 0 END
+                         + NVL(p.avg_review, 0) * 0.1             /* 약한 평점 가점(선택) */
+                         ) AS score
+                 FROM PRODUCT p
+                          LEFT JOIN PRODUCT_TAG pt ON pt.product_id = p.product_id
+                          LEFT JOIN my_tags mt ON mt.common_tag_id = pt.common_tag_id
+                          LEFT JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.product_category_sub_id = p.category_id
+                 WHERE EXISTS (SELECT 1 FROM apparel_subs a WHERE a.product_category_sub_id = p.category_id)
+                   AND p.price IS NOT NULL
+                 GROUP BY p.product_id, p.name, p.brand_name, pcs.name, p.img_url, p.price, p.avg_review
+             ),
+             ordered AS (
+                 SELECT *
+                 FROM scored
+                 ORDER BY score DESC NULLS LAST, name ASC
+             )
+        SELECT *
+        FROM ordered
+        WHERE ROWNUM &lt;= #{limit}
+    </select>
+
 </mapper>
