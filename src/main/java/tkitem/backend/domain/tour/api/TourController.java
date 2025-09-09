@@ -16,6 +16,7 @@ import tkitem.backend.domain.tour.service.TourFacadeService;
 import tkitem.backend.domain.tour.service.TourService;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/tour")
@@ -106,15 +107,30 @@ public class TourController {
         return ResponseEntity.ok(tourCommonRecommendDtos);
     }
 
-    @GetMapping("/topRank")
+    @GetMapping("/topRank/{topN}")
     @Operation(
             summary = "가장 저장이 많이 된 패키지 목록 조회",
             description = "오늘 날짜보다 1일 뒤의 패키지들부터 저장 많이된 순 + 내가 담지 않은 패키지 로 조회"
     )
     public ResponseEntity<List<TourCommonRecommendDto>> topRank(
-            @AuthenticationPrincipal Member member
+            @AuthenticationPrincipal Member member,
+            @PathVariable Integer topN
     ) {
-        List<TourCommonRecommendDto> tourCommonRecommendDtos = tourService.getTopRankedTours(member);
+        List<TourCommonRecommendDto> tourCommonRecommendDtos = tourService.getTopRankedTours(member, topN);
+        log.info("topN={}", topN);
         return ResponseEntity.ok(tourCommonRecommendDtos);
+    }
+
+    @GetMapping("/topRank/allRegion")
+    @Operation(
+            summary = "모든 지역별 저장이 많이 된 패키지 목록조회",
+            description = "전체, 동남아, 일본, 중국/홍콩/대만, 유럽"
+    )
+    public ResponseEntity<Map<String, List<TourCommonRecommendDto>>> topRankAllRegion(
+            @AuthenticationPrincipal Member member
+    ){
+        Map<String, List<TourCommonRecommendDto>> listMap = tourService.getTopRankedToursInAllRegion(member);
+
+        return ResponseEntity.ok(listMap);
     }
 }

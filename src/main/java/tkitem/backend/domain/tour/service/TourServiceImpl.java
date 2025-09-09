@@ -1,6 +1,7 @@
 package tkitem.backend.domain.tour.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.LocationInfo;
@@ -10,7 +11,9 @@ import tkitem.backend.domain.tour.mapper.TourMapper;
 import tkitem.backend.global.error.ErrorCode;
 import tkitem.backend.global.error.exception.BusinessException;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,10 +41,30 @@ public class TourServiceImpl implements TourService {
     }
 
     @Override
-    public List<TourCommonRecommendDto> getTopRankedTours(Member member) {
-        List<TourCommonRecommendDto> tourMaps = tourMapper.selectTourMetaByTripSaved(member.getMemberId());
+    public List<TourCommonRecommendDto> getTopRankedTours(Member member, Integer topN) {
+        List<TourCommonRecommendDto> tourMaps = tourMapper.selectTourMetaByTripSaved(member.getMemberId(), topN, "");
         for(TourCommonRecommendDto dto : tourMaps) {
             dto.setRealTitle(createTitle(dto.getLocations()));
+        }
+        return tourMaps;
+    }
+
+    @Override
+    public Map<String, List<TourCommonRecommendDto>> getTopRankedToursInAllRegion(Member member) {
+        String[] regions = {"동남아", "일본", "대만,홍콩,중국", "유럽"};
+        Map<String, List<TourCommonRecommendDto>> tourMaps = new HashMap<>();
+        tourMaps.put("인기", tourMapper.selectTourMetaByTripSaved(member.getMemberId(), 10, ""));
+        for(String region : regions) {
+            tourMaps.put(region, tourMapper.selectTourMetaByTripSaved(member.getMemberId(), 10, region));
+        }
+
+        for(Map.Entry<String, List<TourCommonRecommendDto>> e : tourMaps.entrySet()) {
+            List<TourCommonRecommendDto> updated = e.getValue().stream().map(dto -> {
+                String newTitle = createTitle(dto.getLocations());
+                dto.setRealTitle(newTitle);
+                return dto;
+            }).toList();
+            tourMaps.put(e.getKey(), updated);
         }
         return tourMaps;
     }
