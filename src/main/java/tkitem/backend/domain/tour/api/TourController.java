@@ -12,7 +12,7 @@ import tkitem.backend.domain.tour.dto.response.TourCommonRecommendDto;
 import tkitem.backend.domain.tour.dto.response.TourPackageDetailDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.service.DataLoadService;
-import tkitem.backend.domain.tour.service.TourFacadeService;
+import tkitem.backend.domain.tour.service.TourRecommendFacadeService;
 import tkitem.backend.domain.tour.service.TourService;
 
 import java.util.List;
@@ -24,7 +24,7 @@ import java.util.Map;
 @Slf4j
 public class TourController {
     private final DataLoadService dataLoadService;
-    private final TourFacadeService tourFacadeService;
+    private final TourRecommendFacadeService tourFacadeService;
     private final TourService tourService;
 
     @PostMapping("/init")
@@ -137,10 +137,13 @@ public class TourController {
     @GetMapping("/keyword")
     @Operation(
             summary = "패키지를 정해둔 키워드로 검색하는 api",
-            description = "ES 에 키워드로 검색을 넘겨줌"
+            description = "keyword.json 룰을 적용해 ES(BM25+KNN) 검색을 수행"
     )
-    public ResponseEntity keyword(){
+    public ResponseEntity<List<TourCommonRecommendDto>> keyword(
+            @RequestParam("keyword") String keyword
+    ){
+        List<TourCommonRecommendDto> result = tourFacadeService.searchByKeyword(keyword);
 
-        return ResponseEntity.ok("");
+        return ResponseEntity.ok(result);
     }
 }

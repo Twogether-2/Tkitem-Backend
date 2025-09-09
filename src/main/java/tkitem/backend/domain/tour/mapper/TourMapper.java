@@ -82,4 +82,10 @@ public interface TourMapper {
     List<TourCommonRecommendDto> selectTourMetaByMemberId(@Param("memberId") Long memberId);
 
     List<TourCommonRecommendDto> selectTourMetaByTripSaved(@Param("memberId") Long memberId, @Param("topN") Integer topN, @Param("countryGroup") String countryGroup);
+
+    List<Long> selectAllowTourIdsByCountry(@Param("country") String country);
+
+    List<Long> selectAllowTourIdsByCountryGroup(@Param("countryGroup") String countryGroup);
+
+    List<TourCommonRecommendDto> selectTourMetaByTourIds(List<Long> tourIds);
 }

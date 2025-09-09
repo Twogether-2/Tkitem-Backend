@@ -5,9 +5,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.member.vo.Member;
+import tkitem.backend.domain.tour.dto.KeywordRule;
 import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
+import tkitem.backend.domain.tour.dto.response.TourCommonRecommendDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
+import tkitem.backend.domain.tour.logic.KeywordRuleLoader;
+import tkitem.backend.domain.tour.mapper.TourMapper;
+import tkitem.backend.global.error.ErrorCode;
+import tkitem.backend.global.error.exception.BusinessException;
 import tkitem.backend.global.util.NumberUtil;
 
 import java.util.*;
@@ -16,10 +22,13 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TourFacadeServiceImpl implements TourFacadeService {
+public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeService {
 
     private final TourRecommendService tourRecommendService;
     private final TourEsService tourEsService;
+
+    private final TourMapper tourMapper;
+    private final KeywordRuleLoader ruleLoader;
 
     // 가중치 설정.
     private static final double ALPHA_DB = 0.6;     // DB 점수 가중
@@ -98,5 +107,59 @@ public class TourFacadeServiceImpl implements TourFacadeService {
         tourRecommendService.saveShownRecommendations(req.getGroupId(), dtos, member);
 
         return dtos;
+    }
+
+    @Transactional(readOnly = true)
+    public List<TourCommonRecommendDto> searchByKeyword(String keyword) {
+        try {
+            if (keyword == null || keyword.isBlank()) {
+                throw new BusinessException("keyword 파라미터가 비어 있습니다.", ErrorCode.INVALID_INPUT_VALUE);
+            }
+
+            // 1) 룰 조회 (없으면 404)
+            KeywordRule rule = ruleLoader.getRequired(keyword); // BusinessException 발생 가능
+
+            // 2) 허용 투어 집합 (DB) — 비어도 진행
+            Set<Long> allow = new HashSet<>();
+            if (rule.getCountry() != null && !rule.getCountry().isBlank()) {
+                allow.addAll(tourMapper.selectAllowTourIdsByCountry(rule.getCountry()));
+            }
+            if (rule.getCountryGroup() != null && !rule.getCountryGroup().isBlank()) {
+                allow.addAll(tourMapper.selectAllowTourIdsByCountryGroup(rule.getCountryGroup()));
+            }
+
+            // 3) ES 통합 스코어는 전부 TourEsService에서 처리
+            Map<Long, Double> finalScores =
+                    tourEsService.searchByKeywordScores(rule, allow, /*k*/2000, /*candidates*/4000, /*mTop*/3, /*wKnn*/0.7, /*wBm25*/0.3);
+
+            if (finalScores.isEmpty()) {
+                throw new BusinessException("검색 결과가 없습니다.", ErrorCode.ENTITY_NOT_FOUND);
+            }
+
+            // 4) 점수로 정렬한 뒤, 상위 50개 tourId 만 추출
+            List<Long> topIds = finalScores.entrySet().stream()
+                    .sorted(Map.Entry.<Long, Double>comparingByValue().reversed())
+                    .limit(50)
+                    .map(Map.Entry::getKey)
+                    .toList();
+
+            // DTO는 기본 생성자 + setter로 tourId만 세팅
+            List<TourCommonRecommendDto> result = new ArrayList<>(topIds.size());
+            for (Long id : topIds) {
+                TourCommonRecommendDto dto = new TourCommonRecommendDto();
+                dto.setTourId(id);
+                result.add(dto);
+            }
+
+
+
+            return result;
+
+        } catch (BusinessException be) {
+            throw be;
+        } catch (Exception e) {
+            log.error("[Facade.searchByKeyword] unexpected error: {}", e.getMessage(), e);
+            throw new BusinessException( "키워드 검색 중 오류: " + e.getMessage(), ErrorCode.INTERNAL_SERVER_ERROR);
+        }
     }
 }

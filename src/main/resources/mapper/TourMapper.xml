@@ -498,4 +498,63 @@
         FETCH FIRST #{topN} ROWS ONLY
     </select>
 
+    <select id="selectAllowTourIdsByCountry" parameterType="string" resultType="long">
+        SELECT DISTINCT t.tour_id
+        FROM TOUR t
+            JOIN TOUR_CITY tc ON tc.tour_id = t.tour_id
+            JOIN CITY c ON c.city_id = tc.city_id
+        WHERE c.country_name = #{country}
+    </select>
+
+    <select id="selectAllowTourIdsByCountryGroup" parameterType="string" resultType="long">
+        SELECT DISTINCT t.tour_id
+        FROM TOUR t
+            JOIN TOUR_CITY tc ON tc.tour_id = t.tour_id
+            JOIN CITY c ON c.city_id = tc.city_id
+        WHERE c.country_group_name = #{countryGroup}
+    </select>
+
+    <select id="selectTourMetaByTourIds" parameterType="map" resultMap="TourCommonRecommendDtoMap">
+        WITH pkg_one AS (
+            SELECT
+                tp.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY tp.tour_id
+                    ORDER BY
+                        CASE WHEN tp.price IS NULL THEN 1 ELSE 0 END,   -- NULL 가격은 뒤로
+                        tp.price,                                       -- 최저가 우선
+                        tp.departure_date,                              -- 같은 가격이면 빠른 출발
+                        tp.tour_package_id                              -- 마지막 타이브레이커
+                ) ranking
+            FROM TOUR_PACKAGE tp
+        )
+        SELECT
+            t.tour_id,
+            t.title,
+            t.feature,
+            t.img_url,
+            t.provider,
+            t.duration_days,
+            t.nights,
+            p.tour_package_id,
+            p.price,
+            p.departure_date,
+            p.return_date,
+            p.booking_url,
+            p.departure_airline,
+            p.return_airline
+        FROM TOUR t
+            LEFT JOIN pkg_one p ON p.tour_id = t.tour_id AND p.ranking = 1
+        WHERE t.tour_id IN
+            <foreach item="id" collection="ids" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+            ORDER BY CASE
+            <foreach item="id" collection="ids" index="idx" separator=" ">
+                WHEN t.tour_id = #{id} THEN #{idx}
+            </foreach>
+            ELSE 999999
+        END
+    </select>
+
 </mapper>

@@ -42,9 +42,6 @@ public class DataLoadServiceImpl implements DataLoadService {
         return TRIP_CODE_PATTERN.matcher(tripCode).matches();
     }
 
-    // TODO :
-    //  1. TOUR 의 summary 속성 작성(AI 필요)
-    //  2. TOUR 의 hotelRating 을 어떻게 할지
     @Override
     public void loadDataFromCsv(String filePath) throws Exception {
         log.info("JSON 데이터 적재를 시작합니다. 파일 경로: {}", filePath);
