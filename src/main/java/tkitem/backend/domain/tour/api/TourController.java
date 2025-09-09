@@ -133,4 +133,14 @@ public class TourController {
 
         return ResponseEntity.ok(listMap);
     }
+
+    @GetMapping("/keyword")
+    @Operation(
+            summary = "패키지를 정해둔 키워드로 검색하는 api",
+            description = "ES 에 키워드로 검색을 넘겨줌"
+    )
+    public ResponseEntity keyword(){
+
+        return ResponseEntity.ok("");
+    }
 }
