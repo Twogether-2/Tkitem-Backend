@@ -5,10 +5,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import tkitem.backend.domain.member.vo.Member;
-import tkitem.backend.domain.product_recommendation.dto.request.ProductRecommendationRequest;
-import tkitem.backend.domain.product_recommendation.dto.response.CandidateListResponse;
-import tkitem.backend.domain.product_recommendation.dto.response.ProductRecommendationResponse;
-import tkitem.backend.domain.product_recommendation.dto.response.ProductResponse;
+import tkitem.backend.domain.product_recommendation.dto.request.BudgetRecommendationRequest;
+import tkitem.backend.domain.product_recommendation.dto.response.*;
 import tkitem.backend.domain.product_recommendation.service.ProductRecommendationServiceImpl;
 
 import java.util.List;
@@ -18,60 +16,47 @@ import java.util.List;
 @RestController
 public class ProductRecommendationController {
 
-    private final ProductRecommendationServiceImpl productRecommendationService;
+    private final ProductRecommendationServiceImpl recommendationService;
 
-    @PostMapping("/{tripId}")
-    public ResponseEntity<ProductRecommendationResponse> planWithBudget(
-            @PathVariable Long tripId,
-            @RequestParam(name="scheduleDate", required=false) String scheduleDate,
-            @RequestParam(name="perItemCandidates", defaultValue="20") int perItemCandidates,
-            @RequestParam(name="step", defaultValue="100") int step,
-            @RequestBody ProductRecommendationRequest request
-    ) {
-        ProductRecommendationResponse response = productRecommendationService.planWithBudget(
-                tripId,
-                request.getChecklistItemIds(),
-                request.getBudget(),
-                request.getWeights(),
-                scheduleDate,
-                perItemCandidates,
-                step
-        );
-        return ResponseEntity.ok(response);
+    // 1. 예산에 맞는 추천리스트
+    @PostMapping("/budget")
+    public ResponseEntity<BudgetRecommendationResponse> getBudgetRecommendations(
+            @RequestBody BudgetRecommendationRequest request,
+            @AuthenticationPrincipal Member member) {
+        return ResponseEntity.ok(recommendationService.recommendByBudget(request, member.getGender()));
     }
 
+    // 2. 추천 아이템 후보군
     @GetMapping("/{tripId}/candidates/{checklistItemId}")
-    public ResponseEntity<CandidateListResponse> getCandidatesForChecklistItem(
+    public ResponseEntity<ProductCandidatesResponse> getProductCandidates(
             @PathVariable Long tripId,
             @PathVariable Long checklistItemId,
-            @RequestParam(defaultValue = "10") int limit
-    ) {
-        return ResponseEntity.ok(
-                productRecommendationService.getCandidatesForChecklistItem(tripId, checklistItemId, limit)
-        );
+            @AuthenticationPrincipal Member member) {
+        return ResponseEntity.ok(recommendationService.getProductCandidates(tripId, checklistItemId, member.getGender()));
     }
 
+    // 3. 최근 본 상품의 연관상품
     @GetMapping("/related-to-recent")
-    public ResponseEntity<List<ProductResponse>> relatedToRecent(
+    public ResponseEntity<List<ProductResponse>> getRelatedProducts(
             @RequestParam Long productId,
-            @RequestParam(defaultValue = "10") int limit
-    ) {
-        return ResponseEntity.ok(productRecommendationService.relatedToRecent(productId, limit));
+            @RequestParam(defaultValue = "10") int limit,
+            @AuthenticationPrincipal Member member) {
+        return ResponseEntity.ok(recommendationService.getRelatedProducts(productId, limit, member.getGender()));
     }
 
+    // 4. 사용자의 가장 가까운 trip에서 추천 아이템
     @GetMapping("/near-trip-items")
-    public ResponseEntity<List<ProductResponse>> nearTripItems(
-            @AuthenticationPrincipal Member member,
-            @RequestParam(defaultValue = "10") int limit
-    ) {
-        return ResponseEntity.ok(productRecommendationService.nearTripItems(member.getMemberId(), limit));
+    public ResponseEntity<List<ProductResponse>> getUpcomingTripRecommendations(
+            @RequestParam(defaultValue = "20") int limit,
+            @AuthenticationPrincipal Member member) {
+        return ResponseEntity.ok(recommendationService.getUpcomingTripItems(member.getMemberId(), limit, member.getGender()));
     }
 
+    // 5. 사용자의 선호 취향에 맞는 옷
     @GetMapping("/personal-clothing")
-    public ResponseEntity<List<ProductResponse>> personalClothing(
-            @AuthenticationPrincipal Member member,
-            @RequestParam(defaultValue = "10") int limit
-    ) {
-        return ResponseEntity.ok(productRecommendationService.personalClothing(member.getMemberId(), limit));
+    public ResponseEntity<List<ProductResponse>> getFashionByPreference(
+            @RequestParam(defaultValue = "20") int limit,
+            @AuthenticationPrincipal Member member) {
+        return ResponseEntity.ok(recommendationService.getFashionByPreference(member.getMemberId(), limit, member.getGender()));
     }
 }

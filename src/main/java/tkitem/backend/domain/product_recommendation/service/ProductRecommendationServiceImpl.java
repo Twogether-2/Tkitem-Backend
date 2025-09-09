@@ -4,13 +4,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tkitem.backend.domain.product_recommendation.dto.*;
-import tkitem.backend.domain.product_recommendation.dto.request.ProductRecommendationRequest;
-import tkitem.backend.domain.product_recommendation.dto.response.CandidateListResponse;
-import tkitem.backend.domain.product_recommendation.dto.response.ProductRecommendationResponse;
-import tkitem.backend.domain.product_recommendation.dto.response.ProductResponse;
+import tkitem.backend.domain.product_recommendation.dto.request.BudgetRecommendationRequest;
+import tkitem.backend.domain.product_recommendation.dto.response.*;
 import tkitem.backend.domain.product_recommendation.mapper.ProductRecommendationMapper;
-import tkitem.backend.domain.product_recommendation.util.TagExtractor;
+import tkitem.backend.domain.product_recommendation.vo.*;
 
 import java.math.*;
 import java.util.*;
@@ -21,272 +18,297 @@ import java.util.stream.Collectors;
 @Service
 public class ProductRecommendationServiceImpl implements ProductRecommendationService {
 
-    private final ProductRecommendationMapper productRecommendationMapper;
+    private final ProductRecommendationMapper recommendationMapper;
 
+    // 1. 예산에 맞는 추천리스트
     @Override
     @Transactional(readOnly = true)
-    public ProductRecommendationResponse planWithBudget(
-            Long tripId,
-            List<Long> checklistItemIds,
-            BigDecimal budget,
-            ProductRecommendationRequest.Weights weights,
-            String scheduleDateParam,
-            int perItemCandidates,
-            int step
-    ) {
-        if (weights == null) weights = new ProductRecommendationRequest.Weights(0.7, 0.3);
-        double wTag = Optional.ofNullable(weights.getTag()).orElse(0.7);
-        double wRating = Optional.ofNullable(weights.getRating()).orElse(0.3);
+    public BudgetRecommendationResponse recommendByBudget(BudgetRecommendationRequest request, Character gender) {
+        // 체크리스트 아이템들 조회
+        List<ChecklistItem> checklistItems = recommendationMapper.findChecklistItemsByIds(request.getChecklistItemIds());
 
-        // 1) 아이템 조회(+tripId 검증) 및 scheduleDate 필터
-        List<ChecklistItemDto> items = productRecommendationMapper.selectChecklistItemsByIds(tripId, checklistItemIds);
-        items = applyScheduleDateFilter(items, scheduleDateParam);
-
-        // 2) 각 아이템별 후보 수집 (loop)
-        Map<Long, List<CandidateProductDto>> candidatesByItem = new LinkedHashMap<>();
-        for (ChecklistItemDto it : items) {
-            Set<String> tagCodes = TagExtractor.extractTagCodes(it.getNotes(), it.getItemName());
-
-            List<CandidateProductDto> cands = tagCodes.isEmpty()
-                    ? productRecommendationMapper.selectPopularCandidatesFallback(it.getProductCategorySubId(), perItemCandidates)
-                    : productRecommendationMapper.selectCandidatesForItem(it.getProductCategorySubId(), new ArrayList<>(tagCodes), perItemCandidates);
-
-            // 태그는 있었지만 매칭 0건 → 인기/평점 백업
-            if (cands == null || cands.isEmpty()) {
-                cands = productRecommendationMapper.selectPopularCandidatesFallback(it.getProductCategorySubId(), perItemCandidates);
-            }
-            candidatesByItem.put(it.getChecklistItemId(), cands);
+        if (checklistItems.isEmpty()) {
+            throw new IllegalArgumentException("체크리스트 아이템을 찾을 수 없습니다.");
         }
 
-        // 3) 유틸리티 정규화(태그 점수 max)
-        double maxTag = 0;
-        for (List<CandidateProductDto> list : candidatesByItem.values()) {
-            for (CandidateProductDto c : list) {
-                if (c.getTagScore() != null) {
-                    maxTag = Math.max(maxTag, c.getTagScore().doubleValue());
-                }
-            }
-        }
-        if (maxTag <= 0) maxTag = 1; // 0 division 보호
+        Long tripId = checklistItems.get(0).getTripId();
+        Trip trip = recommendationMapper.findTripById(tripId);
 
-        // 4) 그룹(아이템)별 옵션 구성 (skip 포함)
-        List<Long> itemOrder = items.stream().map(ChecklistItemDto::getChecklistItemId).toList();
-        List<List<Option>> groups = new ArrayList<>();
-        for (ChecklistItemDto it : items) {
-            List<Option> opts = new ArrayList<>();
-            // skip 옵션
-            opts.add(Option.skip());
-            for (CandidateProductDto c : candidatesByItem.getOrDefault(it.getChecklistItemId(), List.of())) {
-                double price = c.getPrice().doubleValue();
-                double tagNorm = Math.max(0, (c.getTagScore()==null?0.0:c.getTagScore().doubleValue()) / maxTag);
-                double ratingNorm = Math.max(0, (c.getAvgReview()==null?0.0:c.getAvgReview().doubleValue()) / 5.0);
-                double utility = wTag * tagNorm + wRating * ratingNorm;
-                opts.add(Option.pick(
-                        c.getProductId(), c.getName(), price, utility, c.getMatchedTags(),
-                        c.getBrandName(), c.getCategory(), c.getImgUrl()
+        // 일자별로 그룹핑
+        Map<Integer, List<ChecklistItem>> groupedByDate = checklistItems.stream()
+                .collect(Collectors.groupingBy(
+                        item -> item.getScheduleDate() != null ? item.getScheduleDate() : -1
                 ));
-            }
-            groups.add(opts);
-        }
 
-        // 5) DP (Multiple-Choice Knapsack) — 총예산 제약
-        int cap = budget.divide(new BigDecimal(step), 0, RoundingMode.DOWN).intValue();
-        double[] dp = new double[cap+1];
-        int[][] pick = new int[groups.size()][cap+1];
-        int[][] prev = new int[groups.size()][cap+1];
+        List<ScheduleGroupResponse> groups = new ArrayList<>();
+        BigDecimal remainingBudget = request.getBudget();
+        BigDecimal totalSpent = BigDecimal.ZERO;
 
-        for (int g=0; g<groups.size(); g++) {
-            Arrays.fill(pick[g], -1);
-            Arrays.fill(prev[g], -1);
-            double[] next = Arrays.copyOf(dp, dp.length);
+        for (Map.Entry<Integer, List<ChecklistItem>> entry : groupedByDate.entrySet()) {
+            Integer scheduleDate = entry.getKey() == -1 ? null : entry.getKey();
+            List<ChecklistItem> items = entry.getValue();
 
-            List<Option> opts = groups.get(g);
-            for (int oi=0; oi<opts.size(); oi++) {
-                Option o = opts.get(oi);
-                int w = (int)Math.floor(o.cost / step);
-                if (w < 0) w = 0;
-                for (int c = cap; c >= w; c--) {
-                    double cand = dp[c - w] + o.utility;
-                    if (cand > next[c]) {
-                        next[c] = cand;
-                        pick[g][c] = oi;
-                        prev[g][c] = c - w;
-                    }
+            // score 높은 순으로 정렬
+            items.sort((a, b) -> Double.compare(b.getScore(), a.getScore()));
+
+            List<ChecklistProductResponse> productResponses = new ArrayList<>();
+
+            for (ChecklistItem item : items) {
+                if (remainingBudget.compareTo(BigDecimal.ZERO) <= 0) break;
+
+                // 예산 내 최적 상품 조회
+                Map<String, Object> params = new HashMap<>();
+                params.put("categoryId", item.getProductCategorySubId());
+                params.put("maxPrice", remainingBudget);
+                params.put("memberId", trip.getMemberId());
+                params.put("notes", item.getNotes());
+                params.put("gender", gender);
+
+                Product recommendedProduct = recommendationMapper.findBestProductForBudget(params);
+
+                if (recommendedProduct != null) {
+                    // 추천 이유 생성
+                    String reason = generateRecommendReason(item, recommendedProduct, trip.getMemberId());
+
+                    ProductResponse productResponse = ProductResponse.builder()
+                            .productId(recommendedProduct.getProductId())
+                            .name(recommendedProduct.getName())
+                            .brandName(recommendedProduct.getBrandName())
+                            .category(recommendedProduct.getCategoryName())
+                            .url(recommendedProduct.getUrl())
+                            .imgUrl(recommendedProduct.getImgUrl())
+                            .code(recommendedProduct.getCode())
+                            .price(recommendedProduct.getPrice())
+                            .avgReview(recommendedProduct.getAvgReview())
+                            .recommendReason(reason)
+                            .build();
+
+                    productResponses.add(ChecklistProductResponse.builder()
+                            .checklistItemId(item.getChecklistItemId())
+                            .product(productResponse)
+                            .build());
+
+                    remainingBudget = remainingBudget.subtract(recommendedProduct.getPrice());
+                    totalSpent = totalSpent.add(recommendedProduct.getPrice());
                 }
             }
-            dp = next;
-        }
 
-        // 6) 역추적
-        int bestC = 0; double bestV = dp[0];
-        for (int c=1; c<=cap; c++) if (dp[c] > bestV) { bestV = dp[c]; bestC = c; }
-
-        Map<Long, PlannedPickDto> bestByItem = new LinkedHashMap<>();
-        int c = bestC;
-        for (int g = groups.size()-1; g>=0; g--) {
-            int oi = pick[g][c];
-            if (oi < 0) continue;
-            Option o = groups.get(g).get(oi);
-            if (!o.isSkip) {
-                PlannedPickDto pickDto = PlannedPickDto.builder()
-                        .productId(o.productId)
-                        .name(o.name)
-                        .brandName(o.brandName)
-                        .category(o.category)
-                        .imgUrl(o.imgUrl)
-                        .price(BigDecimal.valueOf(o.cost))
-                        .utility(o.utility)
-                        .matchedTags(o.matchedTags)
-                        .build();
-                bestByItem.put(itemOrder.get(g), pickDto);
+            if (!productResponses.isEmpty()) {
+                groups.add(ScheduleGroupResponse.builder()
+                        .scheduleDate(scheduleDate)
+                        .items(productResponses)
+                        .build());
             }
-            c = Math.max(0, prev[g][c]);
         }
 
-        // 7) 응답 구성 + 그룹핑 + 합계
-        Map<Integer, List<ItemRecommendationResultDto>> grouped = new LinkedHashMap<>();
-        BigDecimal totalCost = BigDecimal.ZERO;
-        double totalUtility = 0.0;
-
-        for (ChecklistItemDto it : items) {
-            PlannedPickDto p = bestByItem.get(it.getChecklistItemId());
-            if (p != null) {
-                totalCost = totalCost.add(p.getPrice());
-                totalUtility += p.getUtility();
-            }
-            grouped.computeIfAbsent(it.getScheduleDate(), k -> new ArrayList<>())
-                    .add(ItemRecommendationResultDto.builder()
-                            .checklistItemId(it.getChecklistItemId())
-                            .product(p)
-                            .build());
-        }
-
-        List<ScheduleGroupDto> groupsOut = grouped.entrySet().stream()
-                .sorted((a, b) -> {
-                    Integer ka = a.getKey(), kb = b.getKey();
-                    if (ka == null && kb == null) return 0;
-                    if (ka == null) return 1;
-                    if (kb == null) return -1;
-                    return Integer.compare(ka, kb);
-                })
-                .map(e -> ScheduleGroupDto.builder()
-                        .scheduleDate(e.getKey())
-                        .items(e.getValue())
-                        .build())
-                .collect(Collectors.toList());
-
-        BigDecimal remaining = budget.subtract(totalCost.max(BigDecimal.ZERO));
-
-        return ProductRecommendationResponse.builder()
+        return BudgetRecommendationResponse.builder()
                 .tripId(tripId)
-                .budget(budget)
-                .totalCost(totalCost)
-                .totalUtility(totalUtility)
-                .remaining(remaining)
-                .groups(groupsOut)
+                .budget(request.getBudget())
+                .groups(groups)
+                .totalPrice(totalSpent)
+                .remainingBudget(remainingBudget)
                 .build();
     }
 
+    // 2. 추천 아이템 후보군
     @Override
     @Transactional(readOnly = true)
-    public CandidateListResponse getCandidatesForChecklistItem(Long tripId, Long checklistItemId, int limit) {
-        // 0) limit 가드
-        int topN = Math.max(1, Math.min(limit, 50));
+    public ProductCandidatesResponse getProductCandidates(Long tripId, Long checklistItemId, Character gender) {
+        ChecklistItem checklistItem = recommendationMapper.findChecklistItemById(checklistItemId);
+        Trip trip = recommendationMapper.findTripById(tripId);
 
-        // 1) checklist item 검증 + 메타 확보 (tripId 스코프)
-        List<ChecklistItemDto> items = productRecommendationMapper.selectChecklistItemsByIds(tripId, List.of(checklistItemId));
-        if (items.isEmpty()) {
-            // 프로젝트에 EntityNotFoundException 있으면 그거 사용
-            throw new IllegalArgumentException("tripId=" + tripId + " 범위에 checklistItemId=" + checklistItemId + "가 없습니다.");
-        }
-        ChecklistItemDto it = items.get(0);
+        // 상품 후보군 조회 파라미터
+        Map<String, Object> params = new HashMap<>();
+        params.put("categoryId", checklistItem.getProductCategorySubId());
+        params.put("memberId", trip.getMemberId());
+        params.put("notes", checklistItem.getNotes());
+        params.put("scheduleDate", checklistItem.getScheduleDate());
+        params.put("limit", 20);
+        params.put("gender", gender);
 
-        // 2) 태그 추출 (notes + itemName). TagExtractor가 Set<String>이든 List<String>이든 안전 처리
-        Set<String> extracted = Optional.ofNullable(
-                TagExtractor.extractTagCodes(
-                        Optional.ofNullable(it.getNotes()).orElse(""),
-                        Optional.ofNullable(it.getItemName()).orElse("")
-                )
-        ).orElseGet(Collections::emptySet);
-        ArrayList<String> ctxTagCodes = new ArrayList<>(extracted);
+        List<ProductWithScore> products = recommendationMapper.findProductCandidates(params);
 
-        // 3) 태그 매칭 후보 → 없으면 인기/평점 백업
-        List<CandidateProductDto> candidates = Collections.emptyList();
-        if (!ctxTagCodes.isEmpty()) {
-            candidates = productRecommendationMapper.selectCandidatesForItem(it.getProductCategorySubId(), ctxTagCodes, topN);
-        }
-        if (candidates == null || candidates.isEmpty()) {
-            candidates = productRecommendationMapper.selectPopularCandidatesFallback(it.getProductCategorySubId(), topN);
-        }
+        // ProductResponse로 변환
+        List<ProductResponse> productResponses = products.stream()
+                .map(p -> ProductResponse.builder()
+                        .productId(p.getProductId())
+                        .name(p.getName())
+                        .brandName(p.getBrandName())
+                        .category(p.getCategoryName())
+                        .code(p.getCode())
+                        .url(p.getUrl())
+                        .imgUrl(p.getImgUrl())
+                        .price(p.getPrice())
+                        .avgReview(p.getAvgReview())
+                        .matchScore(p.getMatchScore())
+                        .matchedTags(Arrays.asList(p.getMatchedTags().split(",")))
+                        .recommendReason(p.getRecommendReason())
+                        .build())
+                .collect(Collectors.toList());
 
-        // 4) 응답 (tripId 포함해 세팅)
-        return CandidateListResponse.of(tripId, it, ctxTagCodes, candidates);
+        return ProductCandidatesResponse.builder()
+                .tripId(tripId)
+                .checklistItemId(checklistItemId)
+                .productCategorySubId(checklistItem.getProductCategorySubId())
+                .itemName(checklistItem.getItemName())
+                .products(productResponses)
+                .categoryContext(checklistItem.getNotes())
+                .build();
     }
 
-    /** 1) 최근 본 상품의 연관상품 */
+    // 3. 최근 본 상품의 연관상품
     @Override
     @Transactional(readOnly = true)
-    public List<ProductResponse> relatedToRecent(Long productId, int limit) {
-        if (productId == null) throw new IllegalArgumentException("productId is required");
-        return productRecommendationMapper.selectRelatedToProduct(productId, Math.max(limit, 1));
+    public List<ProductResponse> getRelatedProducts(Long productId, int limit, Character gender) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("productId", productId);
+        params.put("limit", limit);
+        params.put("gender", gender);
+
+        List<ProductWithSimilarity> relatedProducts = recommendationMapper.findRelatedProducts(params);
+
+        return relatedProducts.stream()
+                .map(p -> ProductResponse.builder()
+                        .productId(p.getProductId())
+                        .name(p.getName())
+                        .brandName(p.getBrandName())
+                        .category(p.getCategoryName())
+                        .code(p.getCode())
+                        .url(p.getUrl())
+                        .imgUrl(p.getImgUrl())
+                        .price(p.getPrice())
+                        .avgReview(p.getAvgReview())
+                        .matchScore(p.getSimilarity())
+                        .recommendReason(String.format("%s와 유사한 스타일 (유사도: %.0f%%)",
+                                p.getBaseName(), p.getSimilarity() * 100))
+                        .build())
+                .collect(Collectors.toList());
     }
 
-    /** 2) 사용자의 가장 가까운 Trip에서 추천 아이템 */
+    // 4. 사용자의 가장 가까운 trip에서 추천 아이템
     @Override
     @Transactional(readOnly = true)
-    public List<ProductResponse> nearTripItems(Long memberId, int limit) {
-        if (memberId == null) throw new IllegalArgumentException("memberId is required");
-        return productRecommendationMapper.selectPopularForNearestTrip(memberId, Math.max(limit, 1));
+    public List<ProductResponse> getUpcomingTripItems(Long memberId, int limit, Character gender) {
+        // 가장 가까운 미래 여행 조회
+        Trip upcomingTrip = recommendationMapper.findUpcomingTrip(memberId);
+        if (upcomingTrip == null) {
+            throw new IllegalArgumentException("예정된 여행이 없습니다.");
+        }
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("tripId", upcomingTrip.getTripId());
+        params.put("memberId", memberId);
+        params.put("minScore", 0.7);
+        params.put("limit", limit);
+        params.put("gender", gender);
+
+        List<ProductForTrip> products = recommendationMapper.findUpcomingTripProducts(params);
+
+        return products.stream()
+                .map(p -> ProductResponse.builder()
+                        .productId(p.getProductId())
+                        .name(p.getName())
+                        .brandName(p.getBrandName())
+                        .category(p.getCategoryName())
+                        .code(p.getCode())
+                        .url(p.getUrl())
+                        .imgUrl(p.getImgUrl())
+                        .price(p.getPrice())
+                        .avgReview(p.getAvgReview())
+                        .recommendReason(String.format("%s 여행 필수템 - %s (중요도: %.0f%%)",
+                                upcomingTrip.getTitle(), p.getTier(), p.getItemScore() * 100))
+                        .build())
+                .collect(Collectors.toList());
     }
 
-    /** 3) 사용자의 선호 취향에 맞는 옷 */
+    // 5. 사용자의 선호 취향에 맞는 옷
     @Override
     @Transactional(readOnly = true)
-    public List<ProductResponse> personalClothing(Long memberId, int limit) {
-        if (memberId == null) throw new IllegalArgumentException("memberId is required");
-        return productRecommendationMapper.selectPersonalClothingForMember(memberId, Math.max(limit, 1));
+    public List<ProductResponse> getFashionByPreference(Long memberId, int limit, Character gender) {
+        Preference preference = recommendationMapper.findPreferenceByMemberId(memberId);
+        if (preference == null) {
+            throw new IllegalArgumentException("사용자 취향 정보를 찾을 수 없습니다.");
+        }
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("memberId", memberId);
+        params.put("firstLook", preference.getFirstLook());
+        params.put("secondLook", preference.getSecondLook());
+        params.put("brightness", preference.getBrightness());
+        params.put("boldness", preference.getBoldness());
+        params.put("fit", preference.getFit());
+        params.put("limit", limit);
+        params.put("gender", gender);
+
+        List<FashionProduct> fashionProducts = recommendationMapper.findFashionByPreference(params);
+
+        return fashionProducts.stream()
+                .map(p -> {
+                    String reason = generateFashionReason(preference, p.getMatchedStyles());
+                    return ProductResponse.builder()
+                            .productId(p.getProductId())
+                            .name(p.getName())
+                            .brandName(p.getBrandName())
+                            .category(p.getCategoryName())
+                            .imgUrl(p.getImgUrl())
+                            .price(p.getPrice())
+                            .avgReview(p.getAvgReview())
+                            .matchScore(p.getPreferenceScore())
+                            .matchedTags(Arrays.asList(p.getMatchedStyles().split(",")))
+                            .recommendReason(reason)
+                            .build();
+                })
+                .collect(Collectors.toList());
     }
 
-    private List<ChecklistItemDto> applyScheduleDateFilter(List<ChecklistItemDto> items, String scheduleDateParam) {
-        if (scheduleDateParam == null) return items;
-        if ("null".equalsIgnoreCase(scheduleDateParam)) {
-            return items.stream().filter(i -> i.getScheduleDate() == null).toList();
+    // Helper Methods
+    private String generateRecommendReason(ChecklistItem item, Product product, Long memberId) {
+        StringBuilder reason = new StringBuilder();
+
+        if (item.getTier() != null) {
+            reason.append(item.getTier()).append(" 아이템");
         }
-        try {
-            int want = Integer.parseInt(scheduleDateParam);
-            return items.stream().filter(i -> Objects.equals(i.getScheduleDate(), want)).toList();
-        } catch (NumberFormatException e) {
-            return items;
+
+        if (item.getNotes() != null) {
+            if (item.getNotes().contains("RAIN")) reason.append(" - 우천 대비");
+            if (item.getNotes().contains("HOT")) reason.append(" - 더운 날씨용");
+            if (item.getNotes().contains("COLD")) reason.append(" - 추운 날씨용");
         }
+
+        return reason.toString();
     }
 
-    // 내부 DP 옵션
-    // ProductRecommendationServiceImpl 내부
+    private String generateFashionReason(Preference preference, String matchedStyles) {
+        StringBuilder reason = new StringBuilder();
 
-    private static final class Option {
-        final boolean isSkip;
-        final Long productId;
-        final String name;
-        final String brandName;
-        final String category;
-        final String imgUrl;
-        final double cost;
-        final double utility;
-        final String matchedTags;
+        if (preference.getFirstLook() != null) {
+            reason.append(getFashionStyleName(preference.getFirstLook()));
+            if (preference.getSecondLook() != null) {
+                reason.append(" & ").append(getFashionStyleName(preference.getSecondLook()));
+            }
+            reason.append(" 스타일");
+        }
 
-        private Option(boolean isSkip, Long pid, String name, double cost, double utility, String tags,
-                       String brandName, String category, String imgUrl) {
-            this.isSkip = isSkip; this.productId = pid; this.name = name;
-            this.cost = cost; this.utility = utility; this.matchedTags = tags;
-            this.brandName = brandName; this.category = category; this.imgUrl = imgUrl;
+        if (matchedStyles != null && !matchedStyles.isEmpty()) {
+            reason.append(" - ").append(matchedStyles);
         }
-        static Option skip() { return new Option(true, null, null, 0.0, 0.0, null, null, null, null); }
-        static Option pick(Long id, String name, double cost, double util, String tags,
-                           String brandName, String category, String imgUrl) {
-            return new Option(false, id, name, cost, util, tags, brandName, category, imgUrl);
-        }
+
+        return reason.toString();
     }
 
+    private String getFashionStyleName(String style) {
+        Map<String, String> styleNames = Map.of(
+                "MODERN", "모던",
+                "STREET", "스트릿",
+                "CASUAL", "캐주얼",
+                "SPORT", "스포티",
+                "MILITARY", "밀리터리",
+                "BOHO", "보헤미안",
+                "ROMANTIC", "로맨틱",
+                "DANDY", "댄디"
+        );
+        return styleNames.getOrDefault(style, style);
+    }
 
 }
 

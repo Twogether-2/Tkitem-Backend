@@ -1,30 +1,15 @@
 package tkitem.backend.domain.product_recommendation.service;
 
-import tkitem.backend.domain.product_recommendation.dto.request.ProductRecommendationRequest;
-import tkitem.backend.domain.product_recommendation.dto.response.CandidateListResponse;
-import tkitem.backend.domain.product_recommendation.dto.response.ProductRecommendationResponse;
-import tkitem.backend.domain.product_recommendation.dto.response.ProductResponse;
+import tkitem.backend.domain.product_recommendation.dto.request.BudgetRecommendationRequest;
+import tkitem.backend.domain.product_recommendation.dto.response.*;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 public interface ProductRecommendationService {
 
-    ProductRecommendationResponse planWithBudget(
-            Long tripId,
-            List<Long> checklistItemIds,
-            BigDecimal budget,
-            ProductRecommendationRequest.Weights weights,
-            String scheduleDateParam,
-            int perItemCandidates,
-            int step
-    );
-
-    CandidateListResponse getCandidatesForChecklistItem(Long tripId, Long checklistItemId, int limit);
-
-    List<ProductResponse> relatedToRecent(Long productId, int limit);
-
-    List<ProductResponse> nearTripItems(Long memberId, int limit);
-
-    List<ProductResponse> personalClothing(Long memberId, int limit);
+    BudgetRecommendationResponse recommendByBudget(BudgetRecommendationRequest request, Character gender);
+    ProductCandidatesResponse getProductCandidates(Long tripId, Long checklistItemId, Character gender);
+    List<ProductResponse> getRelatedProducts(Long productId, int limit, Character gender);
+    List<ProductResponse> getUpcomingTripItems(Long memberId, int limit, Character gender);
+    List<ProductResponse> getFashionByPreference(Long memberId, int limit, Character gender);
 }
