@@ -10,6 +10,8 @@ public enum ErrorCode {
     INTERNAL_SERVER_ERROR(500, "COMMON001", "Internal Server Error"),
     INVALID_INPUT_VALUE(400, "COMMON002", "Invalid Input Value"),
     ENTITY_NOT_FOUND(404, "COMMON003", "Entity Not Found"),
+    CONFIG_LOAD_FAILED(500, "COMMON004", "Config Load Failed"),
+    CONFIG_INVALID(500, "COMMON005", "Config Invalid"),
 
     /* AUTH ERROR */
     INVALID_ACCESS_TOKEN(401, "AUTH001", "Invalid Access Token"),
