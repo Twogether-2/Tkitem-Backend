@@ -87,7 +87,7 @@ public class TourController {
             @AuthenticationPrincipal Member member,
             @PathVariable Long tourPackageId){
 
-        TourPackageDetailDto responseDto = tourService.getTourPackageDetail(tourPackageId);
+        TourPackageDetailDto responseDto = tourService.getTourPackageDetail(tourPackageId, member);
 
         return ResponseEntity.ok(responseDto);
     }
@@ -142,8 +142,6 @@ public class TourController {
     public ResponseEntity<TourCommonRecommendDto> keyword(
             @RequestParam("keyword") String keyword
     ){
-//        List<TourCommonRecommendDto> result = tourFacadeService.searchByKeyword(keyword);
-
         TourCommonRecommendDto result1 = tourFacadeService.searchTop1ByKeyword(keyword);
 
         return ResponseEntity.ok(result1);

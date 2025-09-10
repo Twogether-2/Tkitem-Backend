@@ -7,6 +7,7 @@ import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.LocationInfo;
 import tkitem.backend.domain.tour.dto.response.TourCommonRecommendDto;
 import tkitem.backend.domain.tour.dto.response.TourPackageDetailDto;
+import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.mapper.TourMapper;
 import tkitem.backend.global.error.ErrorCode;
 import tkitem.backend.global.error.exception.BusinessException;
@@ -20,11 +21,19 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TourServiceImpl implements TourService {
     private final TourMapper tourMapper;
+    private final TourRecommendService tourRecommendService;
 
     @Override
-    public TourPackageDetailDto getTourPackageDetail(Long tourPackageId) {
+    public TourPackageDetailDto getTourPackageDetail(Long tourPackageId, Member member) {
         TourPackageDetailDto detailDto = tourMapper.selectTourPackageDetail(tourPackageId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TOUR_NOT_FOUND));
+
+        TourRecommendationResponseDto dto = TourRecommendationResponseDto.builder()
+                .tourId(detailDto.getTourId())
+                .tourPackageId(detailDto.getTourPackageId())
+                        .build();
+        // 추천 결과 저장
+        tourRecommendService.saveShownRecommendations(0L, List.of(dto), member);
 
         return detailDto;
     }

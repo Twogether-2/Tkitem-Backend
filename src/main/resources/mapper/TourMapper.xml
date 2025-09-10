@@ -59,8 +59,9 @@
                     AND NOT EXISTS (
                     SELECT 1
                     FROM TOUR_RECOMMENDATION tr
-                    WHERE tr.tour_package_id = tp.tour_package_id
-                    AND tr.group_id = #{req.groupId}
+                    WHERE tr.tour_id = tp.tour_id
+                        AND tr.group_id = #{req.groupId}
+                        AND tr.member_id = #{memberId}
                     )
                 </if>
                 <if test="memberId != null">

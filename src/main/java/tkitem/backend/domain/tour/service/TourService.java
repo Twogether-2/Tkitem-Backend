@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 public interface TourService {
-    TourPackageDetailDto getTourPackageDetail(Long tourPackageId);
+    TourPackageDetailDto getTourPackageDetail(Long tourPackageId, Member member);
 
     List<TourCommonRecommendDto> getRecentRecommendedTours(Member member);
 
