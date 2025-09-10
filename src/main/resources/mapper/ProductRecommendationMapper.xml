@@ -78,59 +78,147 @@
 
     <!-- 1. 예산 내 최적 상품 조회 -->
     <select id="findBestProductForBudget" resultMap="productMap">
-        WITH product_scores AS (
-            SELECT
-                p.PRODUCT_ID,
-                p.NAME,
-                p.BRAND_NAME,
-                pcs.NAME AS CATEGORY_NAME,
-                p.IMG_URL,
-                p.PRICE,
-                p.AVG_REVIEW,
-                p.CODE,
-                p.URL,
-                -- 다층 스코어링: 태그 매칭 + 기본 점수
-                -- 1. 태그 매칭 점수 (0~0.4)
-                LEAST(0.4,
-                      (SELECT COUNT(*) FROM PRODUCT_TAG pt
-                                                JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                       WHERE pt.PRODUCT_ID = p.PRODUCT_ID
-                         AND (
-                               (#{notes} LIKE '%RAIN%' AND ct.TAG_CODE = 'WEATHER_RAIN')
-                               OR (#{notes} LIKE '%HUMID%' AND ct.TAG_CODE = 'WEATHER_HUMID')
-                               OR (#{notes} LIKE '%WIND%' AND ct.TAG_CODE = 'WEATHER_WIND')
-                               OR (#{notes} LIKE '%SUN%' AND ct.TAG_CODE = 'WEATHER_SUN')
-                               OR (#{notes} LIKE '%COLD%' AND ct.TAG_CODE = 'WEATHER_COLD')
-                               OR (#{notes} LIKE '%HOT%' AND ct.TAG_CODE = 'WEATHER_HOT')
-                               OR (#{notes} LIKE '%SHOPPING%' AND ct.TAG_CODE = 'ACT_SHOPPING')
-                               OR (#{notes} LIKE '%TOURING%' AND ct.TAG_CODE = 'ACT_TOURING')
-                               OR (#{notes} LIKE '%SPORT%' AND ct.TAG_CODE = 'ACT_SPORT')
-                               OR (#{notes} LIKE '%BEACH%' AND ct.TAG_CODE = 'ACT_BEACH')
-                               OR (#{notes} LIKE '%HIKING%' AND ct.TAG_CODE = 'ACT_HIKING')
-                           )) * 0.1
-                    )
-                    -- 2. 리뷰 점수 (0~0.3)
-                    + CASE
-                          WHEN p.AVG_REVIEW IS NULL THEN 0.15
-                          ELSE (p.AVG_REVIEW / 5.0) * 0.3
-                    END
-                    -- 3. 가격 경쟁력 (0~0.2)
-                    + CASE
-                          WHEN p.PRICE &lt;= 30000 THEN 0.2
-                          WHEN p.PRICE &lt;= 50000 THEN 0.15
-                          WHEN p.PRICE &lt;= 100000 THEN 0.1
-                          ELSE 0.05
-                    END
-                    -- 4. 기본 점수 (태그가 없어도 최소 점수 보장)
-                    + 0.1 AS MATCH_SCORE
-            FROM PRODUCT p
-                     JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
-            WHERE p.CATEGORY_ID = #{categoryId}
-              AND p.PRICE &lt;= #{maxPrice}
-              AND (p.GENDER = #{gender} OR p.GENDER = 'U')
-        )
-        SELECT * FROM product_scores
-        ORDER BY MATCH_SCORE DESC, AVG_REVIEW DESC NULLS LAST, PRICE ASC
+        WITH user_preference AS (
+            SELECT *
+            FROM PREFERENCE
+            WHERE MEMBER_ID = #{memberId, jdbcType=NUMERIC}
+                FETCH FIRST 1 ROWS ONLY
+        ),
+             base AS (
+                 SELECT
+                     p.PRODUCT_ID,
+                     p.NAME,
+                     p.BRAND_NAME,
+                     pcs.NAME AS CATEGORY_NAME,
+                     p.IMG_URL,
+                     p.PRICE,
+                     p.AVG_REVIEW,
+                     p.CODE,
+                     p.URL,
+                     pcs.PRODUCT_CATEGORY_MAIN_ID,
+                     /* ===== 기존 스코어: base_score ===== */
+                     (
+                         /* 1) 태그 매칭(날씨/활동) 0~0.4 */
+                         LEAST(
+                                 0.4,
+                                 (
+                                     SELECT COUNT(*)
+                                     FROM PRODUCT_TAG pt
+                                              JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                     WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                                       AND (
+                                         (#{notes, jdbcType=VARCHAR} LIKE '%RAIN%'   AND ct.TAG_CODE = 'WEATHER_RAIN')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%HUMID%'  AND ct.TAG_CODE = 'WEATHER_HUMID')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%WIND%'   AND ct.TAG_CODE = 'WEATHER_WIND')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%SUN%'    AND ct.TAG_CODE = 'WEATHER_SUN')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%COLD%'   AND ct.TAG_CODE = 'WEATHER_COLD')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%HOT%'    AND ct.TAG_CODE = 'WEATHER_HOT')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%SHOPPING%' AND ct.TAG_CODE = 'ACT_SHOPPING')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%TOURING%'  AND ct.TAG_CODE = 'ACT_TOURING')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%SPORT%'    AND ct.TAG_CODE = 'ACT_SPORT')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%BEACH%'    AND ct.TAG_CODE = 'ACT_BEACH')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%HIKING%'   AND ct.TAG_CODE = 'ACT_HIKING')
+                                         )
+                                 ) * 0.1
+                         )
+                             /* 2) 리뷰 0~0.3 */
+                             + CASE
+                                   WHEN p.AVG_REVIEW IS NULL THEN 0.15
+                                   ELSE (p.AVG_REVIEW / 5.0) * 0.3
+                             END
+                             /* 3) 가격 0~0.2 */
+                             + CASE
+                                   WHEN p.PRICE &lt;= 30000  THEN 0.2
+                                   WHEN p.PRICE &lt;= 50000  THEN 0.15
+                                   WHEN p.PRICE &lt;= 100000 THEN 0.1
+                                   ELSE 0.05
+                             END
+                             /* 4) 기본 0.1 */
+                             + 0.1
+                         ) AS base_score
+                 FROM PRODUCT p
+                          JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
+                 WHERE p.CATEGORY_ID = #{categoryId, jdbcType=NUMERIC}
+                   AND p.PRICE     &lt;= #{maxPrice, jdbcType=NUMERIC}
+                   AND (p.GENDER = #{gender, jdbcType=VARCHAR} OR p.GENDER = 'U')
+             ),
+             product_scores AS (
+                 SELECT
+                     b.*,
+                     /* ===== 취향 스코어: 전 상품/의류 조건 별로 분리 ===== */
+                     (
+                         /* (전 상품) 색상-명도 선호 */
+                         NVL((
+                                 SELECT LEAST(1, COUNT(*)) * 0.05
+                                 FROM PRODUCT_TAG pt
+                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                          JOIN user_preference up ON 1=1
+                                 WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                   AND (
+                                     (up.BRIGHTNESS &gt;= 50 AND ct.TAG_CODE IN ('COLOR_BRIGHT','COLOR_PASTEL'))
+                                         OR (up.BRIGHTNESS &lt;  50 AND ct.TAG_CODE IN ('COLOR_DARK','COLOR_NEUTRAL'))
+                                     )
+                             ), 0)
+                             +
+                             /* (전 상품) 채도/비비드 선호 → COLOR_VIVID 가점 */
+                         NVL((
+                                 SELECT LEAST(1, COUNT(*)) * 0.05
+                                 FROM PRODUCT_TAG pt
+                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                          JOIN user_preference up ON 1=1
+                                 WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                   AND NVL(up.BOLDNESS, 0) &gt;= 60
+                                   AND ct.TAG_CODE = 'COLOR_VIVID'
+                             ), 0)
+                             +
+                             /* (의류만) 스타일 선호 */
+                         NVL((
+                                 SELECT LEAST(1, COUNT(*)) * 0.10
+                                 FROM PRODUCT_TAG pt
+                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                          JOIN user_preference up ON 1=1
+                                 WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                   AND b.PRODUCT_CATEGORY_MAIN_ID = 8
+                                   AND (
+                                     ct.TAG_CODE = 'STYLE_' || up.FIRST_LOOK
+                                         OR ct.TAG_CODE = 'STYLE_' || up.SECOND_LOOK
+                                     )
+                             ), 0)
+                             +
+                             /* (의류만) 핏 선호: FIT_{SLIM|REGULAR|LOOSE|OVERSIZED} */
+                         NVL((
+                                 SELECT LEAST(1, COUNT(*)) * 0.05
+                                 FROM PRODUCT_TAG pt
+                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                          JOIN user_preference up ON 1=1
+                                 WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                   AND b.PRODUCT_CATEGORY_MAIN_ID = 8
+                                   AND up.FIT IS NOT NULL
+                                   AND ct.TAG_CODE = ('FIT_' || up.FIT)
+                             ), 0)
+                             +
+                             /* (전 상품) 브랜드 충성도 */
+                         NVL((
+                                 SELECT LEAST(1, COUNT(*)) * 0.05
+                                 FROM ORDER_ITEM oi
+                                          JOIN ORDERS o ON o.ORDER_ID = oi.ORDER_ID
+                                 WHERE o.MEMBER_ID = #{memberId, jdbcType=NUMERIC}
+                                   AND oi.PRODUCT_ID IN (
+                                     SELECT p2.PRODUCT_ID
+                                     FROM PRODUCT p2
+                                     WHERE p2.BRAND_NAME = b.BRAND_NAME
+                                 )
+                             ), 0)
+                         ) AS preference_score
+                 FROM base b
+             )
+        SELECT
+            PRODUCT_ID, NAME, BRAND_NAME, CATEGORY_NAME, IMG_URL, PRICE, AVG_REVIEW, CODE, URL,
+            base_score,
+            preference_score,
+            (base_score * 0.7) + (preference_score * 0.3) AS final_score
+        FROM product_scores
+        ORDER BY final_score DESC, AVG_REVIEW DESC NULLS LAST, PRICE ASC
             FETCH FIRST 1 ROW ONLY
     </select>
 
@@ -166,7 +254,7 @@
                     END
                     -- 4. 의류인 경우 사용자 취향 가중치
                     + CASE
-                          WHEN #{scheduleDate} IS NOT NULL AND #{memberId} IS NOT NULL THEN
+                          WHEN #{scheduleDate, jdbcType=NUMERIC} IS NOT NULL AND #{memberId} IS NOT NULL THEN
                               NVL((SELECT COUNT(*) * 0.05 FROM PRODUCT_TAG pt
                                                                    JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
                                                                    JOIN PREFERENCE pref ON pref.MEMBER_ID = #{memberId}
@@ -182,7 +270,8 @@
                      WHERE pt.PRODUCT_ID = p.PRODUCT_ID), '기본 추천') AS MATCHED_TAGS,
                 -- 추천 이유
                 CASE
-                    WHEN #{scheduleDate} IS NOT NULL THEN '일정 ' || #{scheduleDate} || '일차 추천'
+                    WHEN #{scheduleDate, jdbcType=NUMERIC} IS NOT NULL
+                        THEN '일정 ' || TO_CHAR(#{scheduleDate, jdbcType=NUMERIC}) || '일차 추천'
                     ELSE '여행 필수 아이템'
                     END ||
                 CASE
