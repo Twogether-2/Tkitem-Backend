@@ -10,6 +10,7 @@ import tkitem.backend.domain.tour.dto.TopMatchDto;
 import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 import tkitem.backend.domain.tour.dto.response.TourCommonRecommendDto;
+import tkitem.backend.domain.tour.dto.response.TourPackageDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.logic.KeywordRuleLoader;
 import tkitem.backend.domain.tour.mapper.TourMapper;
@@ -86,8 +87,8 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
             for (int i = 0; i < show; i++) {
                 TourRecommendationResponseDto r = base.get(i);
                 log.info("[DB-ONLY][{}] tourId={}, title='{}', price={}, dep={}, ret={}, pkgId={}, dbScore={}, finalScore={}",
-                        i, r.getTourId(), r.getTitle(), r.getPrice(), r.getDepartureDate(), r.getReturnDate(),
-                        r.getTourPackageId(), r.getDbScore(), r.getFinalScore());
+                        i, r.getTourId(), r.getTitle(), r.getPackageDtos().getFirst().getPrice(), r.getPackageDtos().getFirst().getDepartureDate(), r.getPackageDtos().getFirst().getReturnDate(),
+                        r.getPackageDtos().getFirst().getTourPackageId(), r.getDbScore(), r.getFinalScore());
             }
             if (show == 0) log.info("[DB-ONLY] no candidates.");
         }
@@ -115,11 +116,29 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
             }
         }
 
-        // 4. 최종 점수별 정렬
-        base.sort(Comparator
-                .comparing(TourRecommendationResponseDto::getFinalScore).reversed()
-                .thenComparing(TourRecommendationResponseDto::getPrice, Comparator.nullsLast(Long::compareTo))
-                .thenComparing(TourRecommendationResponseDto::getDepartureDate, Comparator.nullsLast(Date::compareTo)));
+        // ADDED: 유틸 Comparator
+        Comparator<TourRecommendationResponseDto> byFinalDesc = Comparator.comparing(
+                TourRecommendationResponseDto::getFinalScore,
+                Comparator.nullsFirst(Double::compareTo)    // null 점수는 가장 뒤로
+        ).reversed();
+
+        Comparator<TourRecommendationResponseDto> byRepPriceAsc = Comparator.comparing(
+                r -> minPrice(r.getPackageDtos()),
+                Comparator.nullsLast(Long::compareTo)       // 가격 없는 경우 뒤로
+        );
+
+        Comparator<TourRecommendationResponseDto> byRepDepartureAsc = Comparator.comparing(
+                r -> earliestDeparture(r.getPackageDtos()),
+                Comparator.nullsLast(Date::compareTo)       // 날짜 없는 경우 뒤로
+        );
+
+// CHANGED: 정렬 기준 교체
+        base.sort(
+                byFinalDesc
+                        .thenComparing(byRepPriceAsc)
+                        .thenComparing(byRepDepartureAsc)
+                        .thenComparing(TourRecommendationResponseDto::getTourId, Comparator.nullsLast(Long::compareTo)) // 안정적 tie-break
+        );
 
         // 추천 결과 저장
         List<TourRecommendationResponseDto> dtos =
@@ -135,5 +154,23 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
         tourRecommendService.saveShownRecommendations(req.getGroupId(), dtos, member);
 
         return dtos;
+    }
+
+    private static Long minPrice(List<TourPackageDto> pkgs) {
+        if (pkgs == null || pkgs.isEmpty()) return null;
+        return pkgs.stream()
+                .map(TourPackageDto::getPrice)
+                .filter(Objects::nonNull)
+                .min(Long::compareTo)
+                .orElse(null);
+    }
+
+    private static Date earliestDeparture(List<TourPackageDto> pkgs) {
+        if (pkgs == null || pkgs.isEmpty()) return null;
+        return pkgs.stream()
+                .map(TourPackageDto::getDepartureDate)
+                .filter(Objects::nonNull)
+                .min(Date::compareTo)
+                .orElse(null);
     }
 }
