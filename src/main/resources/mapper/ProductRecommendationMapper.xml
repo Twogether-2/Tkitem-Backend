@@ -3,265 +3,462 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="tkitem.backend.domain.product_recommendation.mapper.ProductRecommendationMapper">
 
-    <!-- 체크리스트 아이템 조회: tripId 검증 포함 -->
-    <select id="selectChecklistItemsByIds" resultType="tkitem.backend.domain.product_recommendation.dto.ChecklistItemDto">
-        WITH sel(id) AS (
-        <foreach collection="ids" item="x" separator=" UNION ALL ">
-            SELECT CAST(#{x} AS NUMBER) FROM dual
+    <!-- Result Maps -->
+    <resultMap id="checklistItemMap" type="tkitem.backend.domain.product_recommendation.vo.ChecklistItem">
+        <id property="checklistItemId" column="CHECKLIST_ITEM_ID"/>
+        <result property="tripId" column="TRIP_ID"/>
+        <result property="productCategorySubId" column="PRODUCT_CATEGORY_SUB_ID"/>
+        <result property="itemName" column="ITEM_NAME"/>
+        <result property="scheduleDate" column="SCHEDULE_DATE"/>
+        <result property="score" column="SCORE"/>
+        <result property="tier" column="TIER"/>
+        <result property="notes" column="NOTES"/>
+    </resultMap>
+
+    <resultMap id="productMap" type="tkitem.backend.domain.product_recommendation.vo.Product">
+        <id property="productId" column="PRODUCT_ID"/>
+        <result property="name" column="NAME"/>
+        <result property="brandName" column="BRAND_NAME"/>
+        <result property="categoryName" column="CATEGORY_NAME"/>
+        <result property="url" column="URL"/>
+        <result property="code" column="CODE"/>
+        <result property="imgUrl" column="IMG_URL"/>
+        <result property="price" column="PRICE"/>
+        <result property="avgReview" column="AVG_REVIEW"/>
+    </resultMap>
+
+    <resultMap id="preferenceMap" type="tkitem.backend.domain.product_recommendation.vo.Preference">
+        <id property="preferenceId" column="PREFERENCE_ID"/>
+        <result property="memberId" column="MEMBER_ID"/>
+        <result property="brightness" column="BRIGHTNESS"/>
+        <result property="boldness" column="BOLDNESS"/>
+        <result property="fit" column="FIT"/>
+        <result property="color" column="COLOR"/>
+        <result property="firstLook" column="FIRST_LOOK"/>
+        <result property="secondLook" column="SECOND_LOOK"/>
+    </resultMap>
+
+    <!-- 체크리스트 아이템 조회 -->
+    <select id="findChecklistItemsByIds" resultMap="checklistItemMap">
+        SELECT * FROM CHECKLIST_ITEM
+        WHERE CHECKLIST_ITEM_ID IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
         </foreach>
-        )
-        SELECT ci.checklist_item_id       AS checklistItemId,
-        ci.product_category_sub_id AS productCategorySubId,
-        ci.item_name               AS itemName,
-        ci.schedule_date           AS scheduleDate,
-        ci.score                   AS score,
-        ci.tier                    AS tier,
-        ci.notes                   AS notes
-        FROM CHECKLIST_ITEM ci
-        JOIN sel s ON s.id = ci.checklist_item_id
-        WHERE ci.is_deleted = 'F'
-        AND ci.trip_id = #{tripId}
+        AND IS_DELETED = 'F'
     </select>
 
-    <!-- 태그 기반 후보 (상위 N) -->
-    <select id="selectCandidatesForItem"
-            resultType="tkitem.backend.domain.product_recommendation.dto.CandidateProductDto">
-        WITH ctx AS (
-        SELECT ct.tag_code
-        FROM COMMON_TAG ct
-        WHERE ct.tag_code IN
-        <foreach collection="ctxTagCodes" item="c" open="(" separator="," close=")">
-            #{c}
-        </foreach>
+    <select id="findChecklistItemById" resultMap="checklistItemMap">
+        SELECT * FROM CHECKLIST_ITEM
+        WHERE CHECKLIST_ITEM_ID = #{id}
+          AND IS_DELETED = 'F'
+    </select>
+
+    <!-- 여행 정보 조회 -->
+    <select id="findTripById" resultType="tkitem.backend.domain.product_recommendation.vo.Trip">
+        SELECT * FROM TRIP WHERE TRIP_ID = #{id}
+    </select>
+
+    <select id="findUpcomingTrip" resultType="tkitem.backend.domain.product_recommendation.vo.Trip">
+        SELECT * FROM TRIP
+        WHERE MEMBER_ID = #{memberId}
+          AND DEPARTURE_DATE > SYSDATE
+        ORDER BY DEPARTURE_DATE ASC
+            FETCH FIRST 1 ROW ONLY
+    </select>
+
+    <!-- 사용자 취향 조회 -->
+    <select id="findPreferenceByMemberId" resultMap="preferenceMap">
+        SELECT * FROM PREFERENCE WHERE MEMBER_ID = #{memberId}
+        ORDER BY CREATED_AT DESC
+        FETCH FIRST 1 ROW ONLY
+    </select>
+
+    <!-- ======================== 추천 쿼리 ======================== -->
+
+    <!-- 1. 예산 내 최적 상품 조회 -->
+    <select id="findBestProductForBudget" resultMap="productMap">
+        WITH user_preference AS (
+            SELECT *
+            FROM PREFERENCE
+            WHERE MEMBER_ID = #{memberId, jdbcType=NUMERIC}
+                FETCH FIRST 1 ROWS ONLY
         ),
-        cand AS (
+             base AS (
+                 SELECT
+                     p.PRODUCT_ID,
+                     p.NAME,
+                     p.BRAND_NAME,
+                     pcs.NAME AS CATEGORY_NAME,
+                     p.IMG_URL,
+                     p.PRICE,
+                     p.AVG_REVIEW,
+                     p.CODE,
+                     p.URL,
+                     pcs.PRODUCT_CATEGORY_MAIN_ID,
+                     /* ===== 기존 스코어: base_score ===== */
+                     (
+                         /* 1) 태그 매칭(날씨/활동) 0~0.4 */
+                         LEAST(
+                                 0.4,
+                                 (
+                                     SELECT COUNT(*)
+                                     FROM PRODUCT_TAG pt
+                                              JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                     WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                                       AND (
+                                         (#{notes, jdbcType=VARCHAR} LIKE '%RAIN%'   AND ct.TAG_CODE = 'WEATHER_RAIN')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%HUMID%'  AND ct.TAG_CODE = 'WEATHER_HUMID')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%WIND%'   AND ct.TAG_CODE = 'WEATHER_WIND')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%SUN%'    AND ct.TAG_CODE = 'WEATHER_SUN')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%COLD%'   AND ct.TAG_CODE = 'WEATHER_COLD')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%HOT%'    AND ct.TAG_CODE = 'WEATHER_HOT')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%SHOPPING%' AND ct.TAG_CODE = 'ACT_SHOPPING')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%TOURING%'  AND ct.TAG_CODE = 'ACT_TOURING')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%SPORT%'    AND ct.TAG_CODE = 'ACT_SPORT')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%BEACH%'    AND ct.TAG_CODE = 'ACT_BEACH')
+                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%HIKING%'   AND ct.TAG_CODE = 'ACT_HIKING')
+                                         )
+                                 ) * 0.1
+                         )
+                             /* 2) 리뷰 0~0.3 */
+                             + CASE
+                                   WHEN p.AVG_REVIEW IS NULL THEN 0.15
+                                   ELSE (p.AVG_REVIEW / 5.0) * 0.3
+                             END
+                             /* 3) 가격 0~0.2 */
+                             + CASE
+                                   WHEN p.PRICE &lt;= 30000  THEN 0.2
+                                   WHEN p.PRICE &lt;= 50000  THEN 0.15
+                                   WHEN p.PRICE &lt;= 100000 THEN 0.1
+                                   ELSE 0.05
+                             END
+                             /* 4) 기본 0.1 */
+                             + 0.1
+                         ) AS base_score
+                 FROM PRODUCT p
+                          JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
+                 WHERE p.CATEGORY_ID = #{categoryId, jdbcType=NUMERIC}
+                   AND p.PRICE     &lt;= #{maxPrice, jdbcType=NUMERIC}
+                   AND (p.GENDER = #{gender, jdbcType=VARCHAR} OR p.GENDER = 'U')
+             ),
+             product_scores AS (
+                 SELECT
+                     b.*,
+                     /* ===== 취향 스코어: 전 상품/의류 조건 별로 분리 ===== */
+                     (
+                         /* (전 상품) 색상-명도 선호 */
+                         NVL((
+                                 SELECT LEAST(1, COUNT(*)) * 0.05
+                                 FROM PRODUCT_TAG pt
+                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                          JOIN user_preference up ON 1=1
+                                 WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                   AND (
+                                     (up.BRIGHTNESS &gt;= 50 AND ct.TAG_CODE IN ('COLOR_BRIGHT','COLOR_PASTEL'))
+                                         OR (up.BRIGHTNESS &lt;  50 AND ct.TAG_CODE IN ('COLOR_DARK','COLOR_NEUTRAL'))
+                                     )
+                             ), 0)
+                             +
+                             /* (전 상품) 채도/비비드 선호 → COLOR_VIVID 가점 */
+                         NVL((
+                                 SELECT LEAST(1, COUNT(*)) * 0.05
+                                 FROM PRODUCT_TAG pt
+                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                          JOIN user_preference up ON 1=1
+                                 WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                   AND NVL(up.BOLDNESS, 0) &gt;= 60
+                                   AND ct.TAG_CODE = 'COLOR_VIVID'
+                             ), 0)
+                             +
+                             /* (의류만) 스타일 선호 */
+                         NVL((
+                                 SELECT LEAST(1, COUNT(*)) * 0.10
+                                 FROM PRODUCT_TAG pt
+                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                          JOIN user_preference up ON 1=1
+                                 WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                   AND b.PRODUCT_CATEGORY_MAIN_ID = 8
+                                   AND (
+                                     ct.TAG_CODE = 'STYLE_' || up.FIRST_LOOK
+                                         OR ct.TAG_CODE = 'STYLE_' || up.SECOND_LOOK
+                                     )
+                             ), 0)
+                             +
+                             /* (의류만) 핏 선호: FIT_{SLIM|REGULAR|LOOSE|OVERSIZED} */
+                         NVL((
+                                 SELECT LEAST(1, COUNT(*)) * 0.05
+                                 FROM PRODUCT_TAG pt
+                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                          JOIN user_preference up ON 1=1
+                                 WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                   AND b.PRODUCT_CATEGORY_MAIN_ID = 8
+                                   AND up.FIT IS NOT NULL
+                                   AND ct.TAG_CODE = ('FIT_' || up.FIT)
+                             ), 0)
+                             +
+                             /* (전 상품) 브랜드 충성도 */
+                         NVL((
+                                 SELECT LEAST(1, COUNT(*)) * 0.05
+                                 FROM ORDER_ITEM oi
+                                          JOIN ORDERS o ON o.ORDER_ID = oi.ORDER_ID
+                                 WHERE o.MEMBER_ID = #{memberId, jdbcType=NUMERIC}
+                                   AND oi.PRODUCT_ID IN (
+                                     SELECT p2.PRODUCT_ID
+                                     FROM PRODUCT p2
+                                     WHERE p2.BRAND_NAME = b.BRAND_NAME
+                                 )
+                             ), 0)
+                         ) AS preference_score
+                 FROM base b
+             )
         SELECT
-        p.product_id AS productId,
-        p.name       AS name,
-        p.brand_name AS brandName,       -- 추가
-        pcs.name     AS category,        -- 추가 (서브 카테고리명)
-        p.img_url    AS imgUrl,          -- 추가
-        p.price      AS price,
-        p.avg_review AS avgReview,
-        SUM(
-        CASE WHEN ct.tag_code IN (SELECT tag_code FROM ctx)
-        THEN pt.weight * CASE WHEN pt.source = 'MANUAL' THEN 1.1 ELSE 1.0 END
-        ELSE 0
-        END
-        ) AS tagScore,
-        LISTAGG(CASE WHEN ct.tag_code IN (SELECT tag_code FROM ctx) THEN ct.tag_code END, ',')
-        WITHIN GROUP (ORDER BY ct.tag_code) AS matchedTags
-        FROM PRODUCT p
-        JOIN PRODUCT_TAG pt   ON pt.product_id = p.product_id
-        JOIN COMMON_TAG  ct   ON ct.common_tag_id = pt.common_tag_id
-        JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.product_category_sub_id = p.category_id   -- 추가
-        WHERE p.category_id = #{productCategorySubId}
-        AND p.price IS NOT NULL
-        GROUP BY
-        p.product_id, p.name, p.brand_name, pcs.name, p.img_url, p.price, p.avg_review   -- 추가된 컬럼 포함
-        )
-        SELECT productId, name, brandName, category, imgUrl, price, avgReview,
-        NVL(tagScore,0) AS tagScore, matchedTags
-        FROM cand
-        WHERE NVL(tagScore,0) > 0
-        ORDER BY tagScore DESC, NVL(avgReview,0) DESC, price ASC, name
-        FETCH FIRST #{limit} ROWS ONLY
+            PRODUCT_ID, NAME, BRAND_NAME, CATEGORY_NAME, IMG_URL, PRICE, AVG_REVIEW, CODE, URL,
+            base_score,
+            preference_score,
+            (base_score * 0.7) + (preference_score * 0.3) AS final_score
+        FROM product_scores
+        ORDER BY final_score DESC, AVG_REVIEW DESC NULLS LAST, PRICE ASC
+            FETCH FIRST 1 ROW ONLY
     </select>
 
-    <!-- 태그가 없거나 매칭 0일 때 인기/평점 후보 -->
-    <select id="selectPopularCandidatesFallback"
-            resultType="tkitem.backend.domain.product_recommendation.dto.CandidateProductDto">
-        SELECT
-            p.product_id AS productId,
-            p.name       AS name,
-            p.brand_name AS brandName,       -- 추가
-            pcs.name     AS category,        -- 추가
-            p.img_url    AS imgUrl,          -- 추가
-            p.price      AS price,
-            p.avg_review AS avgReview,
-            0            AS tagScore,
-            NULL         AS matchedTags
-        FROM PRODUCT p
-                 JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.product_category_sub_id = p.category_id   -- 추가
-        WHERE p.category_id = #{productCategorySubId}
-          AND p.price IS NOT NULL
-        ORDER BY NVL(p.avg_review,0) DESC, p.price ASC, p.name
+    <!-- 2. 상품 후보군 조회 -->
+    <select id="findProductCandidates" resultType="tkitem.backend.domain.product_recommendation.vo.ProductWithScore">
+        WITH product_matches AS (
+            SELECT
+                p.PRODUCT_ID,
+                p.NAME,
+                p.BRAND_NAME,
+                pcs.NAME AS CATEGORY_NAME,
+                p.CODE,
+                p.URL,
+                p.IMG_URL,
+                p.PRICE,
+                p.AVG_REVIEW,
+                -- 다층 매칭 점수
+                -- 1. 태그 매칭 (0~0.5)
+                LEAST(0.5,
+                      (SELECT COUNT(*) FROM PRODUCT_TAG pt
+                                                JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                       WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                         AND (
+                           (#{notes} LIKE '%' || SUBSTR(ct.TAG_CODE, INSTR(ct.TAG_CODE, '_') + 1) || '%')
+                           )) * 0.15
+                    )
+                    -- 2. 카테고리 자체 매칭 보너스 (0.2)
+                    + 0.2
+                    -- 3. 리뷰 점수 (0~0.2)
+                    + CASE
+                          WHEN p.AVG_REVIEW IS NULL THEN 0.1
+                          ELSE (p.AVG_REVIEW / 5.0) * 0.2
+                    END
+                    -- 4. 의류인 경우 사용자 취향 가중치
+                    + CASE
+                          WHEN #{scheduleDate, jdbcType=NUMERIC} IS NOT NULL AND #{memberId} IS NOT NULL THEN
+                              NVL((SELECT COUNT(*) * 0.05 FROM PRODUCT_TAG pt
+                                                                   JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                                                   JOIN PREFERENCE pref ON pref.MEMBER_ID = #{memberId}
+                                   WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                                     AND (ct.TAG_CODE = 'STYLE_' || pref.FIRST_LOOK
+                                       OR ct.TAG_CODE = 'STYLE_' || pref.SECOND_LOOK)), 0)
+                          ELSE 0
+                    END AS MATCH_SCORE,
+                -- 매칭된 태그들
+                NVL((SELECT LISTAGG(ct.LABEL, ',') WITHIN GROUP (ORDER BY ct.LABEL)
+                     FROM PRODUCT_TAG pt
+                              JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                     WHERE pt.PRODUCT_ID = p.PRODUCT_ID), '기본 추천') AS MATCHED_TAGS,
+                -- 추천 이유
+                CASE
+                    WHEN #{scheduleDate, jdbcType=NUMERIC} IS NOT NULL
+                        THEN '일정 ' || TO_CHAR(#{scheduleDate, jdbcType=NUMERIC}) || '일차 추천'
+                    ELSE '여행 필수 아이템'
+                    END ||
+                CASE
+                    WHEN p.AVG_REVIEW >= 4.5 THEN ' (베스트셀러)'
+                    WHEN p.AVG_REVIEW >= 4.0 THEN ' (인기상품)'
+                    ELSE ''
+                    END AS RECOMMEND_REASON
+            FROM PRODUCT p
+                     JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
+            WHERE p.CATEGORY_ID = #{categoryId}
+                AND (p.GENDER = #{gender} OR p.GENDER = 'U')
+        )
+        SELECT * FROM product_matches
+        WHERE MATCH_SCORE > 0
+        ORDER BY MATCH_SCORE DESC, AVG_REVIEW DESC NULLS LAST
             FETCH FIRST #{limit} ROWS ONLY
     </select>
 
-    <!-- =========================================================
-         1) 최근 본 상품(앵커)과 연관상품
-         - 태그 교집합 가중치 + 동일 서브카테고리 + 브랜드 보너스
-         ========================================================= -->
-    <select id="selectRelatedToProduct"
-            resultType="tkitem.backend.domain.product_recommendation.dto.response.ProductResponse">
-        WITH anchor AS (
-            SELECT p.product_id, p.category_id, p.brand_name
+    <!-- 3. 연관 상품 조회 -->
+    <select id="findRelatedProducts" resultType="tkitem.backend.domain.product_recommendation.vo.ProductWithSimilarity">
+        WITH base_product AS (
+            SELECT p.*, pcs.NAME AS CATEGORY_NAME
             FROM PRODUCT p
-            WHERE p.product_id = #{productId}
+                     JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
+            WHERE p.PRODUCT_ID = #{productId}
         ),
-             anchor_tags AS (
-                 SELECT pt.common_tag_id
+             base_tags AS (
+                 SELECT pt.COMMON_TAG_ID
                  FROM PRODUCT_TAG pt
-                 WHERE pt.product_id = #{productId}
+                 WHERE pt.PRODUCT_ID = #{productId}
              ),
-             scored AS (
+             similar_products AS (
                  SELECT
-                     p.product_id    AS productId,
-                     p.name          AS name,
-                     p.brand_name    AS brandName,
-                     pcs.name        AS category,
-                     p.img_url       AS imgUrl,
-                     p.price         AS price,
-                     /* 점수 계산(매핑에는 사용 안 해도 무방) */
-                     ( NVL(SUM(CASE WHEN pt.common_tag_id IN (SELECT common_tag_id FROM anchor_tags) THEN 1 ELSE 0 END),0) * 2
-                         + CASE WHEN p.category_id = (SELECT category_id FROM anchor) THEN 1 ELSE 0 END
-                         + CASE WHEN p.brand_name = (SELECT brand_name FROM anchor) THEN 0.5 ELSE 0 END
-                         ) AS score
+                     p.PRODUCT_ID,
+                     p.NAME,
+                     p.BRAND_NAME,
+                     pcs.NAME AS CATEGORY_NAME,
+                     p.CODE,
+                     p.URL,
+                     p.IMG_URL,
+                     p.PRICE,
+                     p.AVG_REVIEW,
+                     bp.NAME AS BASE_NAME,
+                     -- 태그 유사도 계산 (Jaccard similarity)
+                     CASE
+                         WHEN (SELECT COUNT(*) FROM base_tags) = 0 THEN 0.3
+                         ELSE NVL(COUNT(DISTINCT pt.COMMON_TAG_ID) * 1.0 /
+                                  NULLIF((SELECT COUNT(*) + COUNT(DISTINCT pt2.COMMON_TAG_ID)
+                                          FROM base_tags bt
+                                                   LEFT JOIN PRODUCT_TAG pt2 ON pt2.PRODUCT_ID = p.PRODUCT_ID), 0), 0.3)
+                         END AS SIMILARITY
                  FROM PRODUCT p
-                          LEFT JOIN PRODUCT_TAG pt ON pt.product_id = p.product_id
-                          LEFT JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.product_category_sub_id = p.category_id
-                 WHERE p.product_id &lt;&gt; #{productId}
-                 GROUP BY p.product_id, p.name, p.brand_name, pcs.name, p.img_url, p.price, p.category_id
-             ),
-             ordered AS (
-                 SELECT *
-                 FROM scored
-                 ORDER BY score DESC NULLS LAST, /* 선호 태그 우선 */
-                          name ASC
+                          JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
+                          CROSS JOIN base_product bp
+                          LEFT JOIN PRODUCT_TAG pt ON pt.PRODUCT_ID = p.PRODUCT_ID
+                     AND pt.COMMON_TAG_ID IN (SELECT COMMON_TAG_ID FROM base_tags)
+                 WHERE p.CATEGORY_ID = bp.CATEGORY_ID
+                   AND p.PRODUCT_ID != #{productId}
+                   AND (p.GENDER = #{gender} OR p.GENDER = 'U')
+                 GROUP BY p.PRODUCT_ID, p.NAME, p.BRAND_NAME, pcs.NAME, p.CODE, p.URL,
+                          p.IMG_URL, p.PRICE, p.AVG_REVIEW, bp.NAME
              )
-        SELECT *
-        FROM ordered
-        WHERE ROWNUM &lt;= #{limit}
+        SELECT * FROM similar_products
+        ORDER BY SIMILARITY DESC, AVG_REVIEW DESC NULLS LAST
+            FETCH FIRST #{limit} ROWS ONLY
     </select>
 
-    <!-- =========================================================
-         2) 사용자의 가장 가까운 Trip 도시에서 인기 아이템
-         - 다가오는 일정이 있으면 그 도시, 없으면 최근 과거 일정 1건
-         - 도시 기준 최근 180일 구매 TOP
-         ========================================================= -->
-    <select id="selectPopularForNearestTrip"
-            resultType="tkitem.backend.domain.product_recommendation.dto.response.ProductResponse">
-        <!-- 1) 내 여행 중 '가장 가까운' 한 건 선택: 다가오는 일정 우선, 없으면 가장 최근 과거 -->
-        WITH upcoming AS (
-        SELECT t.trip_id, t.departure_date
-        FROM TRIP t
-        WHERE t.member_id = #{memberId}
-        AND t.departure_date >= TRUNC(SYSDATE)
-        ORDER BY t.departure_date ASC
-        FETCH FIRST 1 ROWS ONLY
+    <!-- 4. 다가오는 여행 상품 추천 -->
+    <select id="findUpcomingTripProducts" resultType="tkitem.backend.domain.product_recommendation.vo.ProductForTrip">
+        WITH important_items AS (
+            SELECT
+                ci.CHECKLIST_ITEM_ID,
+                ci.PRODUCT_CATEGORY_SUB_ID,
+                ci.ITEM_NAME,
+                ci.SCORE AS ITEM_SCORE,
+                ci.TIER,
+                ci.NOTES,
+                ROW_NUMBER() OVER (ORDER BY ci.SCORE DESC) AS RN
+            FROM CHECKLIST_ITEM ci
+            WHERE ci.TRIP_ID = #{tripId}
+              AND ci.IS_DELETED = 'F'
+              AND ci.SCORE >= #{minScore}
         ),
-        past AS (
-        SELECT t.trip_id, t.departure_date
-        FROM TRIP t
-        WHERE t.member_id = #{memberId}
-        AND t.departure_date &lt; TRUNC(SYSDATE)
-        ORDER BY t.departure_date DESC
-        FETCH FIRST 1 ROWS ONLY
-        ),
-        picked_trip AS (
-        SELECT * FROM upcoming
-        UNION ALL
-        SELECT * FROM past WHERE NOT EXISTS (SELECT 1 FROM upcoming)
-        ),
-        /* 2) 그 여행이 방문하는 모든 도시 목록 */
-        picked_cities AS (
-        SELECT tc.city_id
-        FROM TRIP_CITY tc
-        WHERE tc.trip_id = (SELECT trip_id FROM picked_trip)
-        ),
-        ranked AS (
-        SELECT
-        p.product_id AS productId,
-        p.name       AS name,
-        p.brand_name AS brandName,
-        pcs.name     AS category,
-        p.img_url    AS imgUrl,
-        p.price      AS price,
-        COUNT(*)     AS popularity
-        FROM ORDER_ITEM oi
-        JOIN ORDERS o  ON o.order_id = oi.order_id
-        JOIN PRODUCT p ON p.product_id = oi.product_id
-        LEFT JOIN PRODUCT_CATEGORY_SUB pcs
-        ON pcs.product_category_sub_id = p.category_id
-        JOIN TRIP t_other ON t_other.trip_id = oi.trip_id
-        /* 3) 다른 사람들의 '동일 목적지(들)'에 해당하는 주문만 카운트
-        - TRIP_CITY로 도시 연결, 중복 방지를 위해 EXISTS 사용 */
-        WHERE o.status IN ('PAYMENT_COMPLETED','DELIVERY_COMPLETED')
-        AND oi.created_at >= SYSTIMESTAMP - INTERVAL '99' DAY
-        AND EXISTS (
-        SELECT 1
-        FROM TRIP_CITY tc2
-        WHERE tc2.trip_id = t_other.trip_id
-        AND tc2.city_id IN (SELECT city_id FROM picked_cities)
-        )
-        GROUP BY p.product_id, p.name, p.brand_name, pcs.name, p.img_url, p.price
-        ORDER BY popularity DESC, name ASC
-        )
-        SELECT *
-        FROM ranked
-        WHERE ROWNUM &lt;= #{limit}
-    </select>
-
-    <!-- =========================================================
-         3) 사용자의 선호 취향(태그/브랜드) 기반 의류 추천
-         - 내 과거 주문에서 많이 나온 태그/브랜드 가중치 + 의류 필터
-         - 히스토리 없으면 글로벌 인기/평점으로 폴백
-         ========================================================= -->
-    <select id="selectPersonalClothingForMember"
-            resultType="tkitem.backend.domain.product_recommendation.dto.response.ProductResponse">
-        WITH my_tags AS (
-            SELECT pt.common_tag_id, COUNT(*) AS w
-            FROM ORDERS o
-                     JOIN ORDER_ITEM oi ON oi.order_id = o.order_id
-                     JOIN PRODUCT_TAG pt ON pt.product_id = oi.product_id
-            WHERE o.member_id = #{memberId}
-            GROUP BY pt.common_tag_id
-        ),
-             fav_brands AS (
-                 SELECT p.brand_name, COUNT(*) AS w
-                 FROM ORDERS o
-                          JOIN ORDER_ITEM oi ON oi.order_id = o.order_id
-                          JOIN PRODUCT p ON p.product_id = oi.product_id
-                 WHERE o.member_id = #{memberId}
-                 GROUP BY p.brand_name
-                 ORDER BY w DESC
-                     FETCH FIRST 5 ROWS ONLY
-             ),
-             apparel_subs AS (
-                 SELECT pcs.product_category_sub_id
-                 FROM PRODUCT_CATEGORY_SUB pcs
-                    JOIN PRODUCT_CATEGORY_MAIN pc ON pc.PRODUCT_CATEGORY_MAIN_ID = pcs.PRODUCT_CATEGORY_MAIN_ID
-                 WHERE pc.name = '의류'
-             ),
-             scored AS (
+             recommended_products AS (
                  SELECT
-                     p.product_id AS productId,
-                     p.name       AS name,
-                     p.brand_name AS brandName,
-                     pcs.name     AS category,
-                     p.img_url    AS imgUrl,
-                     p.price      AS price,
-                     ( NVL(SUM(mt.w),0)                          /* 내 태그 가중치 합 */
-                         + CASE WHEN p.brand_name IN (SELECT fb.brand_name FROM fav_brands fb) THEN 5 ELSE 0 END
-                         + NVL(p.avg_review, 0) * 0.1             /* 약한 평점 가점(선택) */
-                         ) AS score
-                 FROM PRODUCT p
-                          LEFT JOIN PRODUCT_TAG pt ON pt.product_id = p.product_id
-                          LEFT JOIN my_tags mt ON mt.common_tag_id = pt.common_tag_id
-                          LEFT JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.product_category_sub_id = p.category_id
-                 WHERE EXISTS (SELECT 1 FROM apparel_subs a WHERE a.product_category_sub_id = p.category_id)
-                   AND p.price IS NOT NULL
-                 GROUP BY p.product_id, p.name, p.brand_name, pcs.name, p.img_url, p.price, p.avg_review
-             ),
-             ordered AS (
-                 SELECT *
-                 FROM scored
-                 ORDER BY score DESC NULLS LAST, name ASC
+                     p.PRODUCT_ID,
+                     p.NAME,
+                     p.BRAND_NAME,
+                     pcs.NAME AS CATEGORY_NAME,
+                     p.URL,
+                     p.IMG_URL,
+                     p.PRICE,
+                     p.AVG_REVIEW,
+                     ii.ITEM_SCORE,
+                     ii.TIER,
+                     ROW_NUMBER() OVER (PARTITION BY ii.CHECKLIST_ITEM_ID ORDER BY p.AVG_REVIEW DESC NULLS LAST) AS PROD_RN
+                 FROM important_items ii
+                          JOIN PRODUCT p ON p.CATEGORY_ID = ii.PRODUCT_CATEGORY_SUB_ID
+                          JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
+                 WHERE ii.RN &lt;= 10
+                   AND (p.GENDER = #{gender} OR p.GENDER = 'U')
              )
-        SELECT *
-        FROM ordered
-        WHERE ROWNUM &lt;= #{limit}
+        SELECT * FROM recommended_products
+        WHERE PROD_RN &lt;= 2
+          AND ROWNUM &lt;= #{limit}
+        ORDER BY ITEM_SCORE DESC, AVG_REVIEW DESC NULLS LAST
     </select>
 
+    <!-- 5. 패션 취향 기반 상품 추천 -->
+    <select id="findFashionByPreference" resultType="tkitem.backend.domain.product_recommendation.vo.FashionProduct">
+        WITH fashion_scores AS (
+            SELECT
+                p.PRODUCT_ID,
+                p.NAME,
+                p.BRAND_NAME,
+                pcs.NAME AS CATEGORY_NAME,
+                p.CODE,
+                p.URL,
+                p.IMG_URL,
+                p.PRICE,
+                p.AVG_REVIEW,
+                -- 취향 매칭 점수 (여러 요소 결합)
+                -- 1. 스타일 매칭 (0~0.4)
+                LEAST(0.4,
+                      NVL((SELECT COUNT(*) FROM PRODUCT_TAG pt
+                                                    JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                           WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                             AND (
+                                   (ct.TAG_CODE = 'STYLE_' || #{firstLook})
+                                   OR (#{secondLook} IS NOT NULL AND ct.TAG_CODE = 'STYLE_' || #{secondLook})
+                               )), 0) * 0.2
+                    )
+                    -- 2. 색상 취향 매칭 (0~0.2)
+                    + LEAST(0.2,
+                            NVL((SELECT COUNT(*) FROM PRODUCT_TAG pt
+                                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                 WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                                   AND (
+                                         (#{brightness} >= 50 AND ct.TAG_CODE IN ('COLOR_BRIGHT', 'COLOR_PASTEL'))
+                                         OR (#{brightness} &lt; 50 AND ct.TAG_CODE IN ('COLOR_DARK', 'COLOR_NEUTRAL'))
+                                         OR (#{boldness} >= 50 AND ct.TAG_CODE = 'COLOR_VIVID')
+                                         OR (#{boldness} &lt; 50 AND ct.TAG_CODE = 'COLOR_NEUTRAL')
+                                     )), 0) * 0.1
+                    )
+                    -- 3. 핏 매칭 (0~0.2)
+                    + LEAST(0.2,
+                            NVL((SELECT COUNT(*) FROM PRODUCT_TAG pt
+                                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                 WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                                   AND (
+                                         (#{fit} &lt;= 33 AND ct.TAG_CODE = 'FIT_SLIM')
+                                         OR (#{fit} > 33 AND #{fit} &lt;= 66 AND ct.TAG_CODE = 'FIT_REGULAR')
+                                         OR (#{fit} > 66 AND ct.TAG_CODE IN ('FIT_LOOSE', 'FIT_OVERSIZED'))
+                                     )), 0) * 0.2
+                    )
+                    -- 4. 기본 점수 (태그가 없어도 의류면 추천 가능)
+                    + 0.15
+                    -- 5. 리뷰 점수
+                    + CASE
+                          WHEN p.AVG_REVIEW IS NULL THEN 0.05
+                          ELSE (p.AVG_REVIEW / 5.0) * 0.1
+                    END AS PREFERENCE_SCORE,
+                -- 매칭된 스타일들
+                NVL((SELECT LISTAGG(ct.LABEL, ',') WITHIN GROUP (ORDER BY ct.LABEL)
+                     FROM PRODUCT_TAG pt
+                              JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                     WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                       AND ct.TAG_GROUP IN ('FASHION_STYLE', 'FIT', 'COLOR')),
+                    '베이직 스타일') AS MATCHED_STYLES
+            FROM PRODUCT p
+                     JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
+                     JOIN PRODUCT_CATEGORY_MAIN pcm ON pcm.PRODUCT_CATEGORY_MAIN_ID = pcs.PRODUCT_CATEGORY_MAIN_ID
+            WHERE pcm.NAME = '의류'
+              AND (p.GENDER = #{gender} OR p.GENDER = 'U')
+        )
+        SELECT * FROM fashion_scores
+        WHERE PREFERENCE_SCORE > 0.2
+        ORDER BY PREFERENCE_SCORE DESC, AVG_REVIEW DESC NULLS LAST
+            FETCH FIRST #{limit} ROWS ONLY
+    </select>
+
+    <!-- 카테고리별 최저가만 조회 -->
+    <select id="getCategoryMinPrice" resultType="java.math.BigDecimal">
+        SELECT MIN(p.PRICE)
+        FROM PRODUCT p
+        WHERE p.CATEGORY_ID = #{categoryId}
+        AND p.PRICE > 0
+            AND (p.GENDER = #{userGender} OR p.GENDER = 'U')
+    </select>
 </mapper>
