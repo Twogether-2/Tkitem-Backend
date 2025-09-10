@@ -139,15 +139,14 @@
         WHERE IS_DELETED = 'T' AND EMAIL = #{email}
     </update>
 
-    <!-- 멤버아이디로 닉네임, 성별 업데이트 -->
     <update id="updateBirthdayAndGender">
         UPDATE MEMBER
         SET
-            BIRTHDAY = #{birthday},
-            GENDER = #{gender},
-            ROLE = 'ROLE_USER',
-            UPDATED_AT = SYSDATE,
-            UPDATED_BY = #{memberId}
+        BIRTHDAY = TO_DATE(#{birthday}, 'YYYY-MM-DD'),
+        GENDER = #{gender},
+        ROLE = 'ROLE_USER',
+        UPDATED_AT = SYSDATE,
+        UPDATED_BY = #{memberId}
         WHERE MEMBER_ID = #{memberId}
     </update>
 

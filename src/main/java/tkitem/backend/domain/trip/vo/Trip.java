@@ -8,6 +8,7 @@ import lombok.Setter;
 public class Trip {
 	private Long tripId;
 	private Long tourPackageId;
+	private Long memberId;
 	private String imgUrl;
 	private String title;
 	private String departureDate;

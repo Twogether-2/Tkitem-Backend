@@ -69,6 +69,7 @@ public class SecurityConfig {
                     PREFIX + "/member/duplicate",
                     STATIC_RESOURCE,
                     PREFIX + "/actuator/health",
+                    "/test-check",
                     "/actuator/health",
                     "/v3/api-docs/**",
                     "/swagger-ui/**",

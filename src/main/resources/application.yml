@@ -131,17 +131,17 @@ redis:
 elastic:
   apiKey: ${ELASTIC_API_KEY}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    mail:
+      enabled: false
+
 toss:
   secret-key: ${TOSS_SECRET_KEY}
-#management:
-#  endpoints:
-#    web:
-#      exposure:
-#        include: health
-#
-#  endpoint:
-#    health:
-#      show-details: always
 
-#openai:
-#  api-key: ${OPEN_AI_API_KEY}
+server:
+  shutdown: graceful
