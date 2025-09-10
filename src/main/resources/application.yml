@@ -56,8 +56,8 @@ gemini:
 #              max-tokens: 1024
 
 
-  elasticsearch:
-    uris: ${ELASTICSEARCH_HOST}
+elasticsearch:
+  uris: ${ELASTICSEARCH_HOST}
 #    endpoint: ${ELASTICSEARCH_HOST}
 #    apiKey: ${ELASTIC_API_KEY}
 
