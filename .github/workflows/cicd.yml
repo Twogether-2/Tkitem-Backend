@@ -111,3 +111,28 @@ jobs:
 
             # 배포 스크립트가 docker/compose를 호출하므로 sudo로 실행
             sudo -E ./deploy.sh
+
+  notify:
+    needs: [deploy]
+    if: ${{ always() }}   # 배포 성공/실패 관계없이 실행
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Discord (Success)
+        if: ${{ needs.deploy.result == 'success' }}
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        with:
+          args: |
+            🚀 배포 성공: ${{ github.repository }} @ ${{ github.sha }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Notify Discord (Failure)
+        if: ${{ needs.deploy.result == 'failure' }}
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        with:
+          args: |
+            ❌ 배포 실패: ${{ github.repository }} @ ${{ github.sha }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
