@@ -499,18 +499,16 @@
     </select>
 
     <select id="selectAllowTourIdsByCountry" parameterType="string" resultType="long">
-        SELECT DISTINCT t.tour_id
-        FROM TOUR t
-            JOIN TOUR_CITY tc ON tc.tour_id = t.tour_id
-            JOIN CITY c ON c.city_id = tc.city_id
+        SELECT DISTINCT tc.tour_id
+        FROM CITY c
+        JOIN TOUR_CITY tc ON tc.city_id = c.city_id
         WHERE c.country_name = #{country}
     </select>
 
     <select id="selectAllowTourIdsByCountryGroup" parameterType="string" resultType="long">
-        SELECT DISTINCT t.tour_id
-        FROM TOUR t
-            JOIN TOUR_CITY tc ON tc.tour_id = t.tour_id
-            JOIN CITY c ON c.city_id = tc.city_id
+        SELECT DISTINCT tc.tour_id
+        FROM CITY c
+        JOIN TOUR_CITY tc ON tc.city_id = c.city_id
         WHERE c.country_group_name = #{countryGroup}
     </select>
 
@@ -556,5 +554,4 @@
             ELSE 999999
         END
     </select>
-
 </mapper>

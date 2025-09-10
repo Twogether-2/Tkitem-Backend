@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.KeywordRule;
+import tkitem.backend.domain.tour.dto.TopMatchDto;
 import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 import tkitem.backend.domain.tour.dto.response.TourCommonRecommendDto;
@@ -37,6 +38,33 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
     private static final int    ES_CANDIDATES = 4000;
     private static final int    ES_MTOP = 3;        // 투어별 상위 m개 평균
     private static final int    DB_STAGE_TOP = 200; // 최소 1차 후보 확보량
+
+    @Override
+    public TourCommonRecommendDto searchTop1ByKeyword(String keyword) {
+        if(keyword == null || keyword.isBlank()){
+            throw new BusinessException("keyword is blank", ErrorCode.INVALID_INPUT_VALUE);
+        }
+
+        // keyword.json 룰 로드
+        KeywordRule rule = ruleLoader.getRequired(keyword);
+
+        // 허용 tourId 조회 (country 우선, 없으면 countryGroup)
+        Set<Long> allow = null;
+        if (rule.getCountry() != null && !rule.getCountry().isBlank()) { // [ADDED]
+            List<Long> ids = tourMapper.selectAllowTourIdsByCountry(rule.getCountry()); // [ADDED]
+            allow = (ids == null || ids.isEmpty()) ? Collections.emptySet() : new HashSet<>(ids); // [ADDED]
+        } else if (rule.getCountryGroup() != null && !rule.getCountryGroup().isBlank()) { // [ADDED]
+            List<Long> ids = tourMapper.selectAllowTourIdsByCountryGroup(rule.getCountryGroup()); // [ADDED]
+            allow = (ids == null || ids.isEmpty()) ? Collections.emptySet() : new HashSet<>(ids); // [ADDED]
+        }
+
+        String rawJson = tourEsService.searchTop1ByVectorRawJson(rule, allow);
+
+        TopMatchDto topMatchDto = tourEsService.sendRawEsQuery(rawJson);
+        log.info("tourId : {}, score : {}", topMatchDto.tourId(), topMatchDto.score());
+
+        return tourMapper.selectTourMetaByTourIds(List.of(topMatchDto.tourId())).getFirst();
+    }
 
     @Override
     @Transactional

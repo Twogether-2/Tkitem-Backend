@@ -87,5 +87,5 @@ public interface TourMapper {
 
     List<Long> selectAllowTourIdsByCountryGroup(@Param("countryGroup") String countryGroup);
 
-    List<TourCommonRecommendDto> selectTourMetaByTourIds(List<Long> tourIds);
+    List<TourCommonRecommendDto> selectTourMetaByTourIds(@Param("ids") List<Long> ids);
 }

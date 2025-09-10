@@ -8,7 +8,9 @@ import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import java.util.List;
 
 public interface TourRecommendFacadeService {
-    public List<TourRecommendationResponseDto> recommend(TourRecommendationRequestDto req, String queryText, int topN, Member member) throws Exception;
+    List<TourRecommendationResponseDto> recommend(TourRecommendationRequestDto req, String queryText, int topN, Member member) throws Exception;
 
     List<TourCommonRecommendDto> searchByKeyword(String keyword);
+
+    TourCommonRecommendDto searchTop1ByKeyword(String keyword);
 }

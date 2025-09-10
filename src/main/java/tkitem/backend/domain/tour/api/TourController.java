@@ -139,11 +139,13 @@ public class TourController {
             summary = "패키지를 정해둔 키워드로 검색하는 api",
             description = "keyword.json 룰을 적용해 ES(BM25+KNN) 검색을 수행"
     )
-    public ResponseEntity<List<TourCommonRecommendDto>> keyword(
+    public ResponseEntity<TourCommonRecommendDto> keyword(
             @RequestParam("keyword") String keyword
     ){
-        List<TourCommonRecommendDto> result = tourFacadeService.searchByKeyword(keyword);
+//        List<TourCommonRecommendDto> result = tourFacadeService.searchByKeyword(keyword);
 
-        return ResponseEntity.ok(result);
+        TourCommonRecommendDto result1 = tourFacadeService.searchTop1ByKeyword(keyword);
+
+        return ResponseEntity.ok(result1);
     }
 }

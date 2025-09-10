@@ -9,23 +9,164 @@ import co.elastic.clients.elasticsearch._types.query_dsl.QueryBuilders;
 import co.elastic.clients.elasticsearch.core.KnnSearchResponse;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
+import co.elastic.clients.transport.rest_client.RestClientTransport;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.elasticsearch.client.Request;
+import org.elasticsearch.client.Response;
+import org.elasticsearch.client.RestClient;
 import org.springframework.stereotype.Service;
 import tkitem.backend.domain.scheduleType.service.EmbeddingService;
 import tkitem.backend.domain.tour.dto.KeywordRule;
+import tkitem.backend.domain.tour.dto.TopMatchDto;
 import tkitem.backend.global.error.ErrorCode;
 import tkitem.backend.global.error.exception.BusinessException;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TourEsService {
 
     private static final String INDEX_TDS = "tour_detail_schedule_v1";
     private final ElasticsearchClient esClient;
     private final EmbeddingService embeddingService;
+
+    public String searchTop1ByVectorRawJson(KeywordRule rule, Set<Long> allowTourIds) {
+        // 1) 임베딩 텍스트(키워드 + shouldList)
+        StringBuilder qt = new StringBuilder();
+        if (rule.getKeyword() != null && !rule.getKeyword().isBlank()) qt.append(rule.getKeyword()).append(' ');
+        if (rule.getShouldList() != null) {
+            for (String s : rule.getShouldList()) if (s != null && !s.isBlank()) qt.append(s).append(' ');
+        }
+        String queryText = qt.toString().trim();
+
+        // 2) 쿼리 벡터(JSON 배열 문자열)
+        float[] qv = embeddingService.embed(queryText);
+        StringBuilder vec = new StringBuilder("[");
+        for (int i = 0; i < qv.length; i++) { if (i > 0) vec.append(','); vec.append(qv[i]); }
+        vec.append(']');
+
+        // helpers
+        java.util.function.Function<String,String> esc = s -> s == null ? "" : s.replace("\"","\\\"");
+        java.util.function.BiFunction<String,String,String> matchPhrase = (field, term) ->
+                "{\"match_phrase\":{\"" + field + "\":{\"query\":\"" + term + "\",\"slop\":0}}}";
+        java.util.function.Function<String,String> matchPhraseBoostedTitle  = term ->
+                "{\"match_phrase\":{\"title\":{\"query\":\"" + term + "\",\"slop\":0,\"boost\":4}}}";
+        java.util.function.Function<String,String> matchPhraseBoostedDesc   = term ->
+                "{\"match_phrase\":{\"description\":{\"query\":\"" + term + "\",\"slop\":0,\"boost\":3}}}";
+        java.util.function.Function<String,String> matchPhraseBoostedCombo  = term ->
+                "{\"match_phrase\":{\"combined_text\":{\"query\":\"" + term + "\",\"slop\":0,\"boost\":2}}}";
+
+        // 3) allowTourIds → terms
+        StringBuilder allowTerms = new StringBuilder();
+        if (allowTourIds != null && !allowTourIds.isEmpty()) {
+            boolean first = true;
+            for (Long id : allowTourIds) {
+                if (id == null) continue;
+                if (!first) allowTerms.append(',');
+                allowTerms.append(id);
+                first = false;
+            }
+        }
+        boolean hasAllow = allowTerms.length() > 0;
+
+        // 4) shouldList → match_phrase(정확 구문 일치, decompound 회피 목적), 최소 1개 조건 충족
+        List<String> shouldItems = new ArrayList<>();
+        if (rule.getShouldList() != null) {
+            for (String s : rule.getShouldList()) {
+                if (s == null || s.isBlank()) continue;
+                String v = esc.apply(s);
+                // title/description/combined_text 각각 아이템 1개씩 (콤마/괄호 정상)
+                shouldItems.add(matchPhraseBoostedTitle.apply(v));
+                shouldItems.add(matchPhraseBoostedDesc.apply(v));
+                shouldItems.add(matchPhraseBoostedCombo.apply(v));
+            }
+        }
+        String shouldJson = String.join(",", shouldItems);
+        boolean hasShould = !shouldItems.isEmpty();
+
+        // 5) excludeList → must_not (match_phrase 위주로 간단 배제)
+        List<String> mustNotItems = new ArrayList<>();
+        if (rule.getExcludeList() != null) {
+            for (String x : rule.getExcludeList()) {
+                if (x == null || x.isBlank()) continue;
+                String v = esc.apply(x);
+                mustNotItems.add(matchPhrase.apply("title", v));
+                mustNotItems.add(matchPhrase.apply("description", v));
+                mustNotItems.add(matchPhrase.apply("combined_text", v));
+            }
+        }
+        String mustNotJson = String.join(",", mustNotItems);
+        boolean hasMustNot = !mustNotItems.isEmpty();
+
+        // 6) 공용 bool(JSON) — query.bool 과 knn.filter.bool 둘 다 같은 조건(가독성/안정성)
+        List<String> boolParts = new ArrayList<>();
+        if (hasAllow) {
+            boolParts.add("\"filter\":[{\"terms\":{\"tour_id\":[" + allowTerms + "]}}]");
+        }
+        if (hasShould) {
+            boolParts.add("\"should\":[" + shouldJson + "]");
+            boolParts.add("\"minimum_should_match\":1");
+        }
+        if (hasMustNot) {
+            boolParts.add("\"must_not\":[" + mustNotJson + "]");
+        }
+        String boolJson = "{" + String.join(",", boolParts) + "}";
+
+        // 7) 최종 JSON — 단순: kNN 점수로 랭킹, query.bool은 동일 조건으로 필터 역할
+        String json = """
+    {
+      "size": 1,
+      "track_total_hits": false,
+      "_source": ["tour_id"],
+      "collapse": { "field": "tour_id" },
+      "query": { "bool": %s },
+      "knn": {
+        "field": "embedding",
+        "query_vector": %s,
+        "k": 50,
+        "num_candidates": 200,
+        "filter": { "bool": %s }
+      }
+    }
+    """.formatted(boolJson, vec.toString(), boolJson);
+
+        log.info("생성된 json : {}", json);
+        return json;
+    }
+
+    public TopMatchDto sendRawEsQuery(String rawJson) {
+        try {
+            RestClient rest = ((RestClientTransport) esClient._transport()).restClient();
+            Request req = new Request("POST", "/" + INDEX_TDS + "/_search");
+            req.setJsonEntity(rawJson);
+
+            Response resp = rest.performRequest(req);
+            String body = new String(resp.getEntity().getContent().readAllBytes(), StandardCharsets.UTF_8);
+
+            JsonNode root = new ObjectMapper().readTree(body);
+            JsonNode hits = root.path("hits").path("hits");
+            if (!hits.isArray() || hits.size() == 0) {
+                throw new BusinessException("ES no hit", ErrorCode.ENTITY_NOT_FOUND);
+            }
+
+            JsonNode h0 = hits.get(0);
+            long tourId = h0.path("_source").path("tour_id").asLong();
+            double score = h0.path("_score").asDouble(0.0);
+            return new TopMatchDto(tourId, score);
+
+        } catch (BusinessException be) {
+            throw be;
+        } catch (Exception e) {
+            throw new BusinessException("ES raw 전송 실패: " + e.getMessage(), ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+    }
 
     /**
      * 사용자 TEXT를 임베딩하여 TDS 인덱스에 kNN 조회 후, 투어별 상위 m개 점수 평균을 반환
