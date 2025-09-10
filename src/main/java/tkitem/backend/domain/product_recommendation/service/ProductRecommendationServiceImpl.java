@@ -4,7 +4,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.product_recommendation.dto.request.BudgetRecommendationRequest;
+import tkitem.backend.domain.product_recommendation.dto.request.MinimumBudgetRequest;
 import tkitem.backend.domain.product_recommendation.dto.response.*;
 import tkitem.backend.domain.product_recommendation.mapper.ProductRecommendationMapper;
 import tkitem.backend.domain.product_recommendation.vo.*;
@@ -261,6 +263,35 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
                 .collect(Collectors.toList());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public MinimumBudgetResponse calculateMinimumBudget(MinimumBudgetRequest request, Character gender) {
+        List<ChecklistItem> items =
+                recommendationMapper.findChecklistItemsByIds(request.getChecklistItemIds());
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("체크리스트 아이템을 찾을 수 없습니다.");
+        }
+
+        BigDecimal total = BigDecimal.ZERO;
+        for (ChecklistItem item : items) {
+            BigDecimal minPrice = recommendationMapper.getCategoryMinPrice(
+                    Map.of(
+                            "categoryId", item.getProductCategorySubId(),
+                            "userGender", gender
+                    )
+            );
+
+            if (minPrice == null) {
+                minPrice = BigDecimal.ZERO;
+            }
+            total = total.add(minPrice);
+        }
+
+        return MinimumBudgetResponse.builder()
+                .minimumBudget(total)
+                .build();
+    }
+
     // Helper Methods
     private String generateRecommendReason(ChecklistItem item, Product product, Long memberId) {
         StringBuilder reason = new StringBuilder();
@@ -309,7 +340,6 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
         );
         return styleNames.getOrDefault(style, style);
     }
-
 }
 
 

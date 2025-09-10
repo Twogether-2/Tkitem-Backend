@@ -1,6 +1,7 @@
 package tkitem.backend.domain.product_recommendation.service;
 
 import tkitem.backend.domain.product_recommendation.dto.request.BudgetRecommendationRequest;
+import tkitem.backend.domain.product_recommendation.dto.request.MinimumBudgetRequest;
 import tkitem.backend.domain.product_recommendation.dto.response.*;
 
 import java.util.List;
@@ -12,4 +13,5 @@ public interface ProductRecommendationService {
     List<ProductResponse> getRelatedProducts(Long productId, int limit, Character gender);
     List<ProductResponse> getUpcomingTripItems(Long memberId, int limit, Character gender);
     List<ProductResponse> getFashionByPreference(Long memberId, int limit, Character gender);
+    MinimumBudgetResponse calculateMinimumBudget(MinimumBudgetRequest request, Character gender);
 }

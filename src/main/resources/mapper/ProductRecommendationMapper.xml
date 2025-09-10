@@ -363,4 +363,13 @@
         ORDER BY PREFERENCE_SCORE DESC, AVG_REVIEW DESC NULLS LAST
             FETCH FIRST #{limit} ROWS ONLY
     </select>
+
+    <!-- 카테고리별 최저가만 조회 -->
+    <select id="getCategoryMinPrice" resultType="java.math.BigDecimal">
+        SELECT MIN(p.PRICE)
+        FROM PRODUCT p
+        WHERE p.CATEGORY_ID = #{categoryId}
+        AND p.PRICE > 0
+            AND (p.GENDER = #{userGender} OR p.GENDER = 'U')
+    </select>
 </mapper>
