@@ -11,6 +11,9 @@ spring:
     hikari:
       connectionInitSql: "ALTER SESSION DISABLE PARALLEL DML"
 
+server:
+  shutdown: graceful
+
   servlet:
     multipart:
       max-file-size: 10MB
