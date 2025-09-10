@@ -428,7 +428,7 @@
         FETCH FIRST 15 ROWS ONLY
     </select>
 
-    <select id="selectTourMetaByTripSaved" parameterType="long" resultMap="TourCommonRecommendDtoMap">
+    <select id="selectTourMetaByTripSaved" resultMap="TourCommonRecommendDtoMap">
         WITH trip_cnt AS (
             SELECT tp.tour_id, COUNT(*) AS cnt
             FROM TRIP t
@@ -485,8 +485,17 @@
                 WHERE t2.member_id = #{memberId}
                     AND tp2.tour_id  = t.tour_id
             )
+        <if test="countryGroup != null and countryGroup != ''">
+            AND EXISTS (
+                SELECT 1
+                FROM TOUR_CITY tci
+                    JOIN CITY c ON c.city_id = tci.city_id
+                WHERE tci.tour_id = t.tour_id
+                    AND c.country_group_name = #{countryGroup}
+            )
+        </if>
         ORDER BY tc.cnt DESC, rp.price ASC, rp.departure_date ASC
-        FETCH FIRST 10 ROWS ONLY
+        FETCH FIRST #{topN} ROWS ONLY
     </select>
 
 </mapper>
