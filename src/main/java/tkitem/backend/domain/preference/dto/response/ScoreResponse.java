@@ -9,7 +9,11 @@ public record ScoreResponse(
 	int f,
 	int v,
 	String look,
-	int lookScore
+	int lookScore,
+	int bPercent,
+	int mPercent,
+	int fPercent,
+	int vPercent
 ) {
 
 }

@@ -7,6 +7,7 @@ import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
 import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
+import tkitem.backend.domain.tour.dto.response.TourPackageDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.mapper.TourMapper;
 import tkitem.backend.global.util.NumberUtil;
@@ -49,20 +50,27 @@ public class TourRecommendService {
                     .dbScore(dbNorm) // DB 정규화 점수
                     .esScore(0.0) // ES 하기 전이라 아직 0.0
                     .finalScore(dbNorm) // 최종점수에 아직 DB 점수만 활용함
-                    .tourPackageId(r.getRepTourPackageId())
-                    .price(r.getRepPrice())
-                    .bookingUrl(r.getRepBookingUrl())
-                    .departureDate(r.getRepDepartureDate())
-                    .returnDate(r.getRepReturnDate())
-                    .departureAirline(r.getRepDepartureAirline())
-                    .returnAirline(r.getRepReturnAirline())
                     .build();
-        }).sorted(Comparator
-                .comparing(TourRecommendationResponseDto::getFinalScore).reversed()
-                .thenComparing(TourRecommendationResponseDto::getPrice, Comparator.nullsLast(Long::compareTo))
-                .thenComparing(TourRecommendationResponseDto::getDepartureDate, Comparator.nullsLast(Date::compareTo))).collect(Collectors.toCollection(ArrayList::new));
+        }).sorted(Comparator.comparing(TourRecommendationResponseDto::getFinalScore).reversed())
+                .collect(Collectors.toList());
 
-        return ranked.subList(0, Math.min(topN, ranked.size()));
+        // 4) Top-N 투어만 선택 후, 해당 투어들의 "모든 패키지" 조회하여 주입
+        List<TourRecommendationResponseDto> top = ranked.subList(0, Math.min(topN, ranked.size()));
+        List<Long> tourIds = top.stream().map(TourRecommendationResponseDto::getTourId).toList();
+
+        // 투어별 모든 패키지 행 조회 (XML: selectPackagesForTours)
+        List<TourPackageDto> pkgRows = tourMapper.selectPackagesForTours(req, member.getMemberId(), tourIds);
+
+        // tourId 기준 그룹핑 → DTO 주입
+        Map<Long, List<TourPackageDto>> grouped = pkgRows.stream()
+                .collect(Collectors.groupingBy(TourPackageDto::getTourId));
+
+        for (TourRecommendationResponseDto dto : top) {
+            List<TourPackageDto> list = grouped.get(dto.getTourId());
+            dto.setPackageDtos(list != null ? list : Collections.emptyList());
+        }
+
+        return top;
     }
 
     /**
@@ -117,7 +125,6 @@ public class TourRecommendService {
             TourRecommendationResponseDto dto = byId.get(e.getKey());
             if (dto != null) dto.setSchedules(e.getValue());
         }
-
 
         return items;
     }

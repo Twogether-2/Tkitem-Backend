@@ -59,8 +59,9 @@
                     AND NOT EXISTS (
                     SELECT 1
                     FROM TOUR_RECOMMENDATION tr
-                    WHERE tr.tour_package_id = tp.tour_package_id
-                    AND tr.group_id = #{req.groupId}
+                    WHERE tr.tour_id = tp.tour_id
+                        AND tr.group_id = #{req.groupId}
+                        AND tr.member_id = #{memberId}
                     )
                 </if>
                 <if test="memberId != null">
@@ -195,6 +196,89 @@
         ORDER BY "dbScore" DESC, fs."minPrice" ASC, fs."latestDeparture" ASC
     </select>
 
+    <!-- NEW: 선택된 투어들(tourIds)에 대해, 조건에 부합하는 모든 패키지 행을 조회 -->
+    <select id="selectPackagesForTours"
+            parameterType="map"
+            resultType="tkitem.backend.domain.tour.dto.response.TourPackageDto">
+        <!-- 기대 파라미터:
+             - req: 추천 요청 DTO (기간/금액/그룹ID 포함)
+             - memberId: Long (항상 존재)
+             - tourIds: List<Long> (필수; 비어 있으면 결과 없음)
+        -->
+        WITH filtered_pkg AS (
+            SELECT
+                tp.tour_id,
+                tp.tour_package_id,
+                tp.price,
+                tp.departure_date,
+                tp.return_date,
+                tp.booking_url,
+                tp.departure_airline,
+                tp.return_airline
+            FROM TOUR_PACKAGE tp
+            WHERE 1=1
+            <!-- 같은 그룹에서 이미 추천된 '투어' 배제 -->
+            <if test="req.groupId != null and req.groupId &gt; 0">
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM TOUR_RECOMMENDATION tr
+                    WHERE tr.tour_id     = tp.tour_id
+                        AND tr.group_id  = #{req.groupId}
+                        AND tr.member_id = #{memberId}
+                )
+            </if>
+
+        <!-- 사용자가 이미 가진 '패키지' 배제(이력 중복 제거) -->
+        AND NOT EXISTS (
+            SELECT 1
+            FROM TRIP t
+            WHERE t.tour_package_id = tp.tour_package_id
+                AND t.member_id     = #{memberId}
+        )
+
+        <!-- 기간/금액 필터 -->
+        <if test="req != null and req.departureDate != null">
+            AND tp.departure_date &gt;= TRUNC(#{req.departureDate, jdbcType=DATE})
+        </if>
+        <if test="req != null and req.returnDate != null">
+            AND tp.return_date &lt; TRUNC(#{req.returnDate, jdbcType=DATE}) + 1
+        </if>
+        <if test="req != null and req.priceMin != null">
+            AND tp.price &gt;= #{req.priceMin, jdbcType=NUMERIC}
+        </if>
+        <if test="req != null and req.priceMax != null">
+            AND tp.price &lt;= #{req.priceMax, jdbcType=NUMERIC}
+        </if>
+        )
+        SELECT
+        fp.tour_id            AS "tourId",           <!-- Map 키: tourId (그룹핑용) -->
+        fp.tour_package_id    AS "tourPackageId",    <!-- Map 키: tourPackageId -->
+        fp.price              AS "price",            <!-- Map 키: price -->
+        fp.departure_date     AS "departureDate",    <!-- Map 키: departureDate -->
+        fp.return_date        AS "returnDate",       <!-- Map 키: returnDate -->
+        fp.booking_url        AS "bookingUrl",       <!-- Map 키: bookingUrl -->
+        fp.departure_airline  AS "departureAirline", <!-- Map 키: departureAirline -->
+        fp.return_airline     AS "returnAirline"     <!-- Map 키: returnAirline -->
+        FROM filtered_pkg fp
+        WHERE
+        <choose>
+            <when test="tourIds != null and tourIds.size() &gt; 0">
+                fp.tour_id IN
+                <foreach collection="tourIds" item="id" open="(" close=")" separator=",">
+                    #{id}
+                </foreach>
+            </when>
+            <otherwise>
+                1 = 0  <!-- tourIds 비었으면 결과 없음 -->
+            </otherwise>
+        </choose>
+        ORDER BY fp.tour_id ASC,
+        fp.departure_date ASC NULLS LAST,
+        fp.price ASC NULLS LAST,
+        fp.tour_package_id ASC
+    </select>
+
+
     <select id="selectTourMetaByIds" parameterType="list" resultType="map">
         SELECT
             t.tour_id AS "tourId",
@@ -255,14 +339,12 @@
     <insert id="insertTourRecommendation" parameterType="map">
         INSERT INTO TOUR_RECOMMENDATION (
             tour_id,
-            tour_package_id,
             member_id,
             group_id,
             created_at,
             updated_at )
         VALUES (
             #{item.tourId},
-            #{item.tourPackageId},
             #{memberId},
             #{item.groupId},
             SYSTIMESTAMP,
@@ -277,15 +359,13 @@
         <result property="feature"          column="feature"/>
         <result property="imgUrl"           column="img_url"/>
         <result property="provider"         column="provider"/>
+        <result property="tourPackageId"    column="tour_package_id"/>
 
-        <!-- 패키지 정보 -->
-        <result     property="tourPackageId"    column="tour_package_id"/>
-        <result property="price"            column="price"/>
-        <result property="departureDate"    column="departure_date" jdbcType="DATE"/>
-        <result property="returnDate"       column="return_date"    jdbcType="DATE"/>
-        <result property="bookingUrl"       column="booking_url"/>
-        <result property="departureAirline" column="departure_airline"/>
-        <result property="returnAirline"    column="return_airline"/>
+        <!-- 해당 투어의 전체 패키지 목록 -->
+        <collection property="packageDtos"
+                    ofType="tkitem.backend.domain.tour.dto.response.TourPackageDto"
+                    select="selectPackagesByTourId"
+                    column="tour_id"/>
 
         <!-- 스케줄 목록: tour_id를 column으로 넘겨 nested select 실행 -->
         <collection property="schedules"
@@ -293,6 +373,26 @@
                     select="selectSchedulesByTourId"
                     column="tour_id"/>
     </resultMap>
+
+    <!-- 동일 tour_id의 전체 패키지 목록(필터 없이 모두 반환) -->
+    <select id="selectPackagesByTourId"
+            parameterType="long"
+            resultType="tkitem.backend.domain.tour.dto.response.TourPackageDto">
+        SELECT
+            tp.tour_id          AS "tourId",
+            tp.tour_package_id  AS "tourPackageId",
+            tp.price            AS "price",
+            tp.departure_date   AS "departureDate",
+            tp.return_date      AS "returnDate",
+            tp.booking_url      AS "bookingUrl",
+            tp.departure_airline AS "departureAirline",
+            tp.return_airline    AS "returnAirline"
+        FROM TOUR_PACKAGE tp
+        WHERE tp.tour_id = #{value}   <!-- nested select에서는 #{value} -->
+        ORDER BY tp.departure_date ASC NULLS LAST,
+            tp.price ASC NULLS LAST,
+            tp.tour_package_id ASC
+    </select>
 
     <!-- 패키지 + 투어 1건 조회 -->
     <select id="selectTourPackageDetail"
@@ -396,34 +496,44 @@
 
     <select id="selectTourMetaByMemberId" parameterType="long" resultMap="TourCommonRecommendDtoMap">
         WITH ex_group AS (
-            SELECT DISTINCT tr_map.group_id
-            FROM TRIP
-                JOIN TOUR_RECOMMENDATION tr_map ON tr_map.tour_package_id = TRIP.tour_package_id
-            WHERE TRIP.member_id = #{memberId}
-                AND tr_map.member_id = #{memberId}
-                AND tr_map.group_id IS NOT NULL
+        SELECT DISTINCT tr_map.group_id
+        FROM TRIP trip
+        JOIN TOUR_PACKAGE tp2       ON tp2.tour_package_id = trip.tour_package_id
+        JOIN TOUR_RECOMMENDATION tr_map ON tr_map.tour_id = tp2.tour_id
+        WHERE trip.member_id   = #{memberId}
+        AND tr_map.member_id = #{memberId}
+        AND tr_map.group_id IS NOT NULL
+        ),
+        rep_pkg AS (
+        SELECT tp.*,
+        ROW_NUMBER() OVER (
+        PARTITION BY tp.tour_id
+        ORDER BY tp.price ASC NULLS LAST,
+        tp.departure_date ASC NULLS LAST,
+        tp.tour_package_id ASC
+        ) rn
+        FROM TOUR_PACKAGE tp
         )
         SELECT
-            t.tour_id,
-            t.title,
-            t.feature,
-            t.img_url,
-            t.provider,
-            t.duration_days,
-            t.nights,
-            tp.tour_package_id,
-            tp.price,
-            tp.departure_date,
-            tp.return_date,
-            tp.departure_airline,
-            tp.return_airline
+        t.tour_id,
+        t.title,
+        t.feature,
+        t.img_url,
+        t.provider,
+        t.duration_days,
+        t.nights,
+        rp.tour_package_id,
+        rp.price,
+        rp.departure_date,
+        rp.return_date,
+        rp.booking_url,
+        rp.departure_airline,
+        rp.return_airline
         FROM TOUR_RECOMMENDATION tr
-            JOIN TOUR t ON t.tour_id = tr.tour_id
-            JOIN TOUR_PACKAGE tp ON tp.tour_package_id = tr.tour_package_id
+        JOIN TOUR t      ON t.tour_id  = tr.tour_id
+        LEFT JOIN rep_pkg rp ON rp.tour_id = tr.tour_id AND rp.rn = 1
         WHERE tr.member_id = #{memberId}
-            AND NOT EXISTS (
-                SELECT 1 FROM ex_group g WHERE g.group_id = tr.group_id
-            )
+        AND NOT EXISTS (SELECT 1 FROM ex_group g WHERE g.group_id = tr.group_id)
         ORDER BY tr.created_at DESC
         FETCH FIRST 15 ROWS ONLY
     </select>

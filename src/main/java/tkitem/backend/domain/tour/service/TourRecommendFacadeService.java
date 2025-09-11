@@ -10,7 +10,5 @@ import java.util.List;
 public interface TourRecommendFacadeService {
     List<TourRecommendationResponseDto> recommend(TourRecommendationRequestDto req, String queryText, int topN, Member member) throws Exception;
 
-    List<TourCommonRecommendDto> searchByKeyword(String keyword);
-
     TourCommonRecommendDto searchTop1ByKeyword(String keyword);
 }
