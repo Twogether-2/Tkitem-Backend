@@ -21,21 +21,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TourServiceImpl implements TourService {
     private final TourMapper tourMapper;
-    private final TourRecommendService tourRecommendService;
 
     @Override
     public TourPackageDetailDto getTourPackageDetail(Long tourPackageId, Member member) {
-        TourPackageDetailDto detailDto = tourMapper.selectTourPackageDetail(tourPackageId)
+        return tourMapper.selectTourPackageDetail(tourPackageId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TOUR_NOT_FOUND));
-
-        TourRecommendationResponseDto dto = TourRecommendationResponseDto.builder()
-                .tourId(detailDto.getTourId())
-                .tourPackageId(detailDto.getTourPackageId())
-                        .build();
-        // 추천 결과 저장
-        tourRecommendService.saveShownRecommendations(0L, List.of(dto), member);
-
-        return detailDto;
     }
 
     @Override

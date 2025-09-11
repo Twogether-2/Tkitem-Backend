@@ -116,40 +116,50 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
             }
         }
 
-        // ADDED: 유틸 Comparator
+        // =========================
+        // 4) 최종 정렬 (CHANGED)
+        //    - 일자/가격 필터가 있으면: 출발일 오름차순
+        //    - 없으면: 기존 점수 기반 정렬
+        // =========================
+        boolean hasDateFilter  = (req != null) && (req.getDepartureDate() != null || req.getReturnDate() != null);
+        boolean hasPriceFilter = (req != null) && (req.getPriceMin() != null || req.getPriceMax() != null);
+
         Comparator<TourRecommendationResponseDto> byFinalDesc = Comparator.comparing(
                 TourRecommendationResponseDto::getFinalScore,
-                Comparator.nullsFirst(Double::compareTo)    // null 점수는 가장 뒤로
+                Comparator.nullsFirst(Double::compareTo)
         ).reversed();
 
-        Comparator<TourRecommendationResponseDto> byRepPriceAsc = Comparator.comparing(
+        Comparator<TourRecommendationResponseDto> byMinPriceAsc = Comparator.comparing(
                 r -> minPrice(r.getPackageDtos()),
-                Comparator.nullsLast(Long::compareTo)       // 가격 없는 경우 뒤로
+                Comparator.nullsLast(Long::compareTo)
         );
 
-        Comparator<TourRecommendationResponseDto> byRepDepartureAsc = Comparator.comparing(
+        Comparator<TourRecommendationResponseDto> byEarliestDepAsc = Comparator.comparing(
                 r -> earliestDeparture(r.getPackageDtos()),
-                Comparator.nullsLast(Date::compareTo)       // 날짜 없는 경우 뒤로
+                Comparator.nullsLast(Date::compareTo)
         );
 
-// CHANGED: 정렬 기준 교체
-        base.sort(
-                byFinalDesc
-                        .thenComparing(byRepPriceAsc)
-                        .thenComparing(byRepDepartureAsc)
-                        .thenComparing(TourRecommendationResponseDto::getTourId, Comparator.nullsLast(Long::compareTo)) // 안정적 tie-break
-        );
+        if (hasDateFilter || hasPriceFilter) {
+            // 요청하신 기준: 일자 빠른 순만 적용(필요 시 tourId로 tie-break)
+            base.sort(
+                    Comparator
+                            .comparing((TourRecommendationResponseDto r) -> earliestDeparture(r.getPackageDtos()),
+                                    Comparator.nullsLast(Date::compareTo))
+                            .thenComparing(TourRecommendationResponseDto::getTourId, Comparator.nullsLast(Long::compareTo))
+            );
+        } else {
+            // 기존 점수 기반 정렬
+            base.sort(
+                    byFinalDesc
+                            .thenComparing(byMinPriceAsc)
+                            .thenComparing(byEarliestDepAsc)
+                            .thenComparing(TourRecommendationResponseDto::getTourId, Comparator.nullsLast(Long::compareTo))
+            );
+        }
 
         // 추천 결과 저장
         List<TourRecommendationResponseDto> dtos =
                 tourRecommendService.enrichRecommendationDetails(base.subList(0, Math.min(topN, base.size())));
-
-//        if (!useEs && !dtos.isEmpty() && dtos.get(0).getSchedules() != null) {
-//            for (TourDetailScheduleDto tdsItem : dtos.get(0).getSchedules()) {
-//                log.info("title = {}, sortOrder = {}, scheduleDay = {}, defaultType = {}",
-//                        tdsItem.getTitle(), tdsItem.getSortOrder(), tdsItem.getScheduleDay(), tdsItem.getDefaultType());
-//            }
-//        }
 
         tourRecommendService.saveShownRecommendations(req.getGroupId(), dtos, member);
 
