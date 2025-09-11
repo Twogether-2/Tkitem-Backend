@@ -1,14 +1,7 @@
 package tkitem.backend.domain.tour.service;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch._types.FieldValue;
-import co.elastic.clients.elasticsearch._types.SortOrder;
-import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
-import co.elastic.clients.elasticsearch._types.query_dsl.Query;
-import co.elastic.clients.elasticsearch._types.query_dsl.QueryBuilders;
 import co.elastic.clients.elasticsearch.core.KnnSearchResponse;
-import co.elastic.clients.elasticsearch.core.SearchRequest;
-import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.transport.rest_client.RestClientTransport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -259,23 +252,23 @@ public class TourEsService {
             java.util.List<Float> qvList = new java.util.ArrayList<>(qv.length);
             for (float f : qv) qvList.add(f);
 
-            // 2) bool 쿼리 구성 (filter / should / must_not / must)
+            // 2) 공통 filter(allow terms)
             java.util.List<Object> filterArr = new java.util.ArrayList<>();
             if (allowTourIds != null && !allowTourIds.isEmpty()) {
-                // terms: tour_id IN allowIds (chunking은 ES 요청 크기 이슈 있을 때만 도입)
                 java.util.List<Long> ids = new java.util.ArrayList<>(allowTourIds);
-                java.util.Map<String, Object> terms = new LinkedHashMap<>();
+                java.util.Map<String, Object> terms = new java.util.LinkedHashMap<>();
                 terms.put("tour_id", ids);
                 filterArr.add(java.util.Map.of("terms", terms));
             }
 
+            // 3) should(부스팅) / must_not(제외)
             java.util.List<Object> shouldArr = new java.util.ArrayList<>();
             if (rule.getShouldList() != null) {
                 for (String s : rule.getShouldList()) {
                     if (s == null || s.isBlank()) continue;
-                    String term = s; // 원문 유지
-                    shouldArr.add(java.util.Map.of("match_phrase", java.util.Map.of("title",       java.util.Map.of("query", term, "slop", 0, "boost", 4))));
-                    shouldArr.add(java.util.Map.of("match_phrase", java.util.Map.of("description", java.util.Map.of("query", term, "slop", 0, "boost", 3))));
+                    String term = s;
+                    shouldArr.add(java.util.Map.of("match_phrase", java.util.Map.of("title",         java.util.Map.of("query", term, "slop", 0, "boost", 4))));
+                    shouldArr.add(java.util.Map.of("match_phrase", java.util.Map.of("description",   java.util.Map.of("query", term, "slop", 0, "boost", 3))));
                     shouldArr.add(java.util.Map.of("match_phrase", java.util.Map.of("combined_text", java.util.Map.of("query", term, "slop", 0, "boost", 2))));
                 }
             }
@@ -285,23 +278,26 @@ public class TourEsService {
                 for (String x : rule.getExcludeList()) {
                     if (x == null || x.isBlank()) continue;
                     String term = x;
-                    mustNotArr.add(java.util.Map.of("match_phrase", java.util.Map.of("title",       java.util.Map.of("query", term, "slop", 0))));
-                    mustNotArr.add(java.util.Map.of("match_phrase", java.util.Map.of("description", java.util.Map.of("query", term, "slop", 0))));
+                    mustNotArr.add(java.util.Map.of("match_phrase", java.util.Map.of("title",         java.util.Map.of("query", term, "slop", 0))));
+                    mustNotArr.add(java.util.Map.of("match_phrase", java.util.Map.of("description",   java.util.Map.of("query", term, "slop", 0))));
                     mustNotArr.add(java.util.Map.of("match_phrase", java.util.Map.of("combined_text", java.util.Map.of("query", term, "slop", 0))));
                 }
             }
 
-            java.util.Map<String, Object> bool = new LinkedHashMap<>();
-            if (!filterArr.isEmpty()) bool.put("filter", filterArr);
-            if (!shouldArr.isEmpty()) {
-                bool.put("should", shouldArr);
-                bool.put("minimum_should_match", 1);
-            }
-            if (!mustNotArr.isEmpty()) bool.put("must_not", mustNotArr);
-            bool.put("must", java.util.Map.of("match_all", java.util.Map.of()));
+            // 4) query.bool (부스팅 전용: minimum_should_match 제거!)
+            java.util.Map<String, Object> boolQuery = new java.util.LinkedHashMap<>();
+            if (!filterArr.isEmpty())   boolQuery.put("filter",   filterArr);
+            if (!mustNotArr.isEmpty())  boolQuery.put("must_not", mustNotArr);
+            if (!shouldArr.isEmpty())   boolQuery.put("should",   shouldArr);
+            // 필요시 점수 없는 기본 must를 줄 수도 있지만 없어도 유효한 bool
 
-            // 3) 루트 요청 본문 구성
-            java.util.Map<String, Object> root = new LinkedHashMap<>();
+            // 5) knn.filter.bool (가볍게: allow (+ optional must_not)만)
+            java.util.Map<String, Object> boolKnn = new java.util.LinkedHashMap<>();
+            if (!filterArr.isEmpty())   boolKnn.put("filter",   filterArr);
+            if (!mustNotArr.isEmpty())  boolKnn.put("must_not", mustNotArr);
+
+            // 6) 루트 요청
+            java.util.Map<String, Object> root = new java.util.LinkedHashMap<>();
             root.put("size", Math.max(topN, 1));
             root.put("track_total_hits", false);
             root.put("_source", java.util.List.of("tour_id"));
@@ -313,23 +309,21 @@ public class TourEsService {
                             "_source", java.util.List.of("tour_id", "title")
                     )
             ));
-            root.put("query", java.util.Map.of("bool", bool));
+            root.put("query", java.util.Map.of("bool", boolQuery));
             root.put("knn", java.util.Map.of(
                     "field", "embedding",
                     "query_vector", qvList,
                     "k", Math.max(k, 1),
                     "num_candidates", Math.max(numCandidates, 1),
-                    "filter", java.util.Map.of("bool", bool) // 동일 bool을 knn 필터에도 적용
+                    "filter", java.util.Map.of("bool", boolKnn)
             ));
 
-            // 4) 직렬화
-            ObjectMapper om = new ObjectMapper();
+            com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
             String raw = om.writeValueAsString(root);
             log.info("[ES][V2-AllowedOnly] rawJson={}", raw);
             return raw;
 
         } catch (Exception e) {
-            // 호출부에서 BusinessException 처리하므로 여기서는 던져준다
             throw new RuntimeException("Failed to build ES raw json: " + e.getMessage(), e);
         }
     }

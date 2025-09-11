@@ -1,6 +1,7 @@
 package tkitem.backend.domain.tour.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.member.vo.Member;
@@ -18,6 +19,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TourRecommendService {
 
     private final TourMapper tourMapper;
@@ -33,10 +35,13 @@ public class TourRecommendService {
     @Transactional(readOnly = true)
     public List<TourRecommendationResponseDto> recommendDbOnly(TourRecommendationRequestDto req, int topN, Member member) {
 
+        log.info("DB 투어추천 시작");
         List<TourCandidateRowDto> tourCandidateRowDtos = tourMapper.selectTourCandidates(req, kTop, member.getMemberId());
+        log.info("DB 투어추천 완료 : {}", tourCandidateRowDtos.size());
 
         if(tourCandidateRowDtos.isEmpty()) return Collections.emptyList();
 
+        // TODO : 후보계산이 진짜 오래걸림
         // min-max 정규화(S_DB 만)
         double dbMin = tourCandidateRowDtos.stream().mapToDouble(r -> NumberUtil.toDoubleOrZero(r.getSDbRaw())).min().orElse(0);
         double dbMax = tourCandidateRowDtos.stream().mapToDouble(r -> NumberUtil.toDoubleOrZero(r.getSDbRaw())).max().orElse(1);
@@ -69,7 +74,6 @@ public class TourRecommendService {
             List<TourPackageDto> list = grouped.get(dto.getTourId());
             dto.setPackageDtos(list != null ? list : Collections.emptyList());
         }
-
         return top;
     }
 
