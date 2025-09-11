@@ -10,6 +10,7 @@ import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 import tkitem.backend.domain.tour.dto.response.TourCommonRecommendDto;
 import tkitem.backend.domain.tour.dto.response.TourPackageDetailDto;
+import tkitem.backend.domain.tour.dto.response.TourPackageDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.service.DataLoadService;
 import tkitem.backend.domain.tour.service.TourRecommendFacadeService;
@@ -75,6 +76,9 @@ public class TourController {
         }
         List<TourRecommendationResponseDto> responseDtodList = tourFacadeService.recommend(req, queryText, topN, member);
         log.info("[RES] size={}", responseDtodList == null ? null : responseDtodList.size());
+        for(TourRecommendationResponseDto responseDto : responseDtodList){
+            log.info("[RES] tourId : {}, packageCnt : {}, scheduleCnt : {}", responseDto.getTourId(), responseDto.getPackageDtos().size(), responseDto.getSchedules().size());
+        }
         return ResponseEntity.ok(responseDtodList);
     }
 
@@ -87,7 +91,12 @@ public class TourController {
             @AuthenticationPrincipal Member member,
             @PathVariable Long tourPackageId){
 
-        TourPackageDetailDto responseDto = tourService.getTourPackageDetail(tourPackageId);
+        TourPackageDetailDto responseDto = tourService.getTourPackageDetail(tourPackageId, member);
+        responseDto.setTourPackageId(tourPackageId);
+
+        log.info("tourID : {}", responseDto.getTourId());
+        log.info("입력된 tourPackageId: {}", tourPackageId);
+        for(TourPackageDto tpd : responseDto.getPackageDtos()) log.info("tourPackageId : {}", tpd.getTourPackageId());
 
         return ResponseEntity.ok(responseDto);
     }
@@ -142,8 +151,6 @@ public class TourController {
     public ResponseEntity<TourCommonRecommendDto> keyword(
             @RequestParam("keyword") String keyword
     ){
-//        List<TourCommonRecommendDto> result = tourFacadeService.searchByKeyword(keyword);
-
         TourCommonRecommendDto result1 = tourFacadeService.searchTop1ByKeyword(keyword);
 
         return ResponseEntity.ok(result1);

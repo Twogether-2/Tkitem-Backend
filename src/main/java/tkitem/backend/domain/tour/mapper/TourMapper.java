@@ -2,6 +2,7 @@ package tkitem.backend.domain.tour.mapper;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.springframework.security.core.parameters.P;
 import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
 import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
@@ -9,6 +10,7 @@ import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 import tkitem.backend.domain.tour.dto.TourPackageInfo;
 import tkitem.backend.domain.tour.dto.response.TourCommonRecommendDto;
 import tkitem.backend.domain.tour.dto.response.TourPackageDetailDto;
+import tkitem.backend.domain.tour.dto.response.TourPackageDto;
 import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.vo.Tour;
 import tkitem.backend.domain.tour.vo.TourCity;
@@ -66,6 +68,12 @@ public interface TourMapper {
             @Param("req") TourRecommendationRequestDto tourRecommendationRequestDto,
             @Param("kTop") Integer kTop,
             @Param("memberId") Long memberId);
+
+    List<TourPackageDto> selectPackagesForTours(
+            @Param("req") TourRecommendationRequestDto req,
+            @Param("memberId") Long memberId,
+            @Param("tourIds")  List<Long> tourIds
+    );
 
     List<Map<String, Object>> selectTourMetaByIds(List<Long> tourIds);
 

@@ -344,43 +344,4 @@ public class TourEsService {
         if (r.getShouldList() != null) tokens.addAll(r.getShouldList());
         return String.join(" ", tokens);
     }
-
-    /**
-     * BM25 + kNN 결합 스코어 계산 (ES 관련 처리 담당)
-     * @param rule
-     * @param allow
-     * @param k
-     * @param candidates
-     * @param mTop
-     * @param wKnn
-     * @param wBm25
-     * @return
-     */
-    public Map<Long, Double> searchByKeywordScores(KeywordRule rule,
-                                                   Set<Long> allow,
-                                                   int k, int candidates, int mTop,
-                                                   double wKnn, double wBm25) {
-        try {
-            String qText = buildQueryText(rule);
-            Map<Long, Double> knn = computeEsScores(qText, (allow == null || allow.isEmpty()) ? null : allow, k, candidates, mTop);
-            Map<Long, Double> bm25 = searchBm25Scores(rule, allow);
-
-            Set<Long> all = new HashSet<>();
-            all.addAll(knn.keySet());
-            all.addAll(bm25.keySet());
-
-            Map<Long, Double> merged = new HashMap<>();
-            for (Long tid : all) {
-                double sK = knn.getOrDefault(tid, 0.0);
-                double sB = bm25.getOrDefault(tid, 0.0);
-                merged.put(tid, wKnn * sK + wBm25 * sB);
-            }
-            return merged;
-
-        } catch (BusinessException be) {
-            throw be;
-        } catch (Exception e) {
-            throw new BusinessException("키워드 ES 결합 스코어 계산 실패: " + e.getMessage(), ErrorCode.INTERNAL_SERVER_ERROR);
-        }
-    }
 }

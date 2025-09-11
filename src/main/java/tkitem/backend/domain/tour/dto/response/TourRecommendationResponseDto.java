@@ -3,7 +3,6 @@ package tkitem.backend.domain.tour.dto.response;
 import lombok.*;
 import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 
-import java.util.Date;
 import java.util.List;
 
 @Getter
@@ -20,13 +19,7 @@ public class TourRecommendationResponseDto {
     private String provider;
 
     // 투어 일자 정보
-    private Long tourPackageId;
-    private Long price;
-    private Date departureDate;
-    private Date returnDate;
-    private String bookingUrl;
-    private String departureAirline;
-    private String returnAirline;
+    List<TourPackageDto> packageDtos;
 
     // 추천된 투어 그룹 정보
     private Long groupId;
@@ -38,5 +31,4 @@ public class TourRecommendationResponseDto {
     private Double finalScore;
     private Double dbScore;
     private Double esScore;
-    // 투어 추천 이유 분석해서 데이터화 해서 전달 필요
 }
