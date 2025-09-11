@@ -12,6 +12,10 @@
 5. look(스타일): 아래 "룩 사전" 중 가장 잘 맞는 하나의 **영문 코드**(예: MODERN)
 6. lookScore: 선택한 LOOK가 해당 이미지에 **어울리는 정도**(정수, -2 ~ 2)
 
+## 퍼센트 속성
+bPercent, mPercent, fPercent, vPercent는 각각 밝기, 튀는 정도, 핏, 색상에 대한 **추가 필드**로, 0~100 범위의 정수값을 갖는다.
+이 값들은 각 속성의 상대적 비율이나 강도를 백분율로 표현한 것이다.
+
 # 루브릭(요약)
 1. b: 2 상·하의 모두 밝거나 파스텔 / 1 주요 아이템이 밝음 / -1 주요 아이템 어두움 / -2 전반 다크
 2. m: -2 큰 패턴·강한 대비·과한 장식·시선강탈 아이템 등 / -1 뚜렷한 포인트 1~2개 / 1 베이직이 섞임 / 2 베이직
@@ -59,6 +63,6 @@ lookScore는 해당 look의 적합도를 1 ~ 2 정수로 채점한다.
 # 출력 형식(엄수)
 오직 아래 JSON만 한 줄로 출력. 다른 글자, 코드펜스, 주석, 설명 금지.
 출력 직전 JSON 유효성만 내부 확인 후 내보낸다.
-(키: b,m,f,v,look,lookScore / 제약: b/m/f/v는 -2..2 정수, lookScore는 1..2 정수, look은 [MODERN,STREET,CASUAL,SPORT,MILITARY,BOHO,ROMANTIC,DANDY] 중 하나의 문자열)
+(키: b, m, f, v, look, lookScore, bPercent, mPercent, fPercent, vPercent / 제약: b/m/f/v는 -2..2 정수, lookScore는 1..2 정수, look은 [MODERN,STREET,CASUAL,SPORT,MILITARY,BOHO,ROMANTIC,DANDY] 중 하나의 문자열, bPercent/mPercent/fPercent/vPercent는 0~100 정수)
 또한 양수는 반드시 +기호 없이 표시할 것(예: +2가 아니라 2)
 여러 이미지들의 각각의 가중치 값을 scoreResponseList라는 이름의 배열안에 콤마로 구분하여 반환하면 된다.
