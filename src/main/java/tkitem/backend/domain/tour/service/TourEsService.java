@@ -27,6 +27,7 @@ import tkitem.backend.global.error.exception.BusinessException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -180,7 +181,7 @@ public class TourEsService {
      */
     public Map<Long, Double> computeEsScores(
             String queryText,
-            Set<Long> allowTourIds,
+            List<Long> allowTourIds,
             int k, int candidates, int mTop) throws Exception{
 
         // 쿼리 임베딩
@@ -227,121 +228,192 @@ public class TourEsService {
     }
 
     /**
-     * BM25 검색: should 부스팅 + must_not + allow terms 필터
+     * DB에서 전달한 allowTourIds만으로 ES를 선필터링하고,
+     * 부스팅(should) / 제외(must_not) 문장을 그대로 반영하여
+     * /{index}/_search + "knn" + collapse(tour_id) (+ inner_hits=size=mTop) RAW JSON을 생성.
      * @param rule
-     * @param allow
+     * @param allowTourIds
+     * @param topN 투어 단위로 상위 N개를 받고 싶을 때 사용
+     * @param k
+     * @param numCandidates
+     * @param mTop 투어별 일정 문서 점수 상위 m개를 inner_hits로 내려 받아 평균 계산용(파서 메서드에서 사용)
      * @return
      */
-    public Map<Long, Double> searchBm25Scores(KeywordRule rule, Set<Long> allow) {
+    public String searchTopNByVectorRawJsonAllowedOnly(
+            KeywordRule rule,
+            List<Long> allowTourIds,
+            int topN,
+            int k,
+            int numCandidates,
+            int mTop
+    ){
         try {
-            List<Query> shouldQs = new ArrayList<>();
-
-            // [MOD] shouldList: 정제돼 있다는 전제 → trim/empty 체크 생략
+            // 1) 임베딩 벡터
+            StringBuilder qt = new StringBuilder();
+            if (rule.getKeyword() != null && !rule.getKeyword().isBlank()) qt.append(rule.getKeyword()).append(' ');
             if (rule.getShouldList() != null) {
-                for (String q : rule.getShouldList()) {
-                    // 2-1) 일반 키워드: best_fields 멀티매치 (title^2, description)
-                    shouldQs.add(QueryBuilders.multiMatch(mm -> mm
-                            .query(q)
-                            .fields("title^2", "description")
-                    ));
-                    // 2-2) 복합어(공백 포함)에는 phrase 매치 부스팅 추가
-                    if (q.indexOf(' ') >= 0) {
-                        shouldQs.add(QueryBuilders.matchPhrase(mp -> mp
-                                .field("title")
-                                .query(q)
-                                .boost(2.5f)
-                        ));
-                        shouldQs.add(QueryBuilders.matchPhrase(mp -> mp
-                                .field("description")
-                                .query(q)
-                                .boost(1.5f)
-                        ));
-                    }
+                for (String s : rule.getShouldList()) if (s != null && !s.isBlank()) qt.append(s).append(' ');
+            }
+            String queryText = qt.toString().trim();
+            float[] qv = embeddingService.embed(queryText);
+            java.util.List<Float> qvList = new java.util.ArrayList<>(qv.length);
+            for (float f : qv) qvList.add(f);
+
+            // 2) bool 쿼리 구성 (filter / should / must_not / must)
+            java.util.List<Object> filterArr = new java.util.ArrayList<>();
+            if (allowTourIds != null && !allowTourIds.isEmpty()) {
+                // terms: tour_id IN allowIds (chunking은 ES 요청 크기 이슈 있을 때만 도입)
+                java.util.List<Long> ids = new java.util.ArrayList<>(allowTourIds);
+                java.util.Map<String, Object> terms = new LinkedHashMap<>();
+                terms.put("tour_id", ids);
+                filterArr.add(java.util.Map.of("terms", terms));
+            }
+
+            java.util.List<Object> shouldArr = new java.util.ArrayList<>();
+            if (rule.getShouldList() != null) {
+                for (String s : rule.getShouldList()) {
+                    if (s == null || s.isBlank()) continue;
+                    String term = s; // 원문 유지
+                    shouldArr.add(java.util.Map.of("match_phrase", java.util.Map.of("title",       java.util.Map.of("query", term, "slop", 0, "boost", 4))));
+                    shouldArr.add(java.util.Map.of("match_phrase", java.util.Map.of("description", java.util.Map.of("query", term, "slop", 0, "boost", 3))));
+                    shouldArr.add(java.util.Map.of("match_phrase", java.util.Map.of("combined_text", java.util.Map.of("query", term, "slop", 0, "boost", 2))));
                 }
             }
 
-            // [MOD] excludeList: 선택적이므로 안전 처리(비어있을 수 있음)
-            List<Query> mustNotQs = new ArrayList<>();
+            java.util.List<Object> mustNotArr = new java.util.ArrayList<>();
             if (rule.getExcludeList() != null) {
-                for (String q : rule.getExcludeList()) {
-                    if (q == null || q.isBlank()) continue;
-                    mustNotQs.add(QueryBuilders.multiMatch(mm -> mm
-                            .query(q)
-                            .fields("title", "description")
-                    ));
-                    if (q.indexOf(' ') >= 0) {
-                        mustNotQs.add(QueryBuilders.matchPhrase(mp -> mp
-                                .field("title").query(q).boost(1.0f)
-                        ));
-                        mustNotQs.add(QueryBuilders.matchPhrase(mp -> mp
-                                .field("description").query(q).boost(1.0f)
-                        ));
-                    }
+                for (String x : rule.getExcludeList()) {
+                    if (x == null || x.isBlank()) continue;
+                    String term = x;
+                    mustNotArr.add(java.util.Map.of("match_phrase", java.util.Map.of("title",       java.util.Map.of("query", term, "slop", 0))));
+                    mustNotArr.add(java.util.Map.of("match_phrase", java.util.Map.of("description", java.util.Map.of("query", term, "slop", 0))));
+                    mustNotArr.add(java.util.Map.of("match_phrase", java.util.Map.of("combined_text", java.util.Map.of("query", term, "slop", 0))));
                 }
             }
 
-            // 위치 필터: country/countryGroup가 빈 문자열이면 allow는 빈/널이므로 필터 생략
-            List<Query> filterQs = new ArrayList<>();
-            if (allow != null && !allow.isEmpty()) {
-                filterQs.add(QueryBuilders.terms(t -> t.field("tour_id").terms(v -> v.value(
-                        allow.stream().map(FieldValue::of).toList()
-                ))));
+            java.util.Map<String, Object> bool = new LinkedHashMap<>();
+            if (!filterArr.isEmpty()) bool.put("filter", filterArr);
+            if (!shouldArr.isEmpty()) {
+                bool.put("should", shouldArr);
+                bool.put("minimum_should_match", 1);
             }
+            if (!mustNotArr.isEmpty()) bool.put("must_not", mustNotArr);
+            bool.put("must", java.util.Map.of("match_all", java.util.Map.of()));
 
-            BoolQuery.Builder bool = new BoolQuery.Builder();
-            if (!shouldQs.isEmpty()) {
-                bool.should(shouldQs);
-                bool.minimumShouldMatch("1");
-            }
-            if (!mustNotQs.isEmpty()) bool.mustNot(mustNotQs);
-            if (!filterQs.isEmpty())  bool.filter(filterQs);
+            // 3) 루트 요청 본문 구성
+            java.util.Map<String, Object> root = new LinkedHashMap<>();
+            root.put("size", Math.max(topN, 1));
+            root.put("track_total_hits", false);
+            root.put("_source", java.util.List.of("tour_id"));
+            root.put("collapse", java.util.Map.of(
+                    "field", "tour_id",
+                    "inner_hits", java.util.Map.of(
+                            "name", "top_m",
+                            "size", Math.max(mTop, 1),
+                            "_source", java.util.List.of("tour_id", "title")
+                    )
+            ));
+            root.put("query", java.util.Map.of("bool", bool));
+            root.put("knn", java.util.Map.of(
+                    "field", "embedding",
+                    "query_vector", qvList,
+                    "k", Math.max(k, 1),
+                    "num_candidates", Math.max(numCandidates, 1),
+                    "filter", java.util.Map.of("bool", bool) // 동일 bool을 knn 필터에도 적용
+            ));
 
-            SearchRequest req = SearchRequest.of(s -> s
-                    .index(INDEX_TDS)
-                    .size(500)
-                    .query(q -> q.bool(bool.build()))
-                    .sort(sort -> sort.score(sc -> sc.order(SortOrder.Desc)))
-                    .source(src -> src.filter(f -> f.includes("tour_id","title")))
-            );
+            // 4) 직렬화
+            ObjectMapper om = new ObjectMapper();
+            String raw = om.writeValueAsString(root);
+            log.info("[ES][V2-AllowedOnly] rawJson={}", raw);
+            return raw;
 
-            SearchResponse<Map> resp = esClient.search(req, Map.class);
-
-            Map<Long, List<Double>> byTour = new HashMap<>();
-            resp.hits().hits().forEach(h -> {
-                Map<String, Object> src = h.source();
-                if (src == null) return;
-                Object tidObj = src.get("tour_id");
-                if (tidObj == null) return;
-                Long tid = Long.valueOf(String.valueOf(tidObj));
-                byTour.computeIfAbsent(tid, k -> new ArrayList<>()).add(h.score());
-            });
-
-            Map<Long, Double> out = new HashMap<>();
-            for (var e : byTour.entrySet()) {
-                double avgTop3 = e.getValue().stream()
-                        .sorted(Comparator.reverseOrder())
-                        .limit(3)
-                        .mapToDouble(Double::doubleValue).average().orElse(0.0);
-                out.put(e.getKey(), avgTop3);
-            }
-            return out;
-
-        } catch (BusinessException be) {
-            throw be;
         } catch (Exception e) {
-            throw new BusinessException("BM25 검색 실패: " + e.getMessage(), ErrorCode.INTERNAL_SERVER_ERROR);
+            // 호출부에서 BusinessException 처리하므로 여기서는 던져준다
+            throw new RuntimeException("Failed to build ES raw json: " + e.getMessage(), e);
         }
     }
 
     /**
-     * 룰 -> 임베딩 질의 텍스트
-     * @param r
+     * RAW JSON을 바로 호출해, collapse된 각 투어에 대해 inner_hits 상위 m개 점수의 평균을 계산하여
+     * List<TopMatchDto> (tourId, avgScore)로 반환.
+     * 반환 전, avgScore 내림차순으로 정렬합니다.
+     * @param rule
+     * @param allowTourIds
+     * @param topN
+     * @param k
+     * @param numCandidates
+     * @param mTop
      * @return
      */
-    public static String buildQueryText(KeywordRule r) { // static으로 공개
-        List<String> tokens = new ArrayList<>();
-        if (r.getKeyword() != null) tokens.add(r.getKeyword());
-        if (r.getShouldList() != null) tokens.addAll(r.getShouldList());
-        return String.join(" ", tokens);
+    public List<TopMatchDto> sendRawEsQueryTopNAllowed(
+            KeywordRule rule,
+            List<Long> allowTourIds,
+            int topN,
+            int k,
+            int numCandidates,
+            int mTop
+    ) {
+        try {
+            String rawJson = searchTopNByVectorRawJsonAllowedOnly(rule, allowTourIds, topN, k, numCandidates, mTop);
+            RestClient rest = ((RestClientTransport) esClient._transport()).restClient();
+            Request req = new Request("POST", "/" + INDEX_TDS + "/_search");
+            req.setJsonEntity(rawJson);
+
+            Response resp = rest.performRequest(req);
+            String body = new String(resp.getEntity().getContent().readAllBytes(), StandardCharsets.UTF_8);
+
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(body);
+            JsonNode hits = root.get("hits").path("hits");
+            if (!hits.isArray() || hits.size() == 0){
+                throw new BusinessException("ES no hit", ErrorCode.ENTITY_NOT_FOUND);
+            }
+
+            List<TopMatchDto> out = new ArrayList<>();
+            for(JsonNode h :hits){
+                long tourId = h.path("_source").path("tour_id").asLong();
+
+                // inner_hits.top_m.hits.hits. 의 _source 평균(mTop 상한 적용)
+                JsonNode innerHits = h.path("inner_hits").path("top_m").path("hits").path("hits");
+                List<Double> scores = new ArrayList<>();
+                if(innerHits.isArray()){
+                    for(JsonNode ih : innerHits){
+                        scores.add(ih.path("_score").asDouble(0.0));
+                    }
+                }
+                scores.sort(Comparator.reverseOrder());
+                double avg = scores.stream()
+                        .limit(Math.max(mTop, 1)) // 최소 1개 이상은 평균에 포함되게. mTop 이 0으로 들어오는 실수 방지.
+                        .mapToDouble(Double:: doubleValue)
+                        .average().orElse(h.path("_score").asDouble(0.0));
+
+                out.add(new TopMatchDto(tourId, avg));
+            }
+
+            // 평균점수 내림차순 정렬
+            out.sort((a, b) -> Double.compare(b.score(), a.score()));
+            return out;
+        } catch (BusinessException be){
+            throw be;
+        } catch (Exception e) {
+            throw new BusinessException("ES V2 AllowedOnly 전송 실패: " + e.getMessage(), ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    // float[] -> JSON 배열 문자열
+    private final String toJsonArray(float[] arr) {
+        StringBuilder sb = new StringBuilder("[");
+        for(int i=0; i<arr.length; i++){
+            if(i>0) sb.append(",");
+            sb.append(arr[i]);
+        }
+        return sb.append("]").toString();
+    }
+
+    // terms JSON 생성. terms 란 Where tour_id IN(...) 과 같은 필터 역할
+    private static String termJson(String field, List<Long> values){
+        String joined = values.stream().map(Object::toString).collect(Collectors.joining(","));
+        return "{\"terms\":{\"" + field + "\":[" + joined + "]}}";
     }
 }

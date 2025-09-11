@@ -52,7 +52,7 @@ public class TourController {
             @RequestParam(name = "topN", defaultValue = "5") int topN,
             @AuthenticationPrincipal Member member
             ) throws Exception{
-        // [추가] 요청 파라미터 요약 로그
+        // 요청 파라미터 요약 로그
         log.info("[REQ] text={}, topN={}", queryText, topN);
         log.info("[REQ] date {} ~ {}, price {} ~ {}, tags={}, groupId={}",
                 req.getDepartureDate(), req.getReturnDate(),

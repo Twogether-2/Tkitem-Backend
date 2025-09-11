@@ -28,6 +28,7 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
 
     private final TourRecommendService tourRecommendService;
     private final TourEsService tourEsService;
+    private final TourLLmService tourLLmService;
 
     private final TourMapper tourMapper;
     private final KeywordRuleLoader ruleLoader;
@@ -74,10 +75,13 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
         // 1. 사용자 입력 없으면 DB score 랭킹 상위 topN 개 반환
         boolean useEs = queryText != null && !queryText.isBlank();
 
+        // TODO : DB 검색만 7초정도 지연시간 발생. DB 조회시간 최적화 필요
         // DB 후보 1차 계산
         int baseCount = useEs ? Math.max(DB_STAGE_TOP, topN) : topN;
+        log.info("DB후보계산 시작");
         List<TourRecommendationResponseDto> base = tourRecommendService.recommendDbOnly(req, baseCount, member);
         if (base == null || base.isEmpty()) return Collections.emptyList();
+        log.info("DB후보계산 완료 : {}", base.size());
 
         // ES 없을 때. DB 로만 계산
         if (!useEs) {
@@ -95,10 +99,28 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
 
         // ES 입력도 있을 때 DB + ES 합쳐서 계산
         else {
-
             // 2. ES KNN 집계
-            Set<Long> allowIds = base.stream().map(TourRecommendationResponseDto::getTourId).collect(Collectors.toSet());
-            Map<Long, Double> sEsMap = tourEsService.computeEsScores(queryText, allowIds, ES_K, ES_CANDIDATES, ES_MTOP);
+            List<Long> allowIds = tourMapper.selectTourIdsByFilters(req.getDepartureDate(), req.getReturnDate(), req.getPriceMin(), req.getPriceMax(), req.getLocations());
+            log.info("[RE] allowids size from filtering db = {}", allowIds.size());
+
+            // GEMINI 로 queryText -> should/exclude 분류
+            KeywordRule rule = tourLLmService.buildRuleFromQueryText(queryText);
+
+            // ES 호출 파라미터
+            final int TOP_N_ES = 200;
+
+            // TODO : ES 검색시 TOUR 상위 10개만 나오는거, 200개는 찾게 수정
+            // ES 호출 (collapse + inner_hits 상위 m개 평균)
+            List<TopMatchDto>esTop = tourEsService.sendRawEsQueryTopNAllowed(
+                    rule, allowIds, TOP_N_ES, ES_K, ES_CANDIDATES, ES_MTOP
+            );
+
+            Map<Long, Double> sEsMap = esTop.stream()
+                    .collect(Collectors.toMap(TopMatchDto::tourId, TopMatchDto::score,(a, b) -> Math.max(a, b)));
+            log.info("ES KNN 집계 완료 : hits={},  distinctTours={}", esTop.size(), sEsMap.size());
+            for(Map.Entry<Long, Double> e : sEsMap.entrySet()){
+                log.info("tourId : {}, score: {}", e.getKey(), e.getValue());
+            }
 
             // 3. ES 점수 정규화 + 가중합
             double esMax = allowIds.stream()
@@ -117,7 +139,7 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
         }
 
         // =========================
-        // 4) 최종 정렬 (CHANGED)
+        // 4) 최종 정렬
         //    - 일자/가격 필터가 있으면: 출발일 오름차순
         //    - 없으면: 기존 점수 기반 정렬
         // =========================

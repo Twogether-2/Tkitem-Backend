@@ -664,4 +664,88 @@
             ELSE 999999
         END
     </select>
+
+    <select id="selectTourIdsByFilters" resultType="long">
+        SELECT DISTINCT t.tour_id
+        FROM TOUR t
+        WHERE
+        <!-- 날짜/가격 조건을 만족하는 패키지가 '존재'해야 함 -->
+        EXISTS (
+        SELECT 1
+        FROM TOUR_PACKAGE tp
+        WHERE tp.tour_id = t.tour_id
+
+        <!-- 날짜 overlap -->
+        <if test="depStart != null or retEnd != null">
+            AND
+            (
+            1=1
+            <if test="depStart != null and retEnd != null">
+                AND tp.departure_date &lt;= #{retEnd}
+                AND tp.return_date   &gt;= #{depStart}
+            </if>
+            <if test="depStart != null and retEnd == null">
+                <!-- retEnd 미지정: 시작일 이후에 끝나는 패키지면 통과 -->
+                AND tp.return_date   &gt;= #{depStart}
+            </if>
+            <if test="depStart == null and retEnd != null">
+                <!-- depStart 미지정: 종료일 이전에 시작하는 패키지면 통과 -->
+                AND tp.departure_date &lt;= #{retEnd}
+            </if>
+            )
+        </if>
+
+        <!-- 가격 -->
+        <if test="priceMin != null">
+            AND tp.price &gt;= #{priceMin}
+        </if>
+        <if test="priceMax != null">
+            AND tp.price &lt;= #{priceMax}
+        </if>
+        )
+
+        <!-- 지역 OR 매칭 -->
+        <if test="locations != null and locations.size() &gt; 0">
+            AND EXISTS (
+            SELECT 1
+            FROM TOUR_CITY tc
+            JOIN CITY c ON c.city_id = tc.city_id
+            WHERE tc.tour_id = t.tour_id
+            AND (
+            <!-- locations 항목들을 OR 로 연결 -->
+            <foreach collection="locations" item="loc" separator=" OR ">
+                (
+                <!-- 1) city가 주어졌다면 city로 매칭 -->
+                <if test="loc.city != null and loc.city.trim().length() &gt; 0">
+                    c.city_name = #{loc.city}
+                    <!-- country/countryGroup가 같이 왔다면 그까지 '추가로' 제한 -->
+                    <if test="loc.country != null and loc.country.trim().length() &gt; 0">
+                        AND c.country_name = #{loc.country}
+                    </if>
+                    <if test="loc.countryGroup != null and loc.countryGroup.trim().length() &gt; 0">
+                        AND c.country_group_name = #{loc.countryGroup}
+                    </if>
+                </if>
+
+                <!-- 2) city는 없고 country가 주어졌다면 country로 매칭 -->
+                <if test="(loc.city == null or loc.city.trim().length() == 0)
+                                        and (loc.country != null and loc.country.trim().length() &gt; 0)">
+                    c.country_name = #{loc.country}
+                    <if test="loc.countryGroup != null and loc.countryGroup.trim().length() &gt; 0">
+                        AND c.country_group_name = #{loc.countryGroup}
+                    </if>
+                </if>
+
+                <!-- 3) city/country 모두 없고 countryGroup만 주어졌다면 group으로 매칭 -->
+                <if test="(loc.city == null or loc.city.trim().length() == 0)
+                                        and (loc.country == null or loc.country.trim().length() == 0)
+                                        and (loc.countryGroup != null and loc.countryGroup.trim().length() &gt; 0)">
+                    c.country_group_name = #{loc.countryGroup}
+                </if>
+                )
+            </foreach>
+            )
+            )
+        </if>
+    </select>
 </mapper>
