@@ -59,21 +59,6 @@ public class TourController {
                 req.getPriceMin(), req.getPriceMax(),
                 req.getTagIdList(), req.getGroupId());
 
-        // locations 상세 로그 (null-safe)
-        if (req.getLocations() == null) {
-            log.info("[REQ] locations = null");
-        } else if (req.getLocations().isEmpty()) {
-            log.info("[REQ] locations = [] (empty)");
-        } else {
-            for (int i = 0; i < req.getLocations().size(); i++) {
-                var loc = req.getLocations().get(i);
-                log.info("[REQ] locations[{}] group='{}', country='{}', city='{}'",
-                        i,
-                        loc.getCountryGroup(),
-                        loc.getCountry(),
-                        loc.getCity());
-            }
-        }
         List<TourRecommendationResponseDto> responseDtodList = tourFacadeService.recommend(req, queryText, topN, member);
         log.info("[RES] size={}", responseDtodList == null ? null : responseDtodList.size());
         for(TourRecommendationResponseDto responseDto : responseDtodList){
@@ -110,9 +95,6 @@ public class TourController {
             @AuthenticationPrincipal Member member
     ){
         List<TourCommonRecommendDto> tourCommonRecommendDtos = tourService.getRecentRecommendedTours(member);
-        for(TourCommonRecommendDto dto : tourCommonRecommendDtos){
-            log.info("tourId={}, title={}, tourPackageId={}, price={}", dto.getTourId(), dto.getTitle(), dto.getTourPackageId(), dto.getPrice());
-        }
         return ResponseEntity.ok(tourCommonRecommendDtos);
     }
 
