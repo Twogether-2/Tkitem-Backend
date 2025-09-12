@@ -252,6 +252,8 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
                             .name(p.getName())
                             .brandName(p.getBrandName())
                             .category(p.getCategoryName())
+                            .code(p.getCode())
+                            .url(p.getUrl())
                             .imgUrl(p.getImgUrl())
                             .price(p.getPrice())
                             .avgReview(p.getAvgReview())
