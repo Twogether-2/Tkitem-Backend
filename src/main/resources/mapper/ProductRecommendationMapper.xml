@@ -100,7 +100,7 @@
                      (
                          /* 1) 태그 매칭(날씨/활동) 0~0.4 */
                          LEAST(
-                                 0.4,
+                                 0.30,
                                  (
                                      SELECT COUNT(*)
                                      FROM PRODUCT_TAG pt
@@ -119,22 +119,22 @@
                                              OR (#{notes, jdbcType=VARCHAR} LIKE '%BEACH%'    AND ct.TAG_CODE = 'ACT_BEACH')
                                              OR (#{notes, jdbcType=VARCHAR} LIKE '%HIKING%'   AND ct.TAG_CODE = 'ACT_HIKING')
                                          )
-                                 ) * 0.1
+                                 ) * 0.10
                          )
                              /* 2) 리뷰 0~0.3 */
                              + CASE
-                                   WHEN p.AVG_REVIEW IS NULL THEN 0.15
-                                   ELSE (p.AVG_REVIEW / 5.0) * 0.3
+                                   WHEN p.AVG_REVIEW IS NULL THEN 0.075
+                                   ELSE  POWER(LEAST(p.AVG_REVIEW, 4.7) / 5.0, 2) * 0.15
                              END
                              /* 3) 가격 0~0.2 */
                              + CASE
-                                   WHEN p.PRICE &lt;= 30000  THEN 0.2
-                                   WHEN p.PRICE &lt;= 50000  THEN 0.15
-                                   WHEN p.PRICE &lt;= 100000 THEN 0.1
-                                   ELSE 0.05
+                                   WHEN p.PRICE &lt;= 30000  THEN 0.1
+                                   WHEN p.PRICE &lt;= 50000  THEN 0.08
+                                   WHEN p.PRICE &lt;= 100000 THEN 0.05
+                                   ELSE 0.02
                              END
                              /* 4) 기본 0.1 */
-                             + 0.1
+                             + 0.05
                          ) AS base_score
                  FROM PRODUCT p
                           JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
@@ -146,77 +146,79 @@
                  SELECT
                      b.*,
                      /* ===== 취향 스코어: 전 상품/의류 조건 별로 분리 ===== */
-                     (
-                         /* (전 상품) 색상-명도 선호 */
-                         NVL((
-                                 SELECT LEAST(1, COUNT(*)) * 0.05
-                                 FROM PRODUCT_TAG pt
-                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                                          JOIN user_preference up ON 1=1
-                                 WHERE pt.PRODUCT_ID = b.PRODUCT_ID
-                                   AND (
-                                     (up.BRIGHTNESS &gt;= 50 AND ct.TAG_CODE IN ('COLOR_BRIGHT','COLOR_PASTEL'))
-                                         OR (up.BRIGHTNESS &lt;  50 AND ct.TAG_CODE IN ('COLOR_DARK','COLOR_NEUTRAL'))
-                                     )
-                             ), 0)
-                             +
-                             /* (전 상품) 채도/비비드 선호 → COLOR_VIVID 가점 */
-                         NVL((
-                                 SELECT LEAST(1, COUNT(*)) * 0.05
-                                 FROM PRODUCT_TAG pt
-                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                                          JOIN user_preference up ON 1=1
-                                 WHERE pt.PRODUCT_ID = b.PRODUCT_ID
-                                   AND NVL(up.BOLDNESS, 0) &gt;= 60
-                                   AND ct.TAG_CODE = 'COLOR_VIVID'
-                             ), 0)
-                             +
-                             /* (의류만) 스타일 선호 */
-                         NVL((
-                                 SELECT LEAST(1, COUNT(*)) * 0.10
-                                 FROM PRODUCT_TAG pt
-                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                                          JOIN user_preference up ON 1=1
-                                 WHERE pt.PRODUCT_ID = b.PRODUCT_ID
-                                   AND b.PRODUCT_CATEGORY_MAIN_ID = 8
-                                   AND (
-                                     ct.TAG_CODE = 'STYLE_' || up.FIRST_LOOK
-                                         OR ct.TAG_CODE = 'STYLE_' || up.SECOND_LOOK
-                                     )
-                             ), 0)
-                             +
-                             /* (의류만) 핏 선호: FIT_{SLIM|REGULAR|LOOSE|OVERSIZED} */
-                         NVL((
-                                 SELECT LEAST(1, COUNT(*)) * 0.05
-                                 FROM PRODUCT_TAG pt
-                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                                          JOIN user_preference up ON 1=1
-                                 WHERE pt.PRODUCT_ID = b.PRODUCT_ID
-                                   AND b.PRODUCT_CATEGORY_MAIN_ID = 8
-                                   AND up.FIT IS NOT NULL
-                                   AND ct.TAG_CODE = ('FIT_' || up.FIT)
-                             ), 0)
-                             +
-                             /* (전 상품) 브랜드 충성도 */
-                         NVL((
-                                 SELECT LEAST(1, COUNT(*)) * 0.05
-                                 FROM ORDER_ITEM oi
-                                          JOIN ORDERS o ON o.ORDER_ID = oi.ORDER_ID
-                                 WHERE o.MEMBER_ID = #{memberId, jdbcType=NUMERIC}
-                                   AND oi.PRODUCT_ID IN (
-                                     SELECT p2.PRODUCT_ID
-                                     FROM PRODUCT p2
-                                     WHERE p2.BRAND_NAME = b.BRAND_NAME
-                                 )
-                             ), 0)
-                         ) AS preference_score
+                    (
+                        /* (전 상품) 명도 선호 → COLOR_TONE_(LIGHT|DARK) 0.05 */
+                        NVL((
+                            SELECT LEAST(1, COUNT(*)) * 0.10
+                            FROM PRODUCT_TAG pt
+                            JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                            JOIN user_preference up ON 1=1
+                            WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                AND ct.TAG_GROUP = 'COLOR_TONE'
+                                AND ct.TAG_CODE  = CASE WHEN NVL(up.BRIGHTNESS,50) &lt;= 50
+                                    THEN 'COLOR_TONE_LIGHT' ELSE 'COLOR_TONE_DARK' END
+                            ), 0)
+                        +
+                        /* (전 상품) 색상 선호 → COLOR_SAT_(VIVID|MUTED) 0.05 */
+                        NVL((
+                            SELECT LEAST(1, COUNT(*)) * 0.10
+                            FROM PRODUCT_TAG pt
+                            JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                            JOIN user_preference up ON 1=1
+                            WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                AND ct.TAG_GROUP = 'COLOR_SAT'
+                                AND ct.TAG_CODE  = CASE WHEN NVL(up.COLOR,50) &lt;= 50
+                                    THEN 'COLOR_SAT_VIVID' ELSE 'COLOR_SAT_MUTED' END
+                        ), 0)
+                        +
+                        /* (의류만) LOOK 선호 → LOOK_FIRST/SECOND_LOOK 0.10 */
+                        NVL((
+                            SELECT LEAST(1, COUNT(*)) * 0.15
+                            FROM PRODUCT_TAG pt
+                            JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                            JOIN user_preference up ON 1=1
+                            WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                AND b.PRODUCT_CATEGORY_MAIN_ID = 8
+                                AND ct.TAG_GROUP='FASHION_STYLE'
+                                AND (
+                                    (up.FIRST_LOOK  IS NOT NULL AND ct.TAG_CODE = ('STYLE_' || up.FIRST_LOOK))
+                                OR (up.SECOND_LOOK IS NOT NULL AND ct.TAG_CODE = ('STYLE_' || up.SECOND_LOOK))
+                            )
+                        ), 0)
+                        +
+                        /* (의류만) 핏 선호(숫자) → FIT_(SLIM|RELAXED) 0.05 */
+                        NVL((
+                            SELECT LEAST(1, COUNT(*)) * 0.10
+                            FROM PRODUCT_TAG pt
+                            JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                            JOIN user_preference up ON 1=1
+                            WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                            AND b.PRODUCT_CATEGORY_MAIN_ID = 8
+                            AND ct.TAG_GROUP='FIT'
+                            AND ct.TAG_CODE = CASE WHEN NVL(up.FIT,50) &lt;= 60
+                                THEN 'FIT_SLIM' ELSE 'FIT_RELAXED' END
+                        ), 0)
+                        +
+                        /* (전 상품) 브랜드 충성도 0.05 */
+                        NVL((
+                            SELECT LEAST(1, COUNT(*)) * 0.05
+                            FROM ORDER_ITEM oi
+                            JOIN ORDERS o ON o.ORDER_ID = oi.ORDER_ID
+                            WHERE o.MEMBER_ID = #{memberId, jdbcType=NUMERIC}
+                                AND oi.PRODUCT_ID IN (
+                                    SELECT p2.PRODUCT_ID
+                                    FROM PRODUCT p2
+                                    WHERE p2.BRAND_NAME = b.BRAND_NAME
+                            )
+                        ), 0)
+                    ) AS preference_score
                  FROM base b
              )
         SELECT
             PRODUCT_ID, NAME, BRAND_NAME, CATEGORY_NAME, IMG_URL, PRICE, AVG_REVIEW, CODE, URL,
             base_score,
             preference_score,
-            (base_score * 0.7) + (preference_score * 0.3) AS final_score
+            (base_score * 0.50) + (preference_score * 0.50) AS final_score
         FROM product_scores
         ORDER BY final_score DESC, AVG_REVIEW DESC NULLS LAST, PRICE ASC
             FETCH FIRST 1 ROW ONLY
@@ -224,70 +226,127 @@
 
     <!-- 2. 상품 후보군 조회 -->
     <select id="findProductCandidates" resultType="tkitem.backend.domain.product_recommendation.vo.ProductWithScore">
-        WITH product_matches AS (
-            SELECT
-                p.PRODUCT_ID,
-                p.NAME,
-                p.BRAND_NAME,
-                pcs.NAME AS CATEGORY_NAME,
-                p.CODE,
-                p.URL,
-                p.IMG_URL,
-                p.PRICE,
-                p.AVG_REVIEW,
-                -- 다층 매칭 점수
-                -- 1. 태그 매칭 (0~0.5)
-                LEAST(0.5,
-                      (SELECT COUNT(*) FROM PRODUCT_TAG pt
-                                                JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                       WHERE pt.PRODUCT_ID = p.PRODUCT_ID
-                         AND (
-                           (#{notes} LIKE '%' || SUBSTR(ct.TAG_CODE, INSTR(ct.TAG_CODE, '_') + 1) || '%')
-                           )) * 0.15
-                    )
-                    -- 2. 카테고리 자체 매칭 보너스 (0.2)
-                    + 0.2
-                    -- 3. 리뷰 점수 (0~0.2)
-                    + CASE
-                          WHEN p.AVG_REVIEW IS NULL THEN 0.1
-                          ELSE (p.AVG_REVIEW / 5.0) * 0.2
-                    END
-                    -- 4. 의류인 경우 사용자 취향 가중치
-                    + CASE
-                          WHEN #{scheduleDate, jdbcType=NUMERIC} IS NOT NULL AND #{memberId} IS NOT NULL THEN
-                              NVL((SELECT COUNT(*) * 0.05 FROM PRODUCT_TAG pt
-                                                                   JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                                                                   JOIN PREFERENCE pref ON pref.MEMBER_ID = #{memberId}
-                                   WHERE pt.PRODUCT_ID = p.PRODUCT_ID
-                                     AND (ct.TAG_CODE = 'STYLE_' || pref.FIRST_LOOK
-                                       OR ct.TAG_CODE = 'STYLE_' || pref.SECOND_LOOK)), 0)
-                          ELSE 0
-                    END AS MATCH_SCORE,
-                -- 매칭된 태그들
-                NVL((SELECT LISTAGG(ct.LABEL, ',') WITHIN GROUP (ORDER BY ct.LABEL)
-                     FROM PRODUCT_TAG pt
-                              JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                     WHERE pt.PRODUCT_ID = p.PRODUCT_ID), '기본 추천') AS MATCHED_TAGS,
-                -- 추천 이유
-                CASE
-                    WHEN #{scheduleDate, jdbcType=NUMERIC} IS NOT NULL
-                        THEN '일정 ' || TO_CHAR(#{scheduleDate, jdbcType=NUMERIC}) || '일차 추천'
-                    ELSE '여행 필수 아이템'
-                    END ||
-                CASE
-                    WHEN p.AVG_REVIEW >= 4.5 THEN ' (베스트셀러)'
-                    WHEN p.AVG_REVIEW >= 4.0 THEN ' (인기상품)'
-                    ELSE ''
-                    END AS RECOMMEND_REASON
-            FROM PRODUCT p
-                     JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
-            WHERE p.CATEGORY_ID = #{categoryId}
-                AND (p.GENDER = #{gender} OR p.GENDER = 'U')
+        WITH up AS (
+        SELECT *
+        FROM PREFERENCE
+        WHERE MEMBER_ID = #{memberId}
+        FETCH FIRST 1 ROWS ONLY
+        ),
+        product_matches AS (
+        SELECT
+        p.PRODUCT_ID,
+        p.NAME,
+        p.BRAND_NAME,
+        pcs.NAME AS CATEGORY_NAME,
+        p.CODE,
+        p.URL,
+        p.IMG_URL,
+        p.PRICE,
+        p.AVG_REVIEW,
+        -- 다층 매칭 점수
+        -- 1. 태그 매칭 (0~0.5)
+        (
+        LEAST(0.5,
+        (SELECT COUNT(*) FROM PRODUCT_TAG pt
+        JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+        WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+        AND (
+        (#{notes} LIKE '%' || SUBSTR(ct.TAG_CODE, INSTR(ct.TAG_CODE, '_') + 1) || '%')
+        )) * 0.15
+        )
+        -- 2. 카테고리 자체 매칭 보너스 (0.2)
+        + 0.2
+        -- 3. 리뷰 점수 (0~0.2)
+        + CASE
+        WHEN p.AVG_REVIEW IS NULL THEN 0.035
+        ELSE POWER(LEAST(p.AVG_REVIEW, 4.7) / 5.0, 2) * 0.07
+        END
+        -- 4. 의류인 경우 사용자 취향 가중치
+        + NVL((
+        /* 4-1) 명도 선호 → COLOR_TONE_(LIGHT|DARK) 0.08 */
+        SELECT LEAST(1, COUNT(*)) * 0.08
+        FROM PRODUCT_TAG pt
+        JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+        JOIN up ON 1=1
+        WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+        AND ct.TAG_GROUP = 'COLOR_TONE'
+        AND ct.TAG_CODE = CASE WHEN NVL(up.BRIGHTNESS,50) &lt;= 50
+        THEN 'COLOR_TONE_LIGHT' ELSE 'COLOR_TONE_DARK' END
+        ), 0)
+        + NVL((
+        /* 4-2) 채도 선호 → COLOR_SAT_(VIVID|MUTED) 0.08 */
+        SELECT LEAST(1, COUNT(*)) * 0.08
+        FROM PRODUCT_TAG pt
+        JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+        JOIN up ON 1=1
+        WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+        AND ct.TAG_GROUP = 'COLOR_SAT'
+        AND ct.TAG_CODE = CASE WHEN NVL(up.COLOR,50) &lt;= 50
+        THEN 'COLOR_SAT_VIVID' ELSE 'COLOR_SAT_MUTED' END
+        ), 0)
+        + NVL((
+        /* 4-3) 대담함 선호 → BOLDNESS_(BOLD|MILD) 0.08 */
+        SELECT LEAST(1, COUNT(*)) * 0.08
+        FROM PRODUCT_TAG pt
+        JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+        JOIN up ON 1=1
+        WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+        AND ct.TAG_GROUP = 'BOLDNESS'
+        AND ct.TAG_CODE = CASE WHEN NVL(up.BOLDNESS,50) &lt;= 60
+        THEN 'BOLD_BOLD' ELSE 'BOLD_MILD' END
+        ), 0)
+        + NVL((
+        /* 4-4) LOOK 선호(의류만) → LOOK_FIRST/SECOND_LOOK 0.10 */
+        SELECT LEAST(1, COUNT(*)) * 0.10
+        FROM PRODUCT_TAG pt
+        JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+        JOIN up ON 1=1
+        WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+        AND pcs.PRODUCT_CATEGORY_MAIN_ID = 8
+        AND ct.TAG_GROUP = 'FASHION_STYLE'
+        AND (
+        (up.FIRST_LOOK IS NOT NULL AND ct.TAG_CODE = ('STYLE_' || up.FIRST_LOOK))
+        OR (up.SECOND_LOOK IS NOT NULL AND ct.TAG_CODE = ('STYLE_' || up.SECOND_LOOK))
+        )
+        ), 0)
+        + NVL((
+        /* 4-5) 핏 선호(의류만, 숫자) → FIT_(SLIM|RELAXED) 0.08 */
+        SELECT LEAST(1, COUNT(*)) * 0.08
+        FROM PRODUCT_TAG pt
+        JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+        JOIN up ON 1=1
+        WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+        AND pcs.PRODUCT_CATEGORY_MAIN_ID = 8
+        AND ct.TAG_GROUP = 'FIT'
+        AND ct.TAG_CODE = CASE WHEN NVL(up.FIT,50) >= 60
+        THEN 'FIT_SLIM' ELSE 'FIT_RELAXED' END
+        ), 0)
+        ) AS MATCH_SCORE,
+        -- 매칭된 태그들
+        NVL((SELECT LISTAGG(ct.LABEL, ',') WITHIN GROUP (ORDER BY ct.LABEL)
+        FROM PRODUCT_TAG pt
+        JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+        WHERE pt.PRODUCT_ID = p.PRODUCT_ID), '기본 추천') AS MATCHED_TAGS,
+        -- 추천 이유
+        CASE
+        WHEN #{scheduleDate, jdbcType=NUMERIC} IS NOT NULL
+        THEN '일정 ' || TO_CHAR(#{scheduleDate, jdbcType=NUMERIC}) || '일차 추천'
+        ELSE '여행 필수 아이템'
+        END ||
+        CASE
+        WHEN p.AVG_REVIEW >= 4.5 THEN ' (베스트셀러)'
+        WHEN p.AVG_REVIEW >= 4.0 THEN ' (인기상품)'
+        ELSE ''
+        END AS RECOMMEND_REASON
+        FROM PRODUCT p
+        JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
+        WHERE p.CATEGORY_ID = #{categoryId}
+        AND (p.GENDER = #{gender} OR p.GENDER = 'U')
         )
         SELECT * FROM product_matches
         WHERE MATCH_SCORE > 0
         ORDER BY MATCH_SCORE DESC, AVG_REVIEW DESC NULLS LAST
-            FETCH FIRST #{limit} ROWS ONLY
+        FETCH FIRST #{limit} ROWS ONLY
     </select>
 
     <!-- 3. 연관 상품 조회 -->
@@ -393,61 +452,86 @@
                 p.IMG_URL,
                 p.PRICE,
                 p.AVG_REVIEW,
-                -- 취향 매칭 점수 (여러 요소 결합)
-                -- 1. 스타일 매칭 (0~0.4)
-                LEAST(0.4,
-                      NVL((SELECT COUNT(*) FROM PRODUCT_TAG pt
-                                                    JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                           WHERE pt.PRODUCT_ID = p.PRODUCT_ID
-                             AND (
-                                   (ct.TAG_CODE = 'STYLE_' || #{firstLook})
-                                   OR (#{secondLook} IS NOT NULL AND ct.TAG_CODE = 'STYLE_' || #{secondLook})
-                               )), 0) * 0.2
-                    )
-                    -- 2. 색상 취향 매칭 (0~0.2)
-                    + LEAST(0.2,
-                            NVL((SELECT COUNT(*) FROM PRODUCT_TAG pt
-                                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                                 WHERE pt.PRODUCT_ID = p.PRODUCT_ID
-                                   AND (
-                                         (#{brightness} >= 50 AND ct.TAG_CODE IN ('COLOR_BRIGHT', 'COLOR_PASTEL'))
-                                         OR (#{brightness} &lt; 50 AND ct.TAG_CODE IN ('COLOR_DARK', 'COLOR_NEUTRAL'))
-                                         OR (#{boldness} >= 50 AND ct.TAG_CODE = 'COLOR_VIVID')
-                                         OR (#{boldness} &lt; 50 AND ct.TAG_CODE = 'COLOR_NEUTRAL')
-                                     )), 0) * 0.1
-                    )
-                    -- 3. 핏 매칭 (0~0.2)
-                    + LEAST(0.2,
-                            NVL((SELECT COUNT(*) FROM PRODUCT_TAG pt
-                                                          JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                                 WHERE pt.PRODUCT_ID = p.PRODUCT_ID
-                                   AND (
-                                         (#{fit} &lt;= 33 AND ct.TAG_CODE = 'FIT_SLIM')
-                                         OR (#{fit} > 33 AND #{fit} &lt;= 66 AND ct.TAG_CODE = 'FIT_REGULAR')
-                                         OR (#{fit} > 66 AND ct.TAG_CODE IN ('FIT_LOOSE', 'FIT_OVERSIZED'))
-                                     )), 0) * 0.2
-                    )
-                    -- 4. 기본 점수 (태그가 없어도 의류면 추천 가능)
-                    + 0.15
-                    -- 5. 리뷰 점수
-                    + CASE
-                          WHEN p.AVG_REVIEW IS NULL THEN 0.05
-                          ELSE (p.AVG_REVIEW / 5.0) * 0.1
-                    END AS PREFERENCE_SCORE,
-                -- 매칭된 스타일들
-                NVL((SELECT LISTAGG(ct.LABEL, ',') WITHIN GROUP (ORDER BY ct.LABEL)
-                     FROM PRODUCT_TAG pt
-                              JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                     WHERE pt.PRODUCT_ID = p.PRODUCT_ID
-                       AND ct.TAG_GROUP IN ('FASHION_STYLE', 'FIT', 'COLOR')),
-                    '베이직 스타일') AS MATCHED_STYLES
+                /* ===== 취향 매칭 점수 ===== */
+                (
+                    /* 1) LOOK 매칭 (0~0.4) : FIRST/SECOND_LOOK */
+                        LEAST(
+                                0.4,
+                                NVL((
+                                        SELECT COUNT(*)
+                                        FROM PRODUCT_TAG pt
+                                                 JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                        WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                                          AND ct.TAG_GROUP = 'FASHION_STYLE'
+                                          AND (
+                                                (#{firstLook}  IS NOT NULL AND ct.TAG_CODE = 'STYLE_' || #{firstLook})
+                                                OR (#{secondLook} IS NOT NULL AND ct.TAG_CODE = 'STYLE_' || #{secondLook})
+                                            )
+                                    ), 0) * 0.2
+                            )
+                        /* 2) 색/톤/대담함 매칭 (최대 0.20 = 톤 0.10 + 채도/대담함 0.10) */
+                        + NVL((
+                                  /* 2-1) 명도 → COLOR_TONE_(LIGHT|DARK) 0.10 */
+                                  SELECT LEAST(1, COUNT(*)) * 0.10
+                                  FROM PRODUCT_TAG pt
+                                           JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                  WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                                    AND ct.TAG_GROUP = 'COLOR_TONE'
+                                    AND ct.TAG_CODE  = CASE WHEN NVL(#{brightness},50) >= 50
+                                                                THEN 'COLOR_TONE_LIGHT' ELSE 'COLOR_TONE_DARK' END
+                              ), 0)
+                        + NVL((
+                                  /* 2-2) 채도/대담함 → COLOR_SAT_(VIVID|MUTED) 또는 BOLDNESS_(BOLD|MILD) 0.10
+                                     - color 파라미터가 없어서 boldness로 해석:
+                                       boldness >= 50 → VIVID/BOLD, 그 외 → MUTED/MILD */
+                                  SELECT LEAST(1, COUNT(*)) * 0.10
+                                  FROM PRODUCT_TAG pt
+                                           JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                  WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                                    AND (
+                                          (ct.TAG_GROUP='COLOR_SAT' AND ct.TAG_CODE = CASE WHEN NVL(#{boldness},50) >= 50
+                                                                                               THEN 'COLOR_SAT_VIVID' ELSE 'COLOR_SAT_MUTED' END)
+                                          OR (ct.TAG_GROUP='BOLDNESS'  AND ct.TAG_CODE = CASE WHEN NVL(#{boldness},50) >= 50
+                                                                                                  THEN 'BOLD_BOLD' ELSE 'BOLD_MILD' END)
+                                      )
+                              ), 0)
+                        /* 3) 핏 매칭 (0~0.2) : FIT_(SLIM|RELAXED) */
+                        + LEAST(
+                                0.2,
+                                NVL((
+                                        SELECT COUNT(*) * 0.20
+                                        FROM PRODUCT_TAG pt
+                                                 JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                        WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                                          AND ct.TAG_GROUP = 'FIT'
+                                          AND ct.TAG_CODE  = CASE WHEN NVL(#{fit},50) >= 60
+                                                                      THEN 'FIT_SLIM' ELSE 'FIT_RELAXED' END
+                                    ), 0)
+                            )
+                        /* 4) 기본 점수 (의류 기본 추천 여지) */
+                        + 0.15
+                        /* 5) 리뷰 점수 ↓ (0~0.08, 체감 완화) */
+                        + CASE
+                              WHEN p.AVG_REVIEW IS NULL THEN 0.04
+                              ELSE POWER(p.AVG_REVIEW / 5.0, 2) * 0.08
+                            END
+                    ) AS PREFERENCE_SCORE,
+                /* 매칭된 태그 요약 */
+                NVL((
+                        SELECT LISTAGG(ct.LABEL, ',') WITHIN GROUP (ORDER BY ct.LABEL)
+                        FROM PRODUCT_TAG pt
+                                 JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                        WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                          AND ct.TAG_GROUP IN ('LOOK','FIT','COLOR_TONE','COLOR_SAT','BOLDNESS')
+                    ), '베이직 스타일') AS MATCHED_STYLES
             FROM PRODUCT p
                      JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
                      JOIN PRODUCT_CATEGORY_MAIN pcm ON pcm.PRODUCT_CATEGORY_MAIN_ID = pcs.PRODUCT_CATEGORY_MAIN_ID
             WHERE pcm.NAME = '의류'
               AND (p.GENDER = #{gender} OR p.GENDER = 'U')
         )
-        SELECT * FROM fashion_scores
+        SELECT *
+        FROM fashion_scores
         WHERE PREFERENCE_SCORE > 0.2
         ORDER BY PREFERENCE_SCORE DESC, AVG_REVIEW DESC NULLS LAST
             FETCH FIRST #{limit} ROWS ONLY

@@ -13,6 +13,8 @@ import tkitem.backend.domain.product_recommendation.vo.*;
 
 import java.math.*;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -296,19 +298,139 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
 
     // Helper Methods
     private String generateRecommendReason(ChecklistItem item, Product product, Long memberId) {
-        StringBuilder reason = new StringBuilder();
+        final String tier = safe(item.getTier());        // "필수" / "강력추천" / ...
+        final String notes = safe(item.getNotes());
 
-        if (item.getTier() != null) {
-            reason.append(item.getTier()).append(" 아이템");
+        List<String> tokens = new ArrayList<>();
+
+        // 1) 티어 / 일정일차
+        if (!isBlank(tier)) tokens.add(tier);            // "아이템" 제거, 토큰만
+
+        // 2) 룰 노트 요약(앞에서부터 최대 2개, ACT/FLAGS/DURATION/HIST 제외)
+        List<String> ruleNotes = extractRuleNotes(notes, 2);
+        tokens.addAll(ruleNotes);
+
+        // 3) 활동(ACT)
+        List<String> acts = parseActivities(notes);
+        if (!acts.isEmpty()) tokens.add("ACT: " + joinComma(acts));
+
+        // 4) 날씨 플래그(FLAGS)
+        List<String> flagsKo = parseFlags(notes);
+        if (!flagsKo.isEmpty()) tokens.add("FLAGS: " + joinComma(flagsKo));
+
+        // 5) 히스토리(HIST)
+        HistInfo hist = parseHist(notes);
+        if (hist != null) {
+            String rec = isBlank(hist.recPhrase) ? "" : " " + hist.recPhrase;
+            tokens.add("HIST: +" + hist.gain + hist.unit + rec);
         }
 
-        if (item.getNotes() != null) {
-            if (item.getNotes().contains("RAIN")) reason.append(" - 우천 대비");
-            if (item.getNotes().contains("HOT")) reason.append(" - 더운 날씨용");
-            if (item.getNotes().contains("COLD")) reason.append(" - 추운 날씨용");
+        // 6) (옵션) 평점 토큰 — 과장 없이 짧게
+        if (product != null && product.getAvgReview() != null) {
+            double r = product.getAvgReview();
+            if (r >= 4.2) tokens.add("평점 " + trim1(r) + "/5");
         }
 
-        return reason.toString();
+        // 최종: ' | ' 로 연결
+        return String.join(" | ", tokens);
+    }
+
+    /* ====================== 헬퍼들 ====================== */
+
+    private static String safe(String s) { return s == null ? "" : s.trim(); }
+    private static boolean isBlank(String s) { return s == null || s.trim().isEmpty(); }
+
+    private static String joinComma(List<String> parts) {
+        return String.join(", ", parts);
+    }
+
+    /** 룰 노트: ' | '로 분리 후 ACT/FLAGS/DURATION/HIST 아닌 앞에서부터 maxCount개 */
+    private static List<String> extractRuleNotes(String notes, int maxCount) {
+        if (isBlank(notes)) return List.of();
+        String[] toks = notes.split("\\s*\\|\\s*");
+        List<String> out = new ArrayList<>();
+        for (String t : toks) {
+            String tt = t.trim();
+            if (tt.isEmpty()) continue;
+            String up = tt.toUpperCase(Locale.ROOT);
+            if (up.startsWith("ACT:") || up.startsWith("FLAGS:") || up.startsWith("DURATION:") || up.startsWith("HIST:")) continue;
+            if (tt.equals("룰 기반")) continue;
+            out.add(tt);
+            if (out.size() >= maxCount) break;
+        }
+        return out;
+    }
+
+    /** FLAGS:RAIN,HUMID → ["비","습도"] */
+    private static List<String> parseFlags(String notes) {
+        if (isBlank(notes)) return List.of();
+        Matcher m = Pattern.compile("FLAGS:([A-Z,]+)").matcher(notes.toUpperCase(Locale.ROOT));
+        if (!m.find()) return List.of();
+        String[] codes = m.group(1).split("\\s*,\\s*");
+        Set<String> set = new LinkedHashSet<>();
+        for (String c : codes) {
+            switch (c) {
+                case "RAIN"  -> set.add("비");
+                case "HUMID" -> set.add("습도");
+                case "WIND"  -> set.add("강풍");
+                case "SUN"   -> set.add("강한 햇빛");
+            }
+        }
+        return new ArrayList<>(set);
+    }
+
+    /** ACT:FLIGHT, MUSEUM_HERITAGE → ["공항 환승/보안검색", "박물관·유적 관람"] */
+    private static List<String> parseActivities(String notes) {
+        if (isBlank(notes)) return List.of();
+        Matcher m = Pattern.compile("ACT:([A-Z_,\\s]+)").matcher(notes.toUpperCase(Locale.ROOT));
+        if (!m.find()) return List.of();
+        String[] codes = m.group(1).split("\\s*,\\s*");
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        for (String c : codes) {
+            switch (c) {
+                case "FLIGHT"           -> out.add("공항 환승/보안검색");
+                case "MUSEUM_HERITAGE"  -> out.add("박물관·유적 관람");
+                case "BEACH"            -> out.add("해변/수영");
+                case "HIKING"           -> out.add("하이킹/트레킹");
+                case "SHOPPING"         -> out.add("쇼핑");
+                case "TOURING"          -> out.add("도시 투어");
+                case "DINING"           -> out.add("식사/레스토랑");
+                case "THEMEPARK"        -> out.add("테마파크");
+                default -> {
+                    if (!c.isBlank()) out.add(c); // 미정의 코드는 원문 토큰으로
+                }
+            }
+        }
+        return new ArrayList<>(out);
+    }
+
+    /** HIST: +15% (REC: 최근5중 3) → gain=15, unit="%", recPhrase="(최근 5회 중 3회)" */
+    private static class HistInfo {
+        String gain; // 숫자
+        String unit; // "%" or "p"
+        String recPhrase; // "(최근 X회 중 Y회)"
+    }
+
+    private static HistInfo parseHist(String notes) {
+        if (isBlank(notes)) return null;
+        Matcher m = Pattern.compile(
+                "HIST:\\s*\\+\\s*(\\d+)\\s*(%|p)(?:\\s*\\(REC:\\s*최근\\s*(\\d+)중\\s*(\\d+)\\))?",
+                Pattern.CASE_INSENSITIVE).matcher(notes);
+        if (!m.find()) return null;
+        HistInfo hi = new HistInfo();
+        hi.gain = m.group(1);
+        hi.unit = m.group(2);
+        if (m.group(3) != null && m.group(4) != null) {
+            hi.recPhrase = "(최근 " + m.group(3) + "회 중 " + m.group(4) + "회)";
+        } else {
+            hi.recPhrase = "";
+        }
+        return hi;
+    }
+
+    /* 유틸 */
+    private static String trim1(double v) {
+        return String.valueOf(Math.round(v * 10.0) / 10.0);
     }
 
     private String generateFashionReason(Preference preference, String matchedStyles) {
