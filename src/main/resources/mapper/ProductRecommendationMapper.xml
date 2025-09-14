@@ -25,6 +25,7 @@
         <result property="imgUrl" column="IMG_URL"/>
         <result property="price" column="PRICE"/>
         <result property="avgReview" column="AVG_REVIEW"/>
+        <result property="recommendTokens" column="RECOMMEND_TOKENS"/>
     </resultMap>
 
     <resultMap id="preferenceMap" type="tkitem.backend.domain.product_recommendation.vo.Preference">
@@ -82,16 +83,18 @@
         WITH trip_city AS (
             SELECT DISTINCT tc.city_id
             FROM TRIP tr
-            JOIN TOUR_PACKAGE tp ON tp.TOUR_PACKAGE_ID = tr.TOUR_PACKAGE_ID
-            JOIN TOUR_CITY tc    ON tc.TOUR_ID         = tp.TOUR_ID
+                     JOIN TOUR_PACKAGE tp ON tp.TOUR_PACKAGE_ID = tr.TOUR_PACKAGE_ID
+                     JOIN TOUR_CITY tc    ON tc.TOUR_ID         = tp.TOUR_ID
             WHERE tr.TRIP_ID = #{tripId,jdbcType=NUMERIC}
         ),
-        user_preference AS (
-            SELECT *
-            FROM PREFERENCE
-            WHERE MEMBER_ID = #{memberId, jdbcType=NUMERIC}
-                FETCH FIRST 1 ROWS ONLY
-        ),
+            /* 임계값 통일(상향=선호 강함) */
+             th AS ( SELECT 60 TH_BRIGHT, 60 TH_COLOR, 60 TH_FIT, 60 TH_BOLD FROM dual ),
+             user_preference AS (
+                 SELECT *
+                 FROM PREFERENCE
+                 WHERE MEMBER_ID = #{memberId, jdbcType=NUMERIC}
+                     FETCH FIRST 1 ROWS ONLY
+             ),
              base AS (
                  SELECT
                      p.PRODUCT_ID,
@@ -103,50 +106,49 @@
                      p.AVG_REVIEW,
                      p.CODE,
                      p.URL,
+                     p.CATEGORY_ID,                  -- 추천 이유에서 카테고리 POP 대체 사용 가능
                      pcs.PRODUCT_CATEGORY_MAIN_ID,
-                     /* ===== 기존 스코어: base_score ===== */
+                     /* ===== base_score ===== */
                      (
-                         /* 1) 태그 매칭(날씨/활동) 0~0.4 */
-                         LEAST(
-                                 0.30,
-                                 (
-                                     SELECT COUNT(*)
-                                     FROM PRODUCT_TAG pt
-                                              JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                                     WHERE pt.PRODUCT_ID = p.PRODUCT_ID
-                                       AND (
-                                         (#{notes, jdbcType=VARCHAR} LIKE '%RAIN%'   AND ct.TAG_CODE = 'WEATHER_RAIN')
-                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%HUMID%'  AND ct.TAG_CODE = 'WEATHER_HUMID')
-                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%WIND%'   AND ct.TAG_CODE = 'WEATHER_WIND')
-                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%SUN%'    AND ct.TAG_CODE = 'WEATHER_SUN')
-                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%COLD%'   AND ct.TAG_CODE = 'WEATHER_COLD')
-                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%HOT%'    AND ct.TAG_CODE = 'WEATHER_HOT')
-                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%SHOPPING%' AND ct.TAG_CODE = 'ACT_SHOPPING')
-                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%TOURING%'  AND ct.TAG_CODE = 'ACT_TOURING')
-                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%SPORT%'    AND ct.TAG_CODE = 'ACT_SPORT')
-                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%BEACH%'    AND ct.TAG_CODE = 'ACT_BEACH')
-                                             OR (#{notes, jdbcType=VARCHAR} LIKE '%HIKING%'   AND ct.TAG_CODE = 'ACT_HIKING')
-                                         )
-                                 ) * 0.10
-                         )
-                             /* 2) 리뷰 0~0.3 */
+                         /* 1) 태그 매칭(날씨/활동) 0~0.30 */
+                             LEAST(
+                                     0.30,
+                                     (
+                                         SELECT COUNT(*)
+                                         FROM PRODUCT_TAG pt
+                                                  JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                         WHERE pt.PRODUCT_ID = p.PRODUCT_ID
+                                           AND (
+                                                 (#{notes, jdbcType=VARCHAR} LIKE '%RAIN%'    AND ct.TAG_CODE = 'WEATHER_RAIN')
+                                                 OR (#{notes, jdbcType=VARCHAR} LIKE '%HUMID%'   AND ct.TAG_CODE = 'WEATHER_HUMID')
+                                                 OR (#{notes, jdbcType=VARCHAR} LIKE '%WIND%'    AND ct.TAG_CODE = 'WEATHER_WIND')
+                                                 OR (#{notes, jdbcType=VARCHAR} LIKE '%SUN%'     AND ct.TAG_CODE = 'WEATHER_SUN')
+                                                 OR (#{notes, jdbcType=VARCHAR} LIKE '%COLD%'    AND ct.TAG_CODE = 'WEATHER_COLD')
+                                                 OR (#{notes, jdbcType=VARCHAR} LIKE '%HOT%'     AND ct.TAG_CODE = 'WEATHER_HOT')
+                                                 OR (#{notes, jdbcType=VARCHAR} LIKE '%SHOPPING%' AND ct.TAG_CODE = 'ACT_SHOPPING')
+                                                 OR (#{notes, jdbcType=VARCHAR} LIKE '%TOURING%'  AND ct.TAG_CODE = 'ACT_TOURING')
+                                                 OR (#{notes, jdbcType=VARCHAR} LIKE '%SPORT%'    AND ct.TAG_CODE = 'ACT_SPORT')
+                                                 OR (#{notes, jdbcType=VARCHAR} LIKE '%BEACH%'    AND ct.TAG_CODE = 'ACT_BEACH')
+                                                 OR (#{notes, jdbcType=VARCHAR} LIKE '%HIKING%'   AND ct.TAG_CODE = 'ACT_HIKING')
+                                             )
+                                     ) * 0.10
+                                 )
+                             /* 2) 리뷰 0~0.15 (체감+캡) */
                              + CASE
                                    WHEN p.AVG_REVIEW IS NULL THEN 0.075
-                                   ELSE  POWER(LEAST(p.AVG_REVIEW, 4.7) / 5.0, 2) * 0.15
-                             END
-                             /* 3) 가격 0~0.2 */
+                                   ELSE POWER(LEAST(p.AVG_REVIEW, 4.7) / 5.0, 2) * 0.15
+                                 END
+                             /* 3) 가격 0~0.10 */
                              + CASE
-                                   WHEN p.PRICE &lt;= 30000  THEN 0.1
+                                   WHEN p.PRICE &lt;= 30000  THEN 0.10
                                    WHEN p.PRICE &lt;= 50000  THEN 0.08
                                    WHEN p.PRICE &lt;= 100000 THEN 0.05
                                    ELSE 0.02
-                             END
-                             /* 4) 기본 0.1 */
+                                 END
+                             /* 4) 기본 0.05 */
                              + 0.05
-
-                             /* 5) 도시 인기 가점 추가 ------------------------------ */
+                             /* 5) 도시 인기 가점: 상품 POP ×0.10 */
                              + NVL((
-                                       /* 같은 여행의 도시들 중, 해당 '상품'의 도시인기 MAX × 0.10 */
                                        SELECT MAX(NVL(cip.POP_PCTL,0)) * 0.10
                                        FROM CITY_ITEM_POP cip
                                        WHERE cip.PRODUCT_ID = p.PRODUCT_ID
@@ -156,90 +158,271 @@
                  FROM PRODUCT p
                           JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID
                  WHERE p.CATEGORY_ID = #{categoryId, jdbcType=NUMERIC}
-                   AND p.PRICE     &lt;= #{maxPrice, jdbcType=NUMERIC}
+                   AND p.PRICE       &lt;= #{maxPrice, jdbcType=NUMERIC}
                    AND (p.GENDER = #{gender, jdbcType=VARCHAR} OR p.GENDER = 'U')
              ),
              product_scores AS (
                  SELECT
                      b.*,
-                     /* ===== 취향 스코어: 전 상품/의류 조건 별로 분리 ===== */
-                    (
-                        /* (전 상품) 명도 선호 → COLOR_TONE_(LIGHT|DARK) 0.05 */
-                        NVL((
-                            SELECT LEAST(1, COUNT(*)) * 0.10
-                            FROM PRODUCT_TAG pt
-                            JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                            JOIN user_preference up ON 1=1
-                            WHERE pt.PRODUCT_ID = b.PRODUCT_ID
-                                AND ct.TAG_GROUP = 'COLOR_TONE'
-                                AND ct.TAG_CODE  = CASE WHEN NVL(up.BRIGHTNESS,50) &lt;= 50
-                                    THEN 'COLOR_TONE_LIGHT' ELSE 'COLOR_TONE_DARK' END
-                            ), 0)
-                        +
-                        /* (전 상품) 색상 선호 → COLOR_SAT_(VIVID|MUTED) 0.05 */
-                        NVL((
-                            SELECT LEAST(1, COUNT(*)) * 0.10
-                            FROM PRODUCT_TAG pt
-                            JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                            JOIN user_preference up ON 1=1
-                            WHERE pt.PRODUCT_ID = b.PRODUCT_ID
-                                AND ct.TAG_GROUP = 'COLOR_SAT'
-                                AND ct.TAG_CODE  = CASE WHEN NVL(up.COLOR,50) &lt;= 50
-                                    THEN 'COLOR_SAT_VIVID' ELSE 'COLOR_SAT_MUTED' END
-                        ), 0)
-                        +
-                        /* (의류만) LOOK 선호 → LOOK_FIRST/SECOND_LOOK 0.10 */
-                        NVL((
-                            SELECT LEAST(1, COUNT(*)) * 0.15
-                            FROM PRODUCT_TAG pt
-                            JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                            JOIN user_preference up ON 1=1
-                            WHERE pt.PRODUCT_ID = b.PRODUCT_ID
-                                AND b.PRODUCT_CATEGORY_MAIN_ID = 8
-                                AND ct.TAG_GROUP='FASHION_STYLE'
-                                AND (
-                                    (up.FIRST_LOOK  IS NOT NULL AND ct.TAG_CODE = ('STYLE_' || up.FIRST_LOOK))
-                                OR (up.SECOND_LOOK IS NOT NULL AND ct.TAG_CODE = ('STYLE_' || up.SECOND_LOOK))
-                            )
-                        ), 0)
-                        +
-                        /* (의류만) 핏 선호(숫자) → FIT_(SLIM|RELAXED) 0.05 */
-                        NVL((
-                            SELECT LEAST(1, COUNT(*)) * 0.10
-                            FROM PRODUCT_TAG pt
-                            JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
-                            JOIN user_preference up ON 1=1
-                            WHERE pt.PRODUCT_ID = b.PRODUCT_ID
-                            AND b.PRODUCT_CATEGORY_MAIN_ID = 8
-                            AND ct.TAG_GROUP='FIT'
-                            AND ct.TAG_CODE = CASE WHEN NVL(up.FIT,50) &lt;= 60
-                                THEN 'FIT_SLIM' ELSE 'FIT_RELAXED' END
-                        ), 0)
-                        +
-                        /* (전 상품) 브랜드 충성도 0.05 */
-                        NVL((
-                            SELECT LEAST(1, COUNT(*)) * 0.05
-                            FROM ORDER_ITEM oi
-                            JOIN ORDERS o ON o.ORDER_ID = oi.ORDER_ID
-                            WHERE o.MEMBER_ID = #{memberId, jdbcType=NUMERIC}
-                                AND oi.PRODUCT_ID IN (
-                                    SELECT p2.PRODUCT_ID
-                                    FROM PRODUCT p2
-                                    WHERE p2.BRAND_NAME = b.BRAND_NAME
-                            )
-                        ), 0)
-                    ) AS preference_score
+                     /* ===== preference_score ===== */
+                     (
+                         /* 명도 → COLOR_TONE_(LIGHT|DARK) 0.10 */
+                             NVL((
+                                     SELECT LEAST(1, COUNT(*)) * 0.10
+                                     FROM PRODUCT_TAG pt
+                                              JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                              JOIN user_preference up ON 1=1
+                                              JOIN th ON 1=1
+                                     WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                       AND ct.TAG_GROUP = 'COLOR_TONE'
+                                       AND ct.TAG_CODE  = CASE WHEN NVL(up.BRIGHTNESS,50) &gt;= th.TH_BRIGHT
+                                                                   THEN 'COLOR_TONE_LIGHT' ELSE 'COLOR_TONE_DARK' END
+                                 ), 0)
+                             +
+                             /* 채도 → COLOR_SAT_(VIVID|MUTED) 0.10 */
+                             NVL((
+                                     SELECT LEAST(1, COUNT(*)) * 0.10
+                                     FROM PRODUCT_TAG pt
+                                              JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                              JOIN user_preference up ON 1=1
+                                              JOIN th ON 1=1
+                                     WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                       AND ct.TAG_GROUP = 'COLOR_SAT'
+                                       AND ct.TAG_CODE  = CASE WHEN NVL(up.COLOR,50) &gt;= th.TH_COLOR
+                                                                   THEN 'COLOR_SAT_VIVID' ELSE 'COLOR_SAT_MUTED' END
+                                 ), 0)
+                             +
+                             /* 화려함 → BOLDNESS_(BOLD|MILD) 0.10 */
+                             NVL((
+                                     SELECT LEAST(1, COUNT(*)) * 0.10
+                                     FROM PRODUCT_TAG pt
+                                              JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                              JOIN user_preference up ON 1=1
+                                              JOIN th ON 1=1
+                                     WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                       AND ct.TAG_GROUP = 'BOLDNESS'
+                                       AND ct.TAG_CODE  = CASE WHEN NVL(up.BOLDNESS,50) &gt;= th.TH_BOLD
+                                                                   THEN 'BOLD_MILD' ELSE 'BOLD_BOLD' END
+                                 ), 0)
+                             +
+                             /* LOOK 선호(의류) 0.15 */
+                             NVL((
+                                     SELECT LEAST(1, COUNT(*)) * 0.15
+                                     FROM PRODUCT_TAG pt
+                                              JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                              JOIN user_preference up ON 1=1
+                                     WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                       AND b.PRODUCT_CATEGORY_MAIN_ID = 8
+                                       AND ct.TAG_GROUP='FASHION_STYLE'
+                                       AND ( (up.FIRST_LOOK  IS NOT NULL AND ct.TAG_CODE = ('STYLE_' || up.FIRST_LOOK))
+                                         OR (up.SECOND_LOOK IS NOT NULL AND ct.TAG_CODE = ('STYLE_' || up.SECOND_LOOK)) )
+                                 ), 0)
+                             +
+                             /* 핏 선호(의류) 0.10 */
+                             NVL((
+                                     SELECT LEAST(1, COUNT(*)) * 0.10
+                                     FROM PRODUCT_TAG pt
+                                              JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                              JOIN user_preference up ON 1=1
+                                              JOIN th ON 1=1
+                                     WHERE pt.PRODUCT_ID = b.PRODUCT_ID
+                                       AND b.PRODUCT_CATEGORY_MAIN_ID = 8
+                                       AND ct.TAG_GROUP='FIT'
+                                       AND ct.TAG_CODE = CASE WHEN NVL(up.FIT,50) &gt;= th.TH_FIT
+                                                                  THEN 'FIT_SLIM' ELSE 'FIT_RELAXED' END
+                                 ), 0)
+                             +
+                             /* 브랜드 충성도 0.05 */
+                             NVL((
+                                     SELECT LEAST(1, COUNT(*)) * 0.05
+                                     FROM ORDER_ITEM oi
+                                              JOIN ORDERS o ON o.ORDER_ID = oi.ORDER_ID
+                                     WHERE o.MEMBER_ID = #{memberId, jdbcType=NUMERIC}
+                                       AND oi.PRODUCT_ID IN (
+                                         SELECT p2.PRODUCT_ID FROM PRODUCT p2 WHERE p2.BRAND_NAME = b.BRAND_NAME
+                                     )
+                                 ), 0)
+                         ) AS preference_score
                  FROM base b
              )
         SELECT
             PRODUCT_ID, NAME, BRAND_NAME, CATEGORY_NAME, IMG_URL, PRICE, AVG_REVIEW, CODE, URL,
             base_score,
             preference_score,
-            (base_score * 0.50) + (preference_score * 0.50) AS final_score
+            (base_score * 0.50) + (preference_score * 0.50) AS final_score,
+
+            /* ===================== 추천 이유 토큰 ===================== */
+            NVL((
+                    SELECT LISTAGG(tok, ' | ') WITHIN GROUP (ORDER BY ord)
+                    FROM (
+                             /* 도시 인기(상품) — 0이면 제외 */
+                             SELECT (
+                                        SELECT CASE WHEN MAX(NVL(cip.POP_PCTL,0)) &gt; 0
+                                                        THEN 'CITY_POP:' || TO_CHAR(ROUND(100*MAX(NVL(cip.POP_PCTL,0)),0)) || 'pctl'
+                                                   END
+                                        FROM CITY_ITEM_POP cip
+                                        WHERE cip.PRODUCT_ID = PRODUCT_ID
+                                          AND EXISTS (SELECT 1 FROM trip_city tc WHERE tc.city_id = cip.CITY_ID)
+                                    ) AS tok, 10 AS ord FROM dual
+
+
+
+                                 /* 컨텍스트 태그 매칭 — 매칭 없으면 NULL */
+                             UNION ALL
+                             SELECT (
+                                        SELECT NULLIF('MATCH:' || (
+                                            SELECT LISTAGG(code, ',') WITHIN GROUP (ORDER BY code)
+                                            FROM (
+                                                     SELECT 'RAIN'    AS code FROM dual WHERE #{notes} LIKE '%RAIN%'    AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID WHERE pt.PRODUCT_ID=PRODUCT_ID AND ct.TAG_CODE='WEATHER_RAIN')
+                                                     UNION ALL SELECT 'HUMID'   FROM dual WHERE #{notes} LIKE '%HUMID%'   AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID WHERE pt.PRODUCT_ID=PRODUCT_ID AND ct.TAG_CODE='WEATHER_HUMID')
+                                                     UNION ALL SELECT 'WIND'    FROM dual WHERE #{notes} LIKE '%WIND%'    AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID WHERE pt.PRODUCT_ID=PRODUCT_ID AND ct.TAG_CODE='WEATHER_WIND')
+                                                     UNION ALL SELECT 'SUN'     FROM dual WHERE #{notes} LIKE '%SUN%'     AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID WHERE pt.PRODUCT_ID=PRODUCT_ID AND ct.TAG_CODE='WEATHER_SUN')
+                                                     UNION ALL SELECT 'COLD'    FROM dual WHERE #{notes} LIKE '%COLD%'    AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID WHERE pt.PRODUCT_ID=PRODUCT_ID AND ct.TAG_CODE='WEATHER_COLD')
+                                                     UNION ALL SELECT 'HOT'     FROM dual WHERE #{notes} LIKE '%HOT%'     AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID WHERE pt.PRODUCT_ID=PRODUCT_ID AND ct.TAG_CODE='WEATHER_HOT')
+                                                     UNION ALL SELECT 'SHOPPING' FROM dual WHERE #{notes} LIKE '%SHOPPING%' AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID WHERE pt.PRODUCT_ID=PRODUCT_ID AND ct.TAG_CODE='ACT_SHOPPING')
+                                                     UNION ALL SELECT 'TOURING'  FROM dual WHERE #{notes} LIKE '%TOURING%'  AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID WHERE pt.PRODUCT_ID=PRODUCT_ID AND ct.TAG_CODE='ACT_TOURING')
+                                                     UNION ALL SELECT 'SPORT'    FROM dual WHERE #{notes} LIKE '%SPORT%'    AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID WHERE pt.PRODUCT_ID=PRODUCT_ID AND ct.TAG_CODE='ACT_SPORT')
+                                                     UNION ALL SELECT 'BEACH'    FROM dual WHERE #{notes} LIKE '%BEACH%'    AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID WHERE pt.PRODUCT_ID=PRODUCT_ID AND ct.TAG_CODE='ACT_BEACH')
+                                                     UNION ALL SELECT 'HIKING'   FROM dual WHERE #{notes} LIKE '%HIKING%'   AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID WHERE pt.PRODUCT_ID=PRODUCT_ID AND ct.TAG_CODE='ACT_HIKING')
+                                                 )
+                                        ), 'MATCH:')
+                                        FROM dual
+                                    ) AS tok, 20 AS ord FROM dual
+
+                                 /* 취향 일치 토큰들 (임계값 방향 통일: ≥60) */
+                             UNION ALL
+                             SELECT (
+                                        SELECT CASE WHEN EXISTS (
+                                            SELECT 1
+                                            FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID
+                                                                JOIN user_preference up ON 1=1
+                                                                JOIN th ON 1=1
+                                            WHERE pt.PRODUCT_ID = PRODUCT_ID
+                                              AND ct.TAG_GROUP='COLOR_TONE'
+                                              AND ct.TAG_CODE = CASE WHEN NVL(up.BRIGHTNESS,50) &gt;= th.TH_BRIGHT
+                                                                         THEN 'COLOR_TONE_LIGHT' ELSE 'COLOR_TONE_DARK' END
+                                        )
+                                                        THEN 'TONE:' ||
+                                                             CASE WHEN (SELECT NVL(BRIGHTNESS,50) FROM user_preference FETCH FIRST 1 ROWS ONLY) &gt;= (SELECT TH_BRIGHT FROM th)
+                                                                      THEN 'LIGHT' ELSE 'DARK' END
+                                                   END
+                                        FROM dual
+                                    ) AS tok, 30 AS ord FROM dual
+
+                             UNION ALL
+                             SELECT (
+                                        SELECT CASE WHEN EXISTS (
+                                            SELECT 1
+                                            FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID
+                                                                JOIN user_preference up ON 1=1
+                                                                JOIN th ON 1=1
+                                            WHERE pt.PRODUCT_ID = PRODUCT_ID
+                                              AND ct.TAG_GROUP='COLOR_SAT'
+                                              AND ct.TAG_CODE = CASE WHEN NVL(up.COLOR,50) &gt;= th.TH_COLOR
+                                                                         THEN 'COLOR_SAT_VIVID' ELSE 'COLOR_SAT_MUTED' END
+                                        )
+                                                        THEN 'SAT:' ||
+                                                             CASE WHEN (SELECT NVL(COLOR,50) FROM user_preference FETCH FIRST 1 ROWS ONLY) &gt;= (SELECT TH_COLOR FROM th)
+                                                                      THEN 'VIVID' ELSE 'MUTED' END
+                                                   END
+                                        FROM dual
+                                    ) AS tok, 31 AS ord FROM dual
+
+                                 /* 화려함(BOLDNESS) */
+                             UNION ALL
+                             SELECT (
+                                        SELECT CASE WHEN EXISTS (
+                                            SELECT 1
+                                            FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID = pt.COMMON_TAG_ID
+                                                                JOIN user_preference up ON 1=1
+                                                                JOIN th ON 1=1
+                                            WHERE pt.PRODUCT_ID = PRODUCT_ID
+                                              AND ct.TAG_GROUP='BOLDNESS'
+                                              AND ct.TAG_CODE = CASE WHEN NVL(up.BOLDNESS,50) &gt;= th.TH_BOLD
+                                                                         THEN 'BOLD_MILD' ELSE 'BOLD_BOLD' END
+                                        )
+                                                        THEN 'BOLD:' ||
+                                                             CASE WHEN (SELECT NVL(BOLDNESS,50) FROM user_preference FETCH FIRST 1 ROWS ONLY) &gt;= (SELECT TH_BOLD FROM th)
+                                                                      THEN 'MILD' ELSE 'BOLD' END
+                                                   END
+                                        FROM dual
+                                    ) AS tok, 34 AS ord FROM dual
+
+                                 /* LOOK 일치 */
+                             UNION ALL
+                             SELECT (
+                                        SELECT CASE
+                                                   WHEN EXISTS (
+                                                       SELECT 1
+                                                       FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID
+                                                                           JOIN user_preference up ON 1=1
+                                                       WHERE pt.PRODUCT_ID=PRODUCT_ID
+                                                         AND ct.TAG_GROUP='FASHION_STYLE'
+                                                         AND ( (up.FIRST_LOOK  IS NOT NULL AND ct.TAG_CODE='STYLE_'||up.FIRST_LOOK)
+                                                           OR   (up.SECOND_LOOK IS NOT NULL AND ct.TAG_CODE='STYLE_'||up.SECOND_LOOK) )
+                                                   )
+                                                       THEN 'STYLE:' ||
+                                                            NVL((
+                                                                    SELECT LISTAGG(code, ',') WITHIN GROUP (ORDER BY code)
+                                                                    FROM (
+                                                                             SELECT up.FIRST_LOOK  AS code FROM user_preference up WHERE up.FIRST_LOOK  IS NOT NULL
+                                                                                                                                     AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt2 JOIN COMMON_TAG ct2 ON ct2.COMMON_TAG_ID=pt2.COMMON_TAG_ID
+                                                                                                                                                 WHERE pt2.PRODUCT_ID=PRODUCT_ID AND ct2.TAG_CODE='STYLE_'||up.FIRST_LOOK)
+                                                                             UNION ALL
+                                                                             SELECT up.SECOND_LOOK AS code FROM user_preference up WHERE up.SECOND_LOOK IS NOT NULL
+                                                                                                                                     AND EXISTS (SELECT 1 FROM PRODUCT_TAG pt3 JOIN COMMON_TAG ct3 ON ct3.COMMON_TAG_ID=pt3.COMMON_TAG_ID
+                                                                                                                                                 WHERE pt3.PRODUCT_ID=PRODUCT_ID AND ct3.TAG_CODE='STYLE_'||up.SECOND_LOOK)
+                                                                         )
+                                                                ), '')
+                                                   END
+                                        FROM dual
+                                    ) AS tok, 32 AS ord FROM dual
+
+                                 /* FIT 일치 */
+                             UNION ALL
+                             SELECT (
+                                        SELECT CASE WHEN EXISTS (
+                                            SELECT 1 FROM PRODUCT_TAG pt JOIN COMMON_TAG ct ON ct.COMMON_TAG_ID=pt.COMMON_TAG_ID
+                                                                         JOIN user_preference up ON 1=1
+                                                                         JOIN th ON 1=1
+                                            WHERE pt.PRODUCT_ID=PRODUCT_ID
+                                              AND ct.TAG_GROUP='FIT'
+                                              AND ct.TAG_CODE = CASE WHEN NVL(up.FIT,50) &gt;= th.TH_FIT
+                                                                         THEN 'FIT_SLIM' ELSE 'FIT_RELAXED' END
+                                        )
+                                                        THEN 'FIT:' ||
+                                                             CASE WHEN (SELECT NVL(FIT,50) FROM user_preference FETCH FIRST 1 ROWS ONLY) &gt;= (SELECT TH_FIT FROM th)
+                                                                      THEN 'SLIM' ELSE 'RELAXED' END
+                                                   END
+                                        FROM dual
+                                    ) AS tok, 33 AS ord FROM dual
+
+                                 /* 브랜드 충성도 */
+                             UNION ALL
+                             SELECT (
+                                        SELECT CASE WHEN EXISTS (
+                                            SELECT 1
+                                            FROM ORDER_ITEM oi JOIN ORDERS o ON o.ORDER_ID=oi.ORDER_ID
+                                            WHERE o.MEMBER_ID = #{memberId, jdbcType=NUMERIC}
+                                              AND oi.PRODUCT_ID IN (SELECT p2.PRODUCT_ID FROM PRODUCT p2 WHERE p2.BRAND_NAME = BRAND_NAME)
+                                        ) THEN 'BRAND:LOYAL' END
+                                        FROM dual
+                                    ) AS tok, 40 AS ord FROM dual
+
+                                 /* 리뷰 요약 */
+                             UNION ALL
+                             SELECT (CASE WHEN AVG_REVIEW IS NOT NULL THEN 'RATING:' || TO_CHAR(ROUND(AVG_REVIEW,1)) END) AS tok, 51 AS ord FROM dual
+                         )
+                    WHERE tok IS NOT NULL
+                ), '추천 기준 없음') AS RECOMMEND_TOKENS
+            /* ========================================================= */
+
         FROM product_scores
         ORDER BY final_score DESC, AVG_REVIEW DESC NULLS LAST, PRICE ASC
-            FETCH FIRST 1 ROW ONLY
+            FETCH FIRST 1 ROWS ONLY
     </select>
+
+
 
     <!-- 2. 상품 후보군 조회 -->
     <select id="findProductCandidates" resultType="tkitem.backend.domain.product_recommendation.vo.ProductWithScore">

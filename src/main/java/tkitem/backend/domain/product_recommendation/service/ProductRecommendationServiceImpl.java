@@ -9,6 +9,7 @@ import tkitem.backend.domain.product_recommendation.dto.request.BudgetRecommenda
 import tkitem.backend.domain.product_recommendation.dto.request.MinimumBudgetRequest;
 import tkitem.backend.domain.product_recommendation.dto.response.*;
 import tkitem.backend.domain.product_recommendation.mapper.ProductRecommendationMapper;
+import tkitem.backend.domain.product_recommendation.util.RecommendReasonFormatter;
 import tkitem.backend.domain.product_recommendation.vo.*;
 
 import java.math.*;
@@ -85,7 +86,7 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
                             .code(recommendedProduct.getCode())
                             .price(recommendedProduct.getPrice())
                             .avgReview(recommendedProduct.getAvgReview())
-                            .recommendReason(reason)
+                            .recommendReason(RecommendReasonFormatter.toReason(recommendedProduct.getRecommendTokens()))
                             .build();
 
                     productResponses.add(ChecklistProductResponse.builder()
