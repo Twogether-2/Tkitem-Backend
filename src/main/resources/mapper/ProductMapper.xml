@@ -67,7 +67,7 @@
         <if test="cursor != null">
             AND p.product_id &lt; #{cursor}
         </if>
-        ORDER BY p.product_id DESC
+        ORDER BY p.product_id
         FETCH FIRST #{limit} ROWS ONLY
     </select>
 
