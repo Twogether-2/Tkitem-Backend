@@ -100,6 +100,12 @@ public interface TourMapper {
             @Param("retEnd") Date retEnd,
             @Param("priceMin") Long priceMin,
             @Param("priceMax") Long priceMax,
-            @Param("locations") List<LocationInfo> locations
+            @Param("locations") List<LocationInfo> locations,
+            @Param("memberId") Long memberId,
+            @Param("groupId") Long groupId
     );
+
+    List<TourCandidateRowDto> scoreByIdsInline(@Param("allowIdsJson") String allowIdsJson,
+                                               @Param("nPerDay") Integer nPerDay,
+                                               @Param("tagIdList") List<Long> tagIdList);
 }

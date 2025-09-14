@@ -76,12 +76,19 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
         boolean useEs = queryText != null && !queryText.isBlank();
 
         // TODO : DB 검색만 7초정도 지연시간 발생. DB 조회시간 최적화 필요
+
+        // 지역, 날짜, 추천기록에 속하지 않는 허용 투어 ID 목록 조회
+        long touridTime = System.nanoTime();
+        List<Long> allowIds = tourMapper.selectTourIdsByFilters(req.getDepartureDate(), req.getReturnDate(), req.getPriceMin(), req.getPriceMax(), req.getLocations(), member.getMemberId(), req.getGroupId());
+        touridTime = System.nanoTime() - touridTime;
+        log.info("[RECOMMEND] allowids size from filtering db = {}, time = {}", allowIds.size(), touridTime/1_000_000);
+
         // DB 후보 1차 계산
         int baseCount = useEs ? Math.max(DB_STAGE_TOP, topN) : topN;
-        log.info("DB후보계산 시작");
-        List<TourRecommendationResponseDto> base = tourRecommendService.recommendDbOnly(req, baseCount, member);
+        log.info("[RECOMMEND]DB후보계산 시작");
+        List<TourRecommendationResponseDto> base = tourRecommendService.recommendDbOnly(req, baseCount, member, allowIds);
         if (base == null || base.isEmpty()) return Collections.emptyList();
-        log.info("DB후보계산 완료 : {}", base.size());
+        log.info("[RECOMMEND]DB후보계산 완료 : {}", base.size());
 
         // ES 없을 때. DB 로만 계산
         if (!useEs) {
@@ -91,17 +98,21 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
             for (int i = 0; i < show; i++) {
                 TourRecommendationResponseDto r = base.get(i);
                 log.info("[DB-ONLY][{}] tourId={}, title='{}', price={}, dep={}, ret={}, pkgId={}, dbScore={}, finalScore={}",
-                        i, r.getTourId(), r.getTitle(), r.getPackageDtos().getFirst().getPrice(), r.getPackageDtos().getFirst().getDepartureDate(), r.getPackageDtos().getFirst().getReturnDate(),
-                        r.getPackageDtos().getFirst().getTourPackageId(), r.getDbScore(), r.getFinalScore());
+                        i,
+                        r.getTourId(),
+                        r.getTitle(),
+                        r.getPackageDtos().getFirst().getPrice(),
+                        r.getPackageDtos().getFirst().getDepartureDate(),
+                        r.getPackageDtos().getFirst().getReturnDate(),
+                        r.getPackageDtos().getFirst().getTourPackageId(),
+                        r.getDbScore(),
+                        r.getFinalScore());
             }
             if (show == 0) log.info("[DB-ONLY] no candidates.");
         }
 
         // ES 입력도 있을 때 DB + ES 합쳐서 계산
         else {
-            // 2. ES KNN 집계
-            List<Long> allowIds = tourMapper.selectTourIdsByFilters(req.getDepartureDate(), req.getReturnDate(), req.getPriceMin(), req.getPriceMax(), req.getLocations());
-            log.info("[RE] allowids size from filtering db = {}", allowIds.size());
 
             // GEMINI 로 queryText -> should/exclude 분류
             KeywordRule rule = tourLLmService.buildRuleFromQueryText(queryText);

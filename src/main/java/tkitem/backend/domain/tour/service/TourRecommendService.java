@@ -1,5 +1,7 @@
 package tkitem.backend.domain.tour.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,7 @@ public class TourRecommendService {
     private final TourMapper tourMapper;
 
     private static final Integer kTop = 10;
+    private static final Integer nPerDay = 3; // 일자별 상위점수 채택 일정 개수
 
     /**
      * DB 점수만으로 Top-N 추천
@@ -32,49 +35,50 @@ public class TourRecommendService {
      * @param topN 상위 N개
      * @return
      */
-    @Transactional(readOnly = true)
-    public List<TourRecommendationResponseDto> recommendDbOnly(TourRecommendationRequestDto req, int topN, Member member) {
+    @Transactional
+    public List<TourRecommendationResponseDto> recommendDbOnly(TourRecommendationRequestDto req, int topN, Member member, List<Long> allowIds) throws JsonProcessingException {
 
-        log.info("DB 투어추천 시작");
-        List<TourCandidateRowDto> tourCandidateRowDtos = tourMapper.selectTourCandidates(req, kTop, member.getMemberId());
-        log.info("DB 투어추천 완료 : {}", tourCandidateRowDtos.size());
+        long t0 = System.nanoTime();
+        // 정렬까지 DB에서 완료, 전체 반환 (TopN 아님)
+        String allowIdsJson = new ObjectMapper().writeValueAsString(allowIds);
+
+        List<TourCandidateRowDto> tourCandidateRowDtos = tourMapper.scoreByIdsInline(allowIdsJson, nPerDay, req.getTagIdList());
+        t0 = System.nanoTime() - t0;
+        log.info("[RECOMMEND] scoreByAllowIds DB time = {} ms, rows={}", t0/1_000_000, tourCandidateRowDtos.size());
+        //-------------
+
+        for(int i = 0; i<Math.min(tourCandidateRowDtos.size(), 5); i++) {
+            log.info("[RECOMMEND] topN 개 추천 완료. DB : {}, id : {}", tourCandidateRowDtos.get(i).getSDbRaw(), tourCandidateRowDtos.get(i).getTourId());
+        }
 
         if(tourCandidateRowDtos.isEmpty()) return Collections.emptyList();
 
-        // TODO : 후보계산이 진짜 오래걸림
-        // min-max 정규화(S_DB 만)
-        double dbMin = tourCandidateRowDtos.stream().mapToDouble(r -> NumberUtil.toDoubleOrZero(r.getSDbRaw())).min().orElse(0);
-        double dbMax = tourCandidateRowDtos.stream().mapToDouble(r -> NumberUtil.toDoubleOrZero(r.getSDbRaw())).max().orElse(1);
+        List<TourRecommendationResponseDto> ranked = tourCandidateRowDtos.stream().map(r -> TourRecommendationResponseDto.builder()
+                .tourId(r.getTourId())
+                .dbScore(r.getSDbRaw()) // DB 정규화 점수
+                .esScore(0.0) // ES 하기 전이라 아직 0.0
+                .finalScore(r.getSDbRaw()) // 최종점수에 아직 DB 점수만 활용함
+                .build())
+                .collect(Collectors.toCollection(ArrayList::new));
 
-        List<TourRecommendationResponseDto> ranked = tourCandidateRowDtos.stream().map(r -> {
-            double db = NumberUtil.toDoubleOrZero(r.getSDbRaw());
-            double dbNorm = (dbMax > dbMin) ? (db - dbMin) / (dbMax - dbMin) : 0.0;
+        // 해당 투어들의 "모든 패키지" 조회하여 주입
+        List<Long> tourIds = ranked.stream().map(TourRecommendationResponseDto::getTourId).toList();
 
-            return TourRecommendationResponseDto.builder()
-                    .tourId(r.getTourId())
-                    .dbScore(dbNorm) // DB 정규화 점수
-                    .esScore(0.0) // ES 하기 전이라 아직 0.0
-                    .finalScore(dbNorm) // 최종점수에 아직 DB 점수만 활용함
-                    .build();
-        }).sorted(Comparator.comparing(TourRecommendationResponseDto::getFinalScore).reversed())
-                .collect(Collectors.toList());
+        // TODO : 패키지 채우기를 최종 계산 끝난 후로 이동. 로직 시간도 개선 필요.
+//        List<TourPackageDto> pkgRows = tourMapper.selectPackagesForTours(req, member.getMemberId(), tourIds);
+//        log.info("[RECOMMEND] 투어 패키지 채우기 완료");
+//
+//        // tourId 기준 그룹핑 → DTO 주입
+//        Map<Long, List<TourPackageDto>> grouped = pkgRows.stream()
+//                .collect(Collectors.groupingBy(TourPackageDto::getTourId));
+//
+//        for (TourRecommendationResponseDto dto : ranked) {
+//            List<TourPackageDto> list = grouped.get(dto.getTourId());
+//            dto.setPackageDtos(list != null ? list : Collections.emptyList());
+//        }
 
-        // 4) Top-N 투어만 선택 후, 해당 투어들의 "모든 패키지" 조회하여 주입
-        List<TourRecommendationResponseDto> top = ranked.subList(0, Math.min(topN, ranked.size()));
-        List<Long> tourIds = top.stream().map(TourRecommendationResponseDto::getTourId).toList();
-
-        // 투어별 모든 패키지 행 조회 (XML: selectPackagesForTours)
-        List<TourPackageDto> pkgRows = tourMapper.selectPackagesForTours(req, member.getMemberId(), tourIds);
-
-        // tourId 기준 그룹핑 → DTO 주입
-        Map<Long, List<TourPackageDto>> grouped = pkgRows.stream()
-                .collect(Collectors.groupingBy(TourPackageDto::getTourId));
-
-        for (TourRecommendationResponseDto dto : top) {
-            List<TourPackageDto> list = grouped.get(dto.getTourId());
-            dto.setPackageDtos(list != null ? list : Collections.emptyList());
-        }
-        return top;
+        log.info("씨발뭔데");
+        return ranked;
     }
 
     /**
