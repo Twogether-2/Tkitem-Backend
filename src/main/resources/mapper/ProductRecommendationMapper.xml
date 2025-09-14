@@ -78,7 +78,15 @@
 
     <!-- 1. 예산 내 최적 상품 조회 -->
     <select id="findBestProductForBudget" resultMap="productMap">
-        WITH user_preference AS (
+        /* 이 여행이 방문하는 도시 집합 */
+        WITH trip_city AS (
+            SELECT DISTINCT tc.city_id
+            FROM TRIP tr
+            JOIN TOUR_PACKAGE tp ON tp.TOUR_PACKAGE_ID = tr.TOUR_PACKAGE_ID
+            JOIN TOUR_CITY tc    ON tc.TOUR_ID         = tp.TOUR_ID
+            WHERE tr.TRIP_ID = #{tripId,jdbcType=NUMERIC}
+        ),
+        user_preference AS (
             SELECT *
             FROM PREFERENCE
             WHERE MEMBER_ID = #{memberId, jdbcType=NUMERIC}
@@ -135,6 +143,15 @@
                              END
                              /* 4) 기본 0.1 */
                              + 0.05
+
+                             /* 5) 도시 인기 가점 추가 ------------------------------ */
+                             + NVL((
+                                       /* 같은 여행의 도시들 중, 해당 '상품'의 도시인기 MAX × 0.10 */
+                                       SELECT MAX(NVL(cip.POP_PCTL,0)) * 0.10
+                                       FROM CITY_ITEM_POP cip
+                                       WHERE cip.PRODUCT_ID = p.PRODUCT_ID
+                                         AND EXISTS (SELECT 1 FROM trip_city tc WHERE tc.city_id = cip.CITY_ID)
+                                   ), 0)
                          ) AS base_score
                  FROM PRODUCT p
                           JOIN PRODUCT_CATEGORY_SUB pcs ON pcs.PRODUCT_CATEGORY_SUB_ID = p.CATEGORY_ID

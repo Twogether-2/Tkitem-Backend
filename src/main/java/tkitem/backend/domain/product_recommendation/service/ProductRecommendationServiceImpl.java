@@ -63,6 +63,7 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
                 // 예산 내 최적 상품 조회
                 Map<String, Object> params = new HashMap<>();
                 params.put("categoryId", item.getProductCategorySubId());
+                params.put("tripId", item.getTripId());
                 params.put("maxPrice", remainingBudget);
                 params.put("memberId", trip.getMemberId());
                 params.put("notes", item.getNotes());
