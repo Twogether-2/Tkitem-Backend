@@ -190,12 +190,8 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
             );
         }
 
-        // 상위 5개만 세부일정 채우기
-        List<TourRecommendationResponseDto> dtos =
-                tourRecommendService.enrichRecommendationDetails(base.subList(0, Math.min(topN, base.size())));
-
-        // 상위 5개만 투어 세부일정 채우기
-        dtos = tourRecommendService.fillTopNPackage(dtos, req, member, 5);
+        // 상위 5개만 투어 패키지, 세부일정 채우기
+        List<TourRecommendationResponseDto> dtos = tourRecommendService.fillTopNPackage(base.subList(0, Math.min(topN, base.size())), req, member, 5);
 
         // 추천 결과 저장
         tourRecommendService.saveShownRecommendations(req.getGroupId(), dtos, member);

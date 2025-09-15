@@ -62,79 +62,7 @@ public class TourRecommendService {
                 .build())
                 .collect(Collectors.toCollection(ArrayList::new));
 
-        // 해당 투어들의 "모든 패키지" 조회하여 주입
-//        List<Long> tourIds = ranked.stream().map(TourRecommendationResponseDto::getTourId).toList();
-
-        // TODO : 패키지 채우기를 최종 계산 끝난 후로 이동. 로직 시간도 개선 필요.
-//        List<TourPackageDto> pkgRows = tourMapper.selectPackagesForTours(req, member.getMemberId(), tourIds);
-//        log.info("[RECOMMEND] 투어 패키지 채우기 완료");
-//
-//        // tourId 기준 그룹핑 → DTO 주입
-//        Map<Long, List<TourPackageDto>> grouped = pkgRows.stream()
-//                .collect(Collectors.groupingBy(TourPackageDto::getTourId));
-//
-//        for (TourRecommendationResponseDto dto : ranked) {
-//            List<TourPackageDto> list = grouped.get(dto.getTourId());
-//            dto.setPackageDtos(list != null ? list : Collections.emptyList());
-//        }
-
         return ranked;
-    }
-
-    /**
-     * 분류가 끝난 dto 의 데이터를 추가적으로 채워서 전달하기 위한 메서드
-     * @param items
-     * @return
-     */
-    @Transactional
-    public List<TourRecommendationResponseDto> enrichRecommendationDetails(List<TourRecommendationResponseDto> items){
-        if(items == null || items.isEmpty()) return items;
-
-        // 1. 인덱싱
-        Map<Long, TourRecommendationResponseDto> byId = new ConcurrentHashMap<>();
-        List<Long> tourIds = new ArrayList<>(items.size());
-        for(TourRecommendationResponseDto item : items){
-            if(item == null || item.getTourId() == null) continue;
-            byId.put(item.getTourId(), item);
-            tourIds.add(item.getTourId());
-        }
-
-        // 2. TOUR 데이터 조회
-        List<Map<String, Object>> tourMetaDatas = tourMapper.selectTourMetaByIds(tourIds);
-        for(Map<String, Object> row : tourMetaDatas){
-            Long tourId = ((Number) row.get("tourId")).longValue();
-            TourRecommendationResponseDto dto = byId.get(tourId);
-            if(dto == null) continue;
-            dto.setTitle((String) row.get("title"));
-            dto.setFeature((String) row.get("feature"));
-            dto.setImgUrl((String) row.get("imgUrl"));
-            dto.setProvider((String) row.get("provider"));
-        }
-
-        // 3. TDS 조회 및 매핑
-        List<Map<String, Object>> tdsRows = tourMapper.selectTdsByTourIds(tourIds);
-        Map<Long, List<TourDetailScheduleDto>> schedulesByTour = new HashMap<>();
-        for (Map<String, Object> r : tdsRows) {
-            Long tourId = ((Number) r.get("tourId")).longValue();
-            TourDetailScheduleDto item = TourDetailScheduleDto.builder()
-                    .tourDetailScheduleId(((Number) r.get("tourDetailScheduleId")).longValue())
-                    .cityId(r.get("cityId") == null ? null : ((Number) r.get("cityId")).longValue())
-                    .countryName((String) r.get("countryName"))
-                    .cityName((String) r.get("cityName"))
-                    .title((String) r.get("title"))
-                    .description((String) r.get("description"))
-                    .sortOrder(r.get("sortOrder") == null ? null : ((Number) r.get("sortOrder")).intValue())
-                    .defaultType((String) r.get("defaultType"))
-                    .scheduleDay(r.get("scheduleDay") == null ? 0 : ((Number) r.get("scheduleDay")).intValue())
-                    .build();
-            schedulesByTour.computeIfAbsent(tourId, k -> new ArrayList<>()).add(item);
-        }
-        for (Map.Entry<Long, List<TourDetailScheduleDto>> e : schedulesByTour.entrySet()) {
-            TourRecommendationResponseDto dto = byId.get(e.getKey());
-            if (dto != null) dto.setSchedules(e.getValue());
-        }
-
-        return items;
     }
 
     @Transactional(readOnly = true)
