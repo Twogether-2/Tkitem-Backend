@@ -15,6 +15,7 @@ import tkitem.backend.domain.tour.dto.response.TourRecommendationResponseDto;
 import tkitem.backend.domain.tour.mapper.TourMapper;
 import tkitem.backend.global.util.NumberUtil;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -62,7 +63,7 @@ public class TourRecommendService {
                 .collect(Collectors.toCollection(ArrayList::new));
 
         // 해당 투어들의 "모든 패키지" 조회하여 주입
-        List<Long> tourIds = ranked.stream().map(TourRecommendationResponseDto::getTourId).toList();
+//        List<Long> tourIds = ranked.stream().map(TourRecommendationResponseDto::getTourId).toList();
 
         // TODO : 패키지 채우기를 최종 계산 끝난 후로 이동. 로직 시간도 개선 필요.
 //        List<TourPackageDto> pkgRows = tourMapper.selectPackagesForTours(req, member.getMemberId(), tourIds);
@@ -77,7 +78,6 @@ public class TourRecommendService {
 //            dto.setPackageDtos(list != null ? list : Collections.emptyList());
 //        }
 
-        log.info("씨발뭔데");
         return ranked;
     }
 
@@ -135,6 +135,81 @@ public class TourRecommendService {
         }
 
         return items;
+    }
+
+    @Transactional(readOnly = true)
+    public List<TourRecommendationResponseDto> fillTopNPackage(
+            List<TourRecommendationResponseDto> ranked,
+            TourRecommendationRequestDto req,
+            Member member,
+            int topN
+    ){
+        if (ranked == null || ranked.isEmpty()) return ranked;
+        if (topN <= 0) topN = 5;
+
+        // 1) 순서를 보존하며 상위 N개 tourId만 추출
+        Map<Long, TourRecommendationResponseDto> topMap = new LinkedHashMap<>();
+        for (TourRecommendationResponseDto dto : ranked) {
+            if (dto == null || dto.getTourId() == null) continue;
+            if (!topMap.containsKey(dto.getTourId())) {
+                topMap.put(dto.getTourId(), dto);
+                if (topMap.size() >= topN) break;
+            }
+        }
+        if (topMap.isEmpty()) return ranked;
+        List<Long> topIds = new ArrayList<>(topMap.keySet());
+
+        // 2) 패키지 조건 필터(날짜/가격)로 해당 투어들의 패키지 조회 (기존 Mapper 재사용)
+        List<TourPackageDto> pkgRows = tourMapper.selectPackagesForTours(req, member.getMemberId(), topIds); // :contentReference[oaicite:3]{index=3}
+        Map<Long, List<TourPackageDto>> pkgByTour = (pkgRows == null)
+                ? Collections.emptyMap()
+                : pkgRows.stream().collect(Collectors.groupingBy(TourPackageDto::getTourId));
+        for (Long tourId : topIds) {
+            TourRecommendationResponseDto dto = topMap.get(tourId);
+            dto.setPackageDtos(pkgByTour.getOrDefault(tourId, Collections.emptyList()));
+        }
+
+        // 3) 투어 메타(제목/이미지 등) 보강 (기존 Mapper 재사용)
+        List<Map<String, Object>> metaRows = tourMapper.selectTourMetaByIds(topIds); // :contentReference[oaicite:4]{index=4}
+        if (metaRows != null) {
+            for (Map<String, Object> r : metaRows) {
+                Long tourId = ((Number) r.get("tourId")).longValue();
+                TourRecommendationResponseDto dto = topMap.get(tourId);
+                if (dto == null) continue;
+                if (dto.getTitle() == null) dto.setTitle((String) r.get("title"));
+                if (dto.getFeature() == null) dto.setFeature((String) r.get("feature"));
+                if (dto.getImgUrl() == null) dto.setImgUrl((String) r.get("imgUrl"));
+                if (dto.getProvider() == null) dto.setProvider((String) r.get("provider"));
+            }
+        }
+
+        // 4) 세부 일정(TDS) 보강 (기존 Mapper 재사용)
+        List<Map<String, Object>> tdsRows = tourMapper.selectTdsByTourIds(topIds); // :contentReference[oaicite:5]{index=5}
+        Map<Long, List<TourDetailScheduleDto>> tdsByTour = new HashMap<>();
+        if (tdsRows != null) {
+            for (Map<String, Object> r : tdsRows) {
+                Long tourId = ((Number) r.get("tourId")).longValue();
+                TourDetailScheduleDto item = TourDetailScheduleDto.builder()
+                        .tourDetailScheduleId(((Number) r.get("tourDetailScheduleId")).longValue())
+                        .cityId(r.get("cityId") == null ? null : ((Number) r.get("cityId")).longValue())
+                        .countryName((String) r.get("countryName"))
+                        .cityName((String) r.get("cityName"))
+                        .title((String) r.get("title"))
+                        .description((String) r.get("description"))
+                        .sortOrder(r.get("sortOrder") == null ? null : ((Number) r.get("sortOrder")).intValue())
+                        .defaultType((String) r.get("defaultType"))
+                        .scheduleDay(((BigDecimal)r.get("scheduleDay")).intValue())
+                        .build();
+                tdsByTour.computeIfAbsent(tourId, k -> new ArrayList<>()).add(item);
+            }
+        }
+        for (Long tourId : topIds) {
+            TourRecommendationResponseDto dto = topMap.get(tourId);
+            dto.setSchedules(tdsByTour.getOrDefault(tourId, Collections.emptyList()));
+        }
+
+        // 같은 객체 참조이므로 ranked 자체가 갱신됩니다.
+        return ranked;
     }
 
     @Transactional

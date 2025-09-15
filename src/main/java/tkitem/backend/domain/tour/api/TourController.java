@@ -77,7 +77,7 @@ public class TourController {
         List<TourRecommendationResponseDto> responseDtodList = tourFacadeService.recommend(req, queryText, topN, member);
         log.info("[RES] size={}", responseDtodList == null ? null : responseDtodList.size());
         for(TourRecommendationResponseDto responseDto : responseDtodList){
-            log.info("[RES] tourId : {}, packageCnt : {}, scheduleCnt : {}", responseDto.getTourId(), responseDto.getPackageDtos().size(), responseDto.getSchedules().size());
+            log.info("[RES] tourId : {}, title : {}, scheduleCnt : {}, packageCnt : {}", responseDto.getTourId(), responseDto.getTitle(),  responseDto.getSchedules().size(), responseDto.getPackageDtos().size());
         }
         return ResponseEntity.ok(responseDtodList);
     }

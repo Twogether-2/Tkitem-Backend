@@ -101,10 +101,10 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
                         i,
                         r.getTourId(),
                         r.getTitle(),
-                        r.getPackageDtos().getFirst().getPrice(),
-                        r.getPackageDtos().getFirst().getDepartureDate(),
-                        r.getPackageDtos().getFirst().getReturnDate(),
-                        r.getPackageDtos().getFirst().getTourPackageId(),
+//                        r.getPackageDtos().getFirst().getPrice(),
+//                        r.getPackageDtos().getFirst().getDepartureDate(),
+//                        r.getPackageDtos().getFirst().getReturnDate(),
+//                        r.getPackageDtos().getFirst().getTourPackageId(),
                         r.getDbScore(),
                         r.getFinalScore());
             }
@@ -190,10 +190,14 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
             );
         }
 
-        // 추천 결과 저장
+        // 상위 5개만 세부일정 채우기
         List<TourRecommendationResponseDto> dtos =
                 tourRecommendService.enrichRecommendationDetails(base.subList(0, Math.min(topN, base.size())));
 
+        // 상위 5개만 투어 세부일정 채우기
+        dtos = tourRecommendService.fillTopNPackage(dtos, req, member, 5);
+
+        // 추천 결과 저장
         tourRecommendService.saveShownRecommendations(req.getGroupId(), dtos, member);
 
         return dtos;
