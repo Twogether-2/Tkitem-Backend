@@ -1,7 +1,8 @@
 package tkitem.backend.domain.tour.service;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch.core.KnnSearchResponse;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
+import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.transport.rest_client.RestClientTransport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,9 +18,9 @@ import tkitem.backend.domain.tour.dto.TopMatchDto;
 import tkitem.backend.global.error.ErrorCode;
 import tkitem.backend.global.error.exception.BusinessException;
 
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -162,63 +163,7 @@ public class TourEsService {
         }
     }
 
-    /**
-     * 사용자 TEXT를 임베딩하여 TDS 인덱스에 kNN 조회 후, 투어별 상위 m개 점수 평균을 반환
-     * @param queryText 사용자 텍스트
-     * @param allowTourIds 허용 투어 ID 집합
-     * @param k 후보군 수
-     * @param candidates
-     * @param mTop 투어별 상위 m 개 평균
-     * @return 투어 ID -> sEs 점수
-     * @throws Exception
-     */
-    public Map<Long, Double> computeEsScores(
-            String queryText,
-            List<Long> allowTourIds,
-            int k, int candidates, int mTop) throws Exception{
 
-        // 쿼리 임베딩
-        float[] qv = embeddingService.embed(queryText); // 텍스트를 1536D 벡터로 변환
-        List<Float> qvList = new ArrayList<>(qv.length);
-        for(float v : qv) qvList.add(v);
-
-        // KNN 검색(코사인 유사도 검색)
-        KnnSearchResponse<Map> resp = esClient.knnSearch(s -> s
-                .index(INDEX_TDS)
-                .knn(kn -> kn
-                        .field("embedding")
-                        .queryVector(qvList)
-                        .k(k) // 상위 k 개 후보
-                        .numCandidates(candidates)) // 내부 탐색폭을 candidates 로 지정
-                .source(src -> src.filter(f -> f.includes("tour_id", "title", "schedule_date"))), // 응답 페이로드를 필요한 필드만 포함시킴
-                Map.class);
-
-        // 투어별 점수 수집
-        Map<Long, List<Double>> byTour = new ConcurrentHashMap<>();
-        // 각 히트별 처리
-        resp.hits().hits().forEach(hit -> {
-            Map<String, Object> src = hit.source();
-            if(src == null) return;
-            Object tidObj = src.get("tour_id");
-            if(tidObj == null) return;
-            Long tourId  = Long.valueOf(String.valueOf(tidObj));
-            if(allowTourIds != null && !allowTourIds.contains(tourId)) return; // DB 후보군 뽑은것과 교집합 일 경우만 다음step
-            byTour.computeIfAbsent(tourId, k2 -> new ArrayList<>()).add(hit.score()); // 해당 투어의 유사도 점수 추가
-        });
-
-        //투어별 상위 m개 평균
-        Map<Long, Double> sEs = new ConcurrentHashMap<>();
-        for (Map.Entry<Long, List<Double>> e : byTour.entrySet()) {
-            List<Double> top = e.getValue().stream()
-                    .sorted(Comparator.reverseOrder())
-                    .limit(Math.max(mTop, 1))
-                    .toList();
-            double avg = top.stream().mapToDouble(Double::doubleValue).average().orElse(0.0); // ES kNN 의 코사인 유사도 점수 중 상위 mTop개 평균
-            sEs.put(e.getKey(), avg);
-        }
-
-        return sEs;
-    }
 
     /**
      * DB에서 전달한 allowTourIds만으로 ES를 선필터링하고,
@@ -409,5 +354,357 @@ public class TourEsService {
     private static String termJson(String field, List<Long> values){
         String joined = values.stream().map(Object::toString).collect(Collectors.joining(","));
         return "{\"terms\":{\"" + field + "\":[" + joined + "]}}";
+    }
+
+    /// ////////////////////////////////////////
+    /// ////////////////////////////////////////////
+    /// ////////////////////////////////////////////
+    /// ////////////////////////////////////////////
+    /// ////////////////////////////////////////////
+    /// ////////////////////////////////////////////
+    private final TourLLmService tourLLmService;
+
+    private static final int   SIZE_GROUPED       = 100;     // 투어(그룹) 최대 반환 수
+    private static final int   INNER_HITS_MTOP    = 3;       // 투어별 상위 일정 m개
+    private static final int   KNN_K              = 50;      // [간소화] kNN K
+    private static final int   KNN_CANDIDATES     = 200;     // [간소화] kNN 후보군
+    private static final double W_BM25_DEFAULT    = 0.7;     // 기본 BM25 가중
+    private static final double W_VEC_DEFAULT     = 0.3;     // 기본 벡터 가중
+    private static final double W_BM25_WHEN_WEAK  = 0.4;     // BM25 약할 때
+    private static final double W_VEC_WHEN_WEAK   = 0.6;
+
+    // [신규] BM25 “부족 판단” 기준(명확히 제시)
+    //  - 총 히트 < 2 이거나
+    //  - max_score < 8.0 이거나
+    //  - allowTourIds가 아주 큰데(예: 1000+) 커버된 투어 수가 1% 미만
+    private static final int    BM25_MIN_HITS       = 2;
+    private static final double BM25_MIN_MAX_SCORE  = 8.0;
+    private static final double BM25_MIN_COVER_RATE = 0.01;
+
+    // ============================
+    // [신규] 외부에 제공할 단일 엔트리 (한 번에 BM25→kNN→융합)
+    // ============================
+    public HybridResult searchHybridSimple(
+            String userText,
+            Set<Long> allowTourIds,
+            int topN
+    ) throws Exception {
+
+        // 0) LLM 보완 (있으면) : should / mustNot 키워드 추출
+        KeywordRule rule = null;
+//        if (userText != null && !userText.isBlank()) {
+//            try {
+//                rule = tourLLmService.buildRuleFromQueryText(userText);
+//            } catch (Exception e) {
+//                log.warn("[ES][LLM] 보완 키워드 추출 실패(무시) : {}", e.getMessage());
+//            }
+//        }
+
+        // 1) BM25 원문 쿼리 JSON 구성
+        String boolFilterJson = buildBoolFilterJson(allowTourIds, rule);       // 허용 투어 + 제외어
+        String bm25BodyJson   = buildBm25BodyJson(userText, rule, boolFilterJson);
+        log.debug("[ES][BM25] request json=\n{}", bm25BodyJson);               // 원문 노출
+
+        // 2) BM25 실행
+        SearchResponse<Map> bm25Resp = esClient.search(
+                s -> s.index(INDEX_TDS).withJson(new StringReader(bm25BodyJson)),
+                Map.class
+        );
+        Bm25ParseResult bm25 = parseGroupedScores(bm25Resp);
+
+        // 3) BM25 충분성 판단
+        boolean bm25Weak = isBm25Weak(bm25, allowTourIds.size());
+        log.info("[ES][BM25] totalHits={}, maxScore={}, distinctTours={}, bm25Weak={}",
+                bm25.totalHits, String.format(Locale.ROOT, "%.3f", bm25.maxScore),
+                bm25.tourScores.size(), bm25Weak
+        );
+
+        Map<Long, Double> finalScores;
+        String knnBodyJson;
+        boolean usedVector = false;
+
+        if (bm25Weak) {
+            // 4) (조건부) kNN 원문 쿼리 JSON 구성
+            float[] vec = embeddingService.embed(buildVectorText(userText, rule)); // [신규] 간단히 보완어 포함
+            String vecJson = toJsonArray(vec);
+            knnBodyJson = buildKnnBodyJson(vecJson, boolFilterJson);              // [신규]
+            log.debug("[ES][KNN] request json=\n{}", knnBodyJson);                // [신규] 원문 노출
+
+            // 5) kNN 실행
+            SearchResponse<Map> knnResp = esClient.search(
+                    s -> s.index(INDEX_TDS).withJson(new StringReader(knnBodyJson)),
+                    Map.class
+            );
+            Bm25ParseResult knn = parseGroupedScores(knnResp); // 파싱 로직 재사용(점수 필드를 동일 취급)
+            usedVector = true;
+
+            // 6) 점수 정규화 & 융합
+            Map<Long, Double> bm25N = normalizeByMax(bm25.tourScores);
+            Map<Long, Double> knnN  = normalizeByMax(knn.tourScores);
+
+            double wB = W_BM25_WHEN_WEAK;
+            double wV = W_VEC_WHEN_WEAK;
+
+            finalScores = fuseScores(bm25N, knnN, wB, wV);
+        } else {
+            knnBodyJson = null;
+            // BM25만 사용
+            finalScores = bm25.tourScores;
+        }
+
+        // 7) 최종 Top-N
+        List<Map.Entry<Long, Double>> sorted = finalScores.entrySet().stream()
+                .sorted((a, b) -> Double.compare(b.getValue(), a.getValue()))
+                .limit(topN)
+                .toList();
+
+        LinkedHashMap<Long, Double> topNMap = new LinkedHashMap<>();
+        for (var e : sorted) topNMap.put(e.getKey(), e.getValue());
+
+        // 8) 결과 패키징 (요청하신 “원문 쿼리” 포함)
+        HybridResult out = new HybridResult();
+        out.bm25QueryJson = bm25BodyJson;
+        out.knnQueryJson  = knnBodyJson; // 벡터 미사용이면 null
+        out.usedVector    = usedVector;
+        out.bm25Hits      = bm25.totalHits;
+        out.bm25MaxScore  = bm25.maxScore;
+        out.scores        = topNMap;
+        return out;
+    }
+
+    // ============================
+    // [신규] 판단 규칙 (BM25가 부족한지)
+    // ============================
+    private boolean isBm25Weak(Bm25ParseResult bm25, int allowSize) {
+        if (bm25.totalHits < BM25_MIN_HITS) return true;
+        if (bm25.maxScore  < BM25_MIN_MAX_SCORE) return true;
+        if (allowSize >= 1000) {
+            double coverRate = (bm25.tourScores.size() * 1.0) / allowSize;
+            if (coverRate < BM25_MIN_COVER_RATE) return true;
+        }
+        return false;
+    }
+
+    // ============================
+    // [신규] JSON 원문 빌더
+    // ============================
+
+    /** [신규] 허용 투어 + LLM excludeList를 must_not로 반영한 bool JSON */
+    private String buildBoolFilterJson(Set<Long> allowTourIds, KeywordRule rule) {
+        String terms = allowTourIds == null || allowTourIds.isEmpty()
+                ? "\"terms\": {\"tour_id\": []}"
+                : "\"terms\": {\"tour_id\": [" + allowTourIds.stream().map(String::valueOf).collect(Collectors.joining(",")) + "]}";
+
+        // must_not (excludeList → combined_text에 대한 match)
+        String mustNot = "";
+        if (rule != null && rule.getExcludeList() != null && !rule.getExcludeList().isEmpty()) {
+            String blocks = rule.getExcludeList().stream()
+                    .filter(s -> s != null && !s.isBlank())
+                    .map(s -> "{\"match\":{\"combined_text\":{\"query\":\"" + jsonEscape(s) + "\",\"operator\":\"or\"}}}")
+                    .collect(Collectors.joining(","));
+            if (!blocks.isBlank()) {
+                mustNot = ",\"must_not\":[" + blocks + "]";
+            }
+        }
+
+        return "{\"filter\":[" + "{" + terms + "}" + "]" + mustNot + "}";
+    }
+
+    /** [신규] BM25 원문 바디(JSON) */
+    private String buildBm25BodyJson(String userText, KeywordRule rule, String boolJson) {
+        StringBuilder queryText = new StringBuilder();
+        if (userText != null) queryText.append(userText).append(' ');
+        if (rule != null && rule.getKeyword() != null) queryText.append(rule.getKeyword()).append(' ');
+        if (rule != null && rule.getShouldList() != null) {
+            rule.getShouldList().stream().filter(s -> s != null && !s.isBlank())
+                    .forEach(s -> queryText.append(s).append(' '));
+        }
+        String q = jsonEscape(queryText.toString().trim());
+
+        // collapse + inner_hits로 투어 단위 1묶음 반환
+        return """
+        {
+          "track_total_hits": false,
+          "_source": { "excludes": ["embedding","embedding.*"] },
+          "fields": ["tour_id"],
+          "size": %d,
+          "collapse": {
+            "field": "tour_id",
+            "inner_hits": { "name": "top_schedules", "size": %d, "sort": [ { "_score": "desc" } ] }
+          },
+          "query": {
+            "bool": %s
+          }
+        }
+        """.formatted(
+                SIZE_GROUPED,
+                INNER_HITS_MTOP,
+                // bool 내부의 must는 여기서 넣는다
+                injectMustIntoBool(boolJson, """
+                  {"match":{"combined_text":{"query":"%s","operator":"and"}}}
+                """.formatted(q))
+        );
+    }
+
+    /** [신규] kNN 원문 바디(JSON) */
+    private String buildKnnBodyJson(String vectorJson, String boolJson) {
+        // collapse + inner_hits 동일 사용
+        return """
+        {
+          "track_total_hits": false,
+          "_source": { "excludes": ["embedding","embedding.*"] },
+          "fields": ["tour_id"],
+          "size": %d,
+          "collapse": {
+            "field": "tour_id",
+            "inner_hits": { "name": "top_schedules", "size": %d, "sort": [ { "_score": "desc" } ] }
+          },
+          "query": { "bool": %s },
+          "knn": {
+            "field": "embedding",
+            "query_vector": %s,
+            "k": %d,
+            "num_candidates": %d,
+            "filter": { "bool": %s }
+          }
+        }
+        """.formatted(
+                SIZE_GROUPED,
+                INNER_HITS_MTOP,
+                boolJson,
+                vectorJson,
+                KNN_K,
+                KNN_CANDIDATES,
+                boolJson
+        );
+    }
+
+    // ============================
+    // [신규] 파싱/가공 유틸
+    // ============================
+
+    /** [신규] collapse(+inner_hits) 응답을 투어 단위 점수 맵으로 파싱 */
+    private Bm25ParseResult parseGroupedScores(SearchResponse<Map> resp) {
+        Map<Long, Double> tourScore = new LinkedHashMap<>();
+        double maxScore = 0.0;
+        for (Hit<Map> h : resp.hits().hits()) {
+            Long tourId = readTourId(h);
+            if (tourId == null) continue;
+
+            // 대표 문서 _score + inner_hits 평균 중 더 의미있는 값 사용 (여기선 inner_hits 평균 우선)
+            double avg = averageInnerHitsScore(h, "top_schedules");
+            if (Double.isNaN(avg)) {
+                avg = h.score() == null ? 0.0 : h.score();
+            }
+            tourScore.put(tourId, avg);
+            if (avg > maxScore) maxScore = avg;
+        }
+        int total = resp.hits().total() == null ? tourScore.size() : (int) resp.hits().total().value();
+        Bm25ParseResult r = new Bm25ParseResult();
+        r.tourScores = tourScore;
+        r.maxScore   = maxScore;
+        r.totalHits  = total;
+        return r;
+    }
+
+    private Long readTourId(Hit<Map> h) {
+        Map<String, Object> src = h.source();
+        if (src != null && src.get("tour_id") != null) {
+            Object v = src.get("tour_id");
+            if (v instanceof Number n) return n.longValue();
+            try { return Long.parseLong(String.valueOf(v)); } catch (Exception ignore) {}
+        }
+        // fields에 있을 수도 있음
+        if (h.fields() != null && h.fields().get("tour_id") instanceof List<?> list && !list.isEmpty()) {
+            Object v = list.get(0);
+            if (v instanceof Number n) return n.longValue();
+            try { return Long.parseLong(String.valueOf(v)); } catch (Exception ignore) {}
+        }
+        return null;
+    }
+
+    private double averageInnerHitsScore(Hit<Map> h, String innerName) {
+        try {
+            var ih = h.innerHits();
+            if (ih == null || !ih.containsKey(innerName)) return Double.NaN;
+            var hits = ih.get(innerName).hits().hits();
+            if (hits == null || hits.isEmpty()) return Double.NaN;
+            double sum = 0.0; int n = 0;
+            for (var x : hits) {
+                if (x.score() != null) { sum += x.score(); n++; }
+            }
+            return n == 0 ? Double.NaN : (sum / n);
+        } catch (Exception e) {
+            return Double.NaN;
+        }
+    }
+
+    private Map<Long, Double> normalizeByMax(Map<Long, Double> in) {
+        double max = in.values().stream().mapToDouble(d -> d).max().orElse(0.0);
+        if (max <= 0.0) return in;
+        Map<Long, Double> out = new HashMap<>(in.size());
+        for (var e : in.entrySet()) out.put(e.getKey(), e.getValue() / max);
+        return out;
+    }
+
+    private Map<Long, Double> fuseScores(Map<Long, Double> bm25, Map<Long, Double> vec, double wB, double wV) {
+        Map<Long, Double> out = new HashMap<>();
+        Set<Long> keys = new HashSet<>(); keys.addAll(bm25.keySet()); keys.addAll(vec.keySet());
+        for (Long id : keys) {
+            double s = wB * bm25.getOrDefault(id, 0.0) + wV * vec.getOrDefault(id, 0.0);
+            out.put(id, s);
+        }
+        return out;
+    }
+
+    // ============================
+    // [신규] 문자열/JSON 도우미
+    // ============================
+    private static String jsonEscape(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").trim();
+    }
+
+    /** bool JSON 문자열 안에 must 절 하나를 주입 (기존 must_not/filter 보존) */
+    private static String injectMustIntoBool(String boolJson, String mustClauseJson) {
+        // boolJson = {"filter":[...], "must_not":[...]} 형태 가정. must 배열이 없으면 생성.
+        String trimmed = boolJson.trim();
+        if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return boolJson; // 방어
+        boolean hasMust = trimmed.contains("\"must\":");
+        if (hasMust) {
+            return trimmed.replaceFirst("\\\"must\\\"\\s*:\\s*\\[", "\"must\":[" + mustClauseJson + ",");
+        } else {
+            // 마지막 } 앞에 ,"must":[ ... ] 삽입
+            String insert = ",\"must\":[" + mustClauseJson + "]";
+            return trimmed.substring(0, trimmed.length() - 1) + insert + "}";
+        }
+    }
+
+    private String buildVectorText(String userText, KeywordRule rule) {
+        StringBuilder sb = new StringBuilder();
+        if (userText != null) sb.append(userText).append(' ');
+        if (rule != null && rule.getShouldList() != null) {
+            rule.getShouldList().stream().filter(s -> s != null && !s.isBlank())
+                    .forEach(s -> sb.append(s).append(' '));
+        }
+        return sb.toString().trim();
+    }
+
+    // ============================
+    // [신규] 반환 DTO
+    // ============================
+    public static class HybridResult {
+        public Map<Long, Double> scores;    // 최종 Top-N 점수(투어 단위)
+        public String bm25QueryJson;        // BM25 요청 원문 JSON
+        public String knnQueryJson;         // kNN 요청 원문 JSON(미사용이면 null)
+        public boolean usedVector;          // 벡터 사용 여부
+        public int bm25Hits;                // BM25 totalHits (그룹 기준 추정)
+        public double bm25MaxScore;         // BM25 max_score
+    }
+
+    private static class Bm25ParseResult {
+        Map<Long, Double> tourScores;
+        int totalHits;
+        double maxScore;
     }
 }

@@ -7,7 +7,6 @@ import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.KeywordRule;
 import tkitem.backend.domain.tour.dto.TopMatchDto;
-import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 import tkitem.backend.domain.tour.dto.response.TourCommonRecommendDto;
 import tkitem.backend.domain.tour.dto.response.TourPackageDto;
@@ -75,8 +74,6 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
         // 1. 사용자 입력 없으면 DB score 랭킹 상위 topN 개 반환
         boolean useEs = queryText != null && !queryText.isBlank();
 
-        // TODO : DB 검색만 7초정도 지연시간 발생. DB 조회시간 최적화 필요
-
         // 지역, 날짜, 추천기록에 속하지 않는 허용 투어 ID 목록 조회
         long touridTime = System.nanoTime();
         List<Long> allowIds = tourMapper.selectTourIdsByFilters(req.getDepartureDate(), req.getReturnDate(), req.getPriceMin(), req.getPriceMax(), req.getLocations(), member.getMemberId(), req.getGroupId());
@@ -95,19 +92,6 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
             int total = base.size();
             int show = Math.min(total, topN);
             log.info("[DB-ONLY] totalCandidates={}, willShowTopN={}", total, show);
-            for (int i = 0; i < show; i++) {
-                TourRecommendationResponseDto r = base.get(i);
-                log.info("[DB-ONLY][{}] tourId={}, title='{}', price={}, dep={}, ret={}, pkgId={}, dbScore={}, finalScore={}",
-                        i,
-                        r.getTourId(),
-                        r.getTitle(),
-//                        r.getPackageDtos().getFirst().getPrice(),
-//                        r.getPackageDtos().getFirst().getDepartureDate(),
-//                        r.getPackageDtos().getFirst().getReturnDate(),
-//                        r.getPackageDtos().getFirst().getTourPackageId(),
-                        r.getDbScore(),
-                        r.getFinalScore());
-            }
             if (show == 0) log.info("[DB-ONLY] no candidates.");
         }
 
@@ -120,7 +104,6 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
             // ES 호출 파라미터
             final int TOP_N_ES = 200;
 
-            // TODO : ES 검색시 TOUR 상위 10개만 나오는거, 200개는 찾게 수정
             // ES 호출 (collapse + inner_hits 상위 m개 평균)
             List<TopMatchDto>esTop = tourEsService.sendRawEsQueryTopNAllowed(
                     rule, allowIds, TOP_N_ES, ES_K, ES_CANDIDATES, ES_MTOP
