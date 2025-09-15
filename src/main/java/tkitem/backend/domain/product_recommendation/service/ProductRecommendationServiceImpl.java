@@ -53,8 +53,8 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
             Integer scheduleDate = entry.getKey() == -1 ? null : entry.getKey();
             List<ChecklistItem> items = entry.getValue();
 
-            // score 높은 순으로 정렬
-            items.sort((a, b) -> Double.compare(b.getScore(), a.getScore()));
+            // checklistItemId 순으로 정렬
+            items.sort(Comparator.comparing(ChecklistItem::getChecklistItemId));
 
             List<ChecklistProductResponse> productResponses = new ArrayList<>();
 
