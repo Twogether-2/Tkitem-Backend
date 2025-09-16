@@ -34,168 +34,6 @@
         SELECT PACKAGE_DATE_CODE FROM TOUR_PACKAGE WHERE TOUR_ID = #{tourId}
     </select>
 
-    <!--  투어 추천  -->
-    <!--  filtered_pkg : 기간, 가격 필터  -->
-    <!--  pkg_agg : 필터링에 걸린 투어 상품 중 가장 가격 낮은  -->
-    <!--  rep_pkg : 투어별 대표 패키지(정렬 : 가격, 출발일, 패키지ID 1건 -->
-    <!--  tds_score : TDS * TST * STT 가중 합. SUM(stt.weight * tst.score) 를 tds(일정행) 별 점수로 계산  -->
-    <!--  ranked : 투어별로 tds_score를 점수 내림차순 랭킹  -->
-    <!--  final_score : 투어별 Tok-k(sDbRow), Top-k 평균(sDbAvg), tdsCnt, + pkg_agg 의 minPrice/latestDeparture  -->
-    <!--  최종컬럼 : sDbRow=Top-k 합산점수, sDbAvg=Top-k 평균점수, dbScore=길이/기간 보정점수=sDbAvg/루트tdsCnt/루트days  -->
-    <select id="selectTourCandidates" parameterType="map" resultType="tkitem.backend.domain.tour.dto.TourCandidateRowDto">
-        WITH filtered_pkg AS (
-            SELECT
-                tp.tour_id,
-                tp.tour_package_id,
-                tp.price,
-                tp.departure_date,
-                tp.return_date,
-                tp.booking_url,
-                tp.departure_airline,
-                tp.return_airline
-            FROM TOUR_PACKAGE tp
-            WHERE 1=1
-                <if test="req.groupId != null and req.groupId &gt; 0">
-                    AND NOT EXISTS (
-                    SELECT 1
-                    FROM TOUR_RECOMMENDATION tr
-                    WHERE tr.tour_id = tp.tour_id
-                        AND tr.group_id = #{req.groupId}
-                        AND tr.member_id = #{memberId}
-                    )
-                </if>
-                <if test="memberId != null">
-                    AND NOT EXISTS (
-                    SELECT 1
-                    FROM TRIP t
-                    WHERE t.tour_package_id = tp.tour_package_id
-                    AND t.member_id = #{memberId}
-                    )
-                </if>
-                <if test="req != null and req.departureDate != null">
-                    AND tp.departure_date &gt;= TRUNC(#{req.departureDate, jdbcType=DATE})
-                </if>
-                <if test="req != null and req.returnDate != null">
-                    AND tp.return_date &lt; TRUNC(#{req.returnDate, jdbcType=DATE}) + 1
-                </if>
-                <if test="req != null and req.priceMin != null">
-                    AND tp.price &gt;= #{req.priceMin, jdbcType=NUMERIC}
-                </if>
-                <if test="req != null and req.priceMax != null">
-                    AND tp.price &lt;= #{req.priceMax, jdbcType=NUMERIC}
-                </if>
-        ),
-        pkg_agg AS (
-            SELECT
-                tour_id,
-                MIN(price) AS min_price,
-                MAX(departure_date) AS latest_departure
-            FROM filtered_pkg
-            GROUP BY tour_id
-        ),
-        rep_pkg AS (
-            SELECT
-                tour_id,
-                tour_package_id AS "repTourPackageId",
-                price           AS "repPrice",
-                departure_date  AS "repDepartureDate",
-                return_date     AS "repReturnDate",
-                booking_url     AS "repBookingUrl",
-                departure_airline AS "repDepartureAirline",
-                return_airline    AS "repReturnAirline"
-            FROM (
-                SELECT fp2.*,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY fp2.tour_id
-                        ORDER BY fp2.price ASC NULLS LAST,
-                            fp2.departure_date ASC NULLS LAST,
-                            fp2.tour_package_id ASC
-                    ) rn
-                FROM filtered_pkg fp2
-            )
-            WHERE rn = 1
-        ),
-        tds_score AS (
-            SELECT
-                tds.tour_id,
-                tds.tour_detail_schedule_id AS tds_id,
-                SUM (stt.weight * tst.score) AS s
-            FROM TOUR_DETAIL_SCHEDULE tds
-                JOIN TOUR_SCHEDULE_TYPE tst ON tst.tour_detail_schedule_id = tds.tour_detail_schedule_id
-                LEFT JOIN SCHEDULE_TYPE_TAG stt ON stt.schedule_type_id = tst.schedule_type_id
-                LEFT JOIN CITY c ON c.city_id = tds.city_id
-                JOIN pkg_agg pa ON pa.tour_id = tds.tour_id
-            WHERE 1=1
-                <if test="req != null and req.locations != null and req.locations.size() &gt; 0">
-                    AND EXISTS (
-                        SELECT 1
-                        FROM CITY c2
-                        WHERE c2.city_id = tds.city_id
-                        AND (
-                        <foreach collection="req.locations" item="loc" separator=" OR ">
-                            (
-                                1=1
-                                <if test="loc.countryGroup != null and loc.countryGroup != ''">
-                                    AND c2.country_group_name = #{loc.countryGroup}
-                                </if>
-                                <if test="loc.country != null and loc.country != ''">
-                                    AND c2.country_name = #{loc.country}
-                                </if>
-                                <if test="loc.city != null and loc.city != ''">
-                                    AND c2.city_name = #{loc.city}
-                                </if>
-                            )
-                        </foreach>
-                        )
-                    )
-                </if>
-                <if test="req.tagIdList != null and req.tagIdList.size() &gt; 0">
-                    AND (
-                        NOT EXISTS (
-                            SELECT 1 FROM SCHEDULE_TYPE_TAG stt_chk
-                            WHERE stt_chk.tag_id IN
-                                <foreach collection="req.tagIdList" item="id" open="(" close=")" separator=",">#{id}</foreach>
-                        )
-                        OR stt.tag_id IN
-                            <foreach collection="req.tagIdList" item="id" open="(" close=")" separator=",">#{id}</foreach>
-                    )
-                </if>
-            GROUP BY tds.tour_id, tds.tour_detail_schedule_id
-        ),
-        ranked AS (
-            SELECT
-                tour_id, tds_id, s,
-                ROW_NUMBER() OVER (PARTITION BY tour_id ORDER BY s DESC) AS rn
-            FROM tds_score
-        ),
-        final_score AS (
-            SELECT
-                r.tour_id,
-                SUM(CASE WHEN r.rn &lt;= #{kTop} THEN r.s ELSE 0 END) AS "sDbRaw",
-                AVG(CASE WHEN r.rn &lt;= #{kTop} THEN r.s END)       AS "sDbAvg",
-                COUNT(*)                                            AS "tdsCnt",
-                pa.min_price                                        AS "minPrice",
-                pa.latest_departure                                 AS "latestDeparture"
-            FROM ranked r
-                JOIN pkg_agg pa ON pa.tour_id = r.tour_id
-                GROUP BY r.tour_id, pa.min_price, pa.latest_departure
-        )
-        SELECT
-            fs.tour_id AS "tourId",
-            fs."sDbRaw", fs."sDbAvg",
-            /* 길이·기간 보정 점수 */
-            ( fs."sDbAvg"
-            / POWER(GREATEST(1, fs."tdsCnt"), 0.5)
-            / POWER(GREATEST(1, (rp."repReturnDate" - rp."repDepartureDate") + 1), 0.5)
-            ) AS "dbScore",
-            fs."tdsCnt", fs."minPrice", fs."latestDeparture",
-            rp."repTourPackageId", rp."repPrice", rp."repDepartureDate", rp."repReturnDate",
-            rp."repBookingUrl", rp."repDepartureAirline", rp."repReturnAirline"
-        FROM final_score fs
-        JOIN rep_pkg rp ON rp.tour_id = fs.tour_id
-        ORDER BY "dbScore" DESC, fs."minPrice" ASC, fs."latestDeparture" ASC
-    </select>
-
     <!-- NEW: 선택된 투어들(tourIds)에 대해, 조건에 부합하는 모든 패키지 행을 조회 -->
     <select id="selectPackagesForTours"
             parameterType="map"
@@ -277,6 +115,7 @@
         fp.price ASC NULLS LAST,
         fp.tour_package_id ASC
     </select>
+
 
 
     <select id="selectTourMetaByIds" parameterType="list" resultType="map">
@@ -663,5 +502,270 @@
             </foreach>
             ELSE 999999
         END
+    </select>
+
+    <select id="selectTourIdsByFilters" resultType="long" fetchSize="20">
+        SELECT /*+ PARALLEL(2) */ t.tour_id
+        FROM TOUR t
+        WHERE
+        <!-- 날짜/가격 조건을 만족하는 패키지가 '존재'해야 함 -->
+        EXISTS (
+        SELECT 1
+        FROM TOUR_PACKAGE tp
+        WHERE tp.tour_id = t.tour_id
+
+        <!-- 날짜 overlap -->
+        <if test="depStart != null or retEnd != null">
+            AND
+            (
+            1=1
+            <if test="depStart != null and retEnd != null">
+                AND tp.departure_date &gt;= #{depStart}
+                AND tp.return_date &lt; #{retEnd} + 1
+            </if>
+            <if test="depStart != null and retEnd == null">
+                <!-- retEnd 미지정: 시작일 이후에 끝나는 패키지면 통과 -->
+                AND tp.return_date   &gt;= #{depStart}
+            </if>
+            <if test="depStart == null and retEnd != null">
+                <!-- depStart 미지정: 종료일 이전에 시작하는 패키지면 통과 -->
+                AND tp.departure_date &lt;= #{retEnd}
+            </if>
+            )
+        </if>
+
+        <!-- 가격 -->
+        <if test="priceMin != null">
+            AND tp.price &gt;= #{priceMin}
+        </if>
+        <if test="priceMax != null">
+            AND tp.price &lt;= #{priceMax}
+        </if>
+        )
+
+        <!-- 지역 OR 매칭 -->
+        <if test="locations != null and locations.size() &gt; 0">
+            AND EXISTS (
+            SELECT 1
+            FROM TOUR_CITY tc
+            JOIN CITY c ON c.city_id = tc.city_id
+            WHERE tc.tour_id = t.tour_id
+            AND (
+            <!-- locations 항목들을 OR 로 연결 -->
+            <foreach collection="locations" item="loc" separator=" OR ">
+                (
+                <!-- 1) city가 주어졌다면 city로 매칭 -->
+                <if test="loc.city != null and loc.city.trim().length() &gt; 0">
+                    c.city_name = #{loc.city}
+                    <!-- country/countryGroup가 같이 왔다면 그까지 '추가로' 제한 -->
+                    <if test="loc.country != null and loc.country.trim().length() &gt; 0">
+                        AND c.country_name = #{loc.country}
+                    </if>
+                    <if test="loc.countryGroup != null and loc.countryGroup.trim().length() &gt; 0">
+                        AND c.country_group_name = #{loc.countryGroup}
+                    </if>
+                </if>
+
+                <!-- 2) city는 없고 country가 주어졌다면 country로 매칭 -->
+                <if test="(loc.city == null or loc.city.trim().length() == 0)
+                                        and (loc.country != null and loc.country.trim().length() &gt; 0)">
+                    c.country_name = #{loc.country}
+                    <if test="loc.countryGroup != null and loc.countryGroup.trim().length() &gt; 0">
+                        AND c.country_group_name = #{loc.countryGroup}
+                    </if>
+                </if>
+
+                <!-- 3) city/country 모두 없고 countryGroup만 주어졌다면 group으로 매칭 -->
+                <if test="(loc.city == null or loc.city.trim().length() == 0)
+                                        and (loc.country == null or loc.country.trim().length() == 0)
+                                        and (loc.countryGroup != null and loc.countryGroup.trim().length() &gt; 0)">
+                    c.country_group_name = #{loc.countryGroup}
+                </if>
+                )
+            </foreach>
+            )
+        )
+        </if>
+        <!--    회원에게 추천된 투어면 제외    -->
+        <if test="memberId != null">
+            AND NOT EXISTS (
+                SELECT 1
+                FROM TOUR_RECOMMENDATION tr
+                WHERE tr.tour_id = t.tour_id
+                    AND tr.member_id = #{memberId}
+                    <if test="groupId != null or groupId != 0">
+                        AND tr.group_id = #{groupId}
+                    </if>
+            )
+        </if>
+    </select>
+
+    <select id="scoreByIdsInline"
+            parameterType="map"
+            resultType="tkitem.backend.domain.tour.dto.TourCandidateRowDto"
+            fetchSize="1000">
+        WITH
+        /* allowIdsJson: "[101,102,...]" 형태의 JSON 배열 문자열 */
+        ids AS (
+            SELECT jt.tour_id
+            FROM JSON_TABLE(
+                #{allowIdsJson, jdbcType=CLOB},
+                '$[*]'
+                COLUMNS ( tour_id NUMBER PATH '$' )
+            ) jt
+        ),
+        /* REST 타입 식별 */
+        st_rest AS (
+            SELECT schedule_type_id AS rest_id
+            FROM SCHEDULE_TYPE
+            WHERE UPPER(name) = 'REST'
+        ),
+        /* 태그 가중치(없으면 나중에 1.0 처리) */
+        sel_tag AS (
+            SELECT schedule_type_id, AVG(weight) AS avg_weight
+            FROM SCHEDULE_TYPE_TAG
+            <if test="tagIdList != null and tagIdList.size() &gt; 0">
+                WHERE tag_id IN (
+                <foreach collection="tagIdList" item="tid" separator=",">#{tid}</foreach>
+                )
+            </if>
+            GROUP BY schedule_type_id
+        ),
+        /* allowIds 대상의 일정×유형 원천 */
+        tst_base AS (
+            SELECT
+                tds.tour_id,
+                tds.tour_detail_schedule_id AS tds_id,
+                TRUNC(tds.schedule_date)    AS schedule_date,
+                tds.default_type,
+                tst.schedule_type_id,
+                tst.score
+            FROM ids
+                JOIN TOUR_DETAIL_SCHEDULE tds ON tds.tour_id = ids.tour_id
+                JOIN TOUR_SCHEDULE_TYPE   tst ON tst.tour_detail_schedule_id = tds.tour_detail_schedule_id
+        ),
+        /* ACCOMMODATION 에서의 REST: 같은 날 평균 1건으로 축약 */
+        rest_accom_day AS (
+            SELECT
+                b.tour_id,
+                b.schedule_date,
+                r.rest_id AS schedule_type_id,
+                AVG(b.score) AS avg_score
+            FROM tst_base b
+            JOIN st_rest r ON r.rest_id = b.schedule_type_id
+            WHERE UPPER(NVL(b.default_type,'X')) = 'ACCOMMODATION'
+            GROUP BY b.tour_id, b.schedule_date, r.rest_id
+        ),
+        /* 비-숙소 REST + 기타(행 유지) */
+        non_rest_rows AS (
+            SELECT
+                b.tour_id, b.schedule_date, b.tds_id, b.schedule_type_id,
+                b.score AS base_score
+            FROM tst_base b
+            LEFT JOIN st_rest r ON r.rest_id = b.schedule_type_id
+            WHERE r.rest_id IS NULL OR UPPER(NVL(b.default_type,'X')) &lt;&gt; 'ACCOMMODATION'
+        ),
+        /* 숙소 REST 보정행으로 변환 */
+        rest_rows AS (
+            SELECT
+                r.tour_id, r.schedule_date,
+                CAST(NULL AS NUMBER) AS tds_id,
+                r.schedule_type_id, r.avg_score AS base_score
+            FROM rest_accom_day r
+        ),
+        /* 태그 가중치 적용: 태그 있으면 sum_weight, 없으면 1.0(미매칭은 0) */
+        scored AS (
+            SELECT
+                x.tour_id, x.schedule_date, x.tds_id, x.schedule_type_id,
+                (
+                    <if test="tagIdList != null and tagIdList.size() &gt; 0">
+                        NVL(s.avg_weight, 0)
+                    </if>
+                    <if test="!(tagIdList != null and tagIdList.size() &gt; 0)">
+                        1
+                    </if>
+                ) * x.base_score AS s
+            FROM (
+                SELECT * FROM non_rest_rows
+                UNION ALL
+                SELECT * FROM rest_rows
+            ) x
+            LEFT JOIN sel_tag s ON s.schedule_type_id = x.schedule_type_id
+        ),
+        /* (tour, day, unit) 합산 (숙소 REST는 unit_id=-1) */
+        unit_score AS (
+            SELECT
+                tour_id,
+                schedule_date,
+                NVL(tds_id,-1) AS unit_id,
+                SUM(s) AS unit_s
+            FROM scored
+            GROUP BY tour_id, schedule_date, NVL(tds_id,-1)
+        ),
+        /* 일자별 Top-N 유닛 */
+        ranked_day AS (
+            SELECT
+                u.*,
+                ROW_NUMBER() OVER (PARTITION BY u.tour_id, u.schedule_date ORDER BY u.unit_s DESC) AS rn_day
+            FROM unit_score u
+        ),
+        /* 일자 점수 */
+        day_score AS (
+            SELECT
+                r.tour_id,
+                r.schedule_date,
+                SUM(CASE WHEN r.rn_day &lt;= #{nPerDay} THEN r.unit_s ELSE 0 END) AS day_s
+            FROM ranked_day r
+            GROUP BY r.tour_id, r.schedule_date
+        ),
+        /* 최종 점수: 일자 평균(길이 보정) */
+        tour_score AS (
+            SELECT
+                d.tour_id,
+                AVG(d.day_s) AS finalScore
+            FROM day_score d
+            GROUP BY d.tour_id
+        ),
+        /* 최저가/대표패키지 요약 (allowIds 한정) */
+        pkg_agg AS (
+            SELECT
+                tp.tour_id,
+                MIN(tp.price)          AS min_price,
+                MAX(tp.departure_date) AS latest_departure
+            FROM TOUR_PACKAGE tp
+                JOIN ids ON ids.tour_id = tp.tour_id
+            GROUP BY tp.tour_id
+        ),
+        rep_pkg AS (
+            SELECT
+                tp.tour_id,
+                MIN(tp.tour_package_id) KEEP (DENSE_RANK FIRST ORDER BY tp.price NULLS LAST, tp.departure_date NULLS LAST, tp.tour_package_id) AS repTourPackageId,
+                MIN(tp.price) KEEP (DENSE_RANK FIRST ORDER BY tp.price NULLS LAST, tp.departure_date NULLS LAST, tp.tour_package_id) AS repPrice,
+                MIN(tp.departure_date) KEEP (DENSE_RANK FIRST ORDER BY tp.price NULLS LAST, tp.departure_date NULLS LAST, tp.tour_package_id) AS repDepartureDate,
+                MIN(tp.return_date) KEEP (DENSE_RANK FIRST ORDER BY tp.price NULLS LAST, tp.departure_date NULLS LAST, tp.tour_package_id) AS repReturnDate,
+                MIN(tp.booking_url) KEEP (DENSE_RANK FIRST ORDER BY tp.price NULLS LAST, tp.departure_date NULLS LAST, tp.tour_package_id) AS repBookingUrl,
+                MIN(tp.departure_airline) KEEP (DENSE_RANK FIRST ORDER BY tp.price NULLS LAST, tp.departure_date NULLS LAST, tp.tour_package_id) AS repDepartureAirline,
+                MIN(tp.return_airline) KEEP (DENSE_RANK FIRST ORDER BY tp.price NULLS LAST, tp.departure_date NULLS LAST, tp.tour_package_id) AS repReturnAirline
+            FROM TOUR_PACKAGE tp
+                JOIN ids ON ids.tour_id = tp.tour_id
+            GROUP BY tp.tour_id
+        )
+        SELECT
+            ts.tour_id              AS "tourId",
+            ts.finalScore           AS "sDbRaw",
+            pa.min_price            AS "minPrice",
+            pa.latest_departure     AS "latestDeparture",
+            rp.repTourPackageId     AS "repTourPackageId",
+            rp.repPrice             AS "repPrice",
+            rp.repDepartureDate     AS "repDepartureDate",
+            rp.repReturnDate        AS "repReturnDate",
+            rp.repBookingUrl        AS "repBookingUrl",
+            rp.repDepartureAirline  AS "repDepartureAirline",
+            rp.repReturnAirline     AS "repReturnAirline"
+        FROM tour_score ts
+            LEFT JOIN pkg_agg pa ON pa.tour_id = ts.tour_id
+            LEFT JOIN rep_pkg  rp ON rp.tour_id = ts.tour_id
+        WHERE NVL(ts.finalScore, 0) &gt; 0
+        ORDER BY ts.finalScore DESC, pa.min_price ASC, pa.latest_departure ASC
     </select>
 </mapper>

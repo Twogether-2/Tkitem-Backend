@@ -7,7 +7,6 @@ import org.springframework.transaction.annotation.Transactional;
 import tkitem.backend.domain.member.vo.Member;
 import tkitem.backend.domain.tour.dto.KeywordRule;
 import tkitem.backend.domain.tour.dto.TopMatchDto;
-import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
 import tkitem.backend.domain.tour.dto.response.TourCommonRecommendDto;
 import tkitem.backend.domain.tour.dto.response.TourPackageDto;
@@ -28,6 +27,7 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
 
     private final TourRecommendService tourRecommendService;
     private final TourEsService tourEsService;
+    private final TourLLmService tourLLmService;
 
     private final TourMapper tourMapper;
     private final KeywordRuleLoader ruleLoader;
@@ -74,42 +74,62 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
         // 1. 사용자 입력 없으면 DB score 랭킹 상위 topN 개 반환
         boolean useEs = queryText != null && !queryText.isBlank();
 
+        // 지역, 날짜, 추천기록에 속하지 않는 허용 투어 ID 목록 조회
+        long touridTime = System.nanoTime();
+        List<Long> allowIds = tourMapper.selectTourIdsByFilters(req.getDepartureDate(), req.getReturnDate(), req.getPriceMin(), req.getPriceMax(), req.getLocations(), member.getMemberId(), req.getGroupId());
+        touridTime = System.nanoTime() - touridTime;
+        log.info("[RECOMMEND] allowids size from filtering db = {}, time = {}", allowIds.size(), touridTime/1_000_000);
+
         // DB 후보 1차 계산
         int baseCount = useEs ? Math.max(DB_STAGE_TOP, topN) : topN;
-        List<TourRecommendationResponseDto> base = tourRecommendService.recommendDbOnly(req, baseCount, member);
+        log.info("[RECOMMEND]DB후보계산 시작");
+        List<TourRecommendationResponseDto> base = tourRecommendService.recommendDbOnly(req, baseCount, member, allowIds);
         if (base == null || base.isEmpty()) return Collections.emptyList();
+        log.info("[RECOMMEND]DB후보계산 완료 : {}", base.size());
 
         // ES 없을 때. DB 로만 계산
         if (!useEs) {
             int total = base.size();
             int show = Math.min(total, topN);
             log.info("[DB-ONLY] totalCandidates={}, willShowTopN={}", total, show);
-            for (int i = 0; i < show; i++) {
-                TourRecommendationResponseDto r = base.get(i);
-                log.info("[DB-ONLY][{}] tourId={}, title='{}', price={}, dep={}, ret={}, pkgId={}, dbScore={}, finalScore={}",
-                        i, r.getTourId(), r.getTitle(), r.getPackageDtos().getFirst().getPrice(), r.getPackageDtos().getFirst().getDepartureDate(), r.getPackageDtos().getFirst().getReturnDate(),
-                        r.getPackageDtos().getFirst().getTourPackageId(), r.getDbScore(), r.getFinalScore());
-            }
             if (show == 0) log.info("[DB-ONLY] no candidates.");
         }
 
         // ES 입력도 있을 때 DB + ES 합쳐서 계산
         else {
 
-            // 2. ES KNN 집계
-            Set<Long> allowIds = base.stream().map(TourRecommendationResponseDto::getTourId).collect(Collectors.toSet());
-            Map<Long, Double> sEsMap = tourEsService.computeEsScores(queryText, allowIds, ES_K, ES_CANDIDATES, ES_MTOP);
+            // GEMINI 로 queryText -> should/exclude 분류
+            KeywordRule rule = null;
+//                    tourLLmService.buildRuleFromQueryText(queryText);
 
+            // ES 호출 파라미터
+            final int TOP_N_ES = 200;
+
+
+            // BM25 먼저 요청 → (부족: hit=0 or max_score<8.0)일 때만 kNN도 호출하여 ES 점수 생성
+            TourEsService.HybridResult hr =
+                    tourEsService.searchHybridSimple(queryText, new java.util.HashSet<>(allowIds), TOP_N_ES, rule);
+
+            // 기존 변수명 유지: sEsMap (tourId -> ES 점수)
+            Map<Long, Double> sEsMap = new HashMap<>(hr.scores);
+            log.info("ES 하이브리드 완료 : bm25Hits={}, bm25Max={}, usedVector={}, distinctTours={}",
+                    hr.bm25Hits, String.format(java.util.Locale.ROOT, "%.3f", hr.bm25MaxScore), hr.usedVector, sEsMap.size());
+
+            double dbMax = base.stream()
+                    .mapToDouble(dto -> NumberUtil.toDoubleOrZero(dto.getDbScore()))
+                    .max().orElse(1.0);
             // 3. ES 점수 정규화 + 가중합
             double esMax = allowIds.stream()
                     .mapToDouble(id -> NumberUtil.toDoubleOrZero(sEsMap.getOrDefault(id, 0.0)))
                     .max().orElse(1.0); // 전부 0 인 경우 분모에 0 들어가는거 방지
 
             for (TourRecommendationResponseDto dto : base) {
-                double dbN = NumberUtil.toDoubleOrZero(dto.getDbScore());
+                double dbRaw = NumberUtil.toDoubleOrZero(dto.getDbScore());
                 double esRaw = NumberUtil.toDoubleOrZero(sEsMap.getOrDefault(dto.getTourId(), 0.0));
-                double esN = (esMax > 0.0) ? (esRaw / esMax) : 0.0;
-                double finalScore = ALPHA_DB * dbN + BETA_ES * esN;
+                double dbN = (dbMax > 0.0) ? (dbRaw / dbMax) : 0.0;  // DB 정규화
+                double esN = (esMax > 0.0) ? (esRaw / esMax) : 0.0;  // ES 정규화
+
+                double finalScore = 0.5 * dbN + 0.5 * esN;           // 5:5 합산
 
                 dto.setEsScore(esN);
                 dto.setFinalScore(finalScore);
@@ -117,7 +137,7 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
         }
 
         // =========================
-        // 4) 최종 정렬 (CHANGED)
+        // 4) 최종 정렬
         //    - 일자/가격 필터가 있으면: 출발일 오름차순
         //    - 없으면: 기존 점수 기반 정렬
         // =========================
@@ -140,15 +160,13 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
         );
 
         if (hasDateFilter || hasPriceFilter) {
-            // 요청하신 기준: 일자 빠른 순만 적용(필요 시 tourId로 tie-break)
             base.sort(
-                    Comparator
-                            .comparing((TourRecommendationResponseDto r) -> earliestDeparture(r.getPackageDtos()),
-                                    Comparator.nullsLast(Date::compareTo))
+                    byFinalDesc
+                            .thenComparing(byEarliestDepAsc)
+                            .thenComparing(byMinPriceAsc)
                             .thenComparing(TourRecommendationResponseDto::getTourId, Comparator.nullsLast(Long::compareTo))
             );
         } else {
-            // 기존 점수 기반 정렬
             base.sort(
                     byFinalDesc
                             .thenComparing(byMinPriceAsc)
@@ -157,10 +175,10 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
             );
         }
 
-        // 추천 결과 저장
-        List<TourRecommendationResponseDto> dtos =
-                tourRecommendService.enrichRecommendationDetails(base.subList(0, Math.min(topN, base.size())));
+        // 상위 5개만 투어 패키지, 세부일정 채우기
+        List<TourRecommendationResponseDto> dtos = tourRecommendService.fillTopNPackage(base.subList(0, Math.min(topN, base.size())), req, member, 5);
 
+        // 추천 결과 저장
         tourRecommendService.saveShownRecommendations(req.getGroupId(), dtos, member);
 
         return dtos;

@@ -3,6 +3,7 @@ package tkitem.backend.domain.tour.mapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.springframework.security.core.parameters.P;
+import tkitem.backend.domain.tour.dto.LocationInfo;
 import tkitem.backend.domain.tour.dto.TourCandidateRowDto;
 import tkitem.backend.domain.tour.dto.TourDetailScheduleDto;
 import tkitem.backend.domain.tour.dto.request.TourRecommendationRequestDto;
@@ -17,10 +18,7 @@ import tkitem.backend.domain.tour.vo.TourCity;
 import tkitem.backend.domain.tour.vo.TourDetailSchedule;
 import tkitem.backend.domain.tour.vo.TourPackage;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 @Mapper
 public interface TourMapper {
@@ -96,4 +94,18 @@ public interface TourMapper {
     List<Long> selectAllowTourIdsByCountryGroup(@Param("countryGroup") String countryGroup);
 
     List<TourCommonRecommendDto> selectTourMetaByTourIds(@Param("ids") List<Long> ids);
+
+    List<Long> selectTourIdsByFilters(
+            @Param("depStart") Date depStart,
+            @Param("retEnd") Date retEnd,
+            @Param("priceMin") Long priceMin,
+            @Param("priceMax") Long priceMax,
+            @Param("locations") List<LocationInfo> locations,
+            @Param("memberId") Long memberId,
+            @Param("groupId") Long groupId
+    );
+
+    List<TourCandidateRowDto> scoreByIdsInline(@Param("allowIdsJson") String allowIdsJson,
+                                               @Param("nPerDay") Integer nPerDay,
+                                               @Param("tagIdList") List<Long> tagIdList);
 }
