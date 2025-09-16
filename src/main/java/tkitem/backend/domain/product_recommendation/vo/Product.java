@@ -19,4 +19,5 @@ public class Product {
     private Double avgReview;
     private String code;
     private String url;
+    private String recommendTokens;
 }

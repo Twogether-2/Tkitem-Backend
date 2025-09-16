@@ -132,7 +132,7 @@ public class TourEsService {
     }
     """.formatted(boolJson, vec.toString(), boolJson);
 
-        log.info("생성된 json : {}", json);
+//        log.info("생성된 json : {}", json);
         return json;
     }
 
