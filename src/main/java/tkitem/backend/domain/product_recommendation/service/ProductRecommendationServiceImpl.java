@@ -86,7 +86,7 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
                             .code(recommendedProduct.getCode())
                             .price(recommendedProduct.getPrice())
                             .avgReview(recommendedProduct.getAvgReview())
-                            .recommendReason(RecommendReasonFormatter.toReason(recommendedProduct.getRecommendTokens()))
+                            .recommendReason(reason)
                             .build();
 
                     productResponses.add(ChecklistProductResponse.builder()
