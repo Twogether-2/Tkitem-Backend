@@ -99,33 +99,37 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
         else {
 
             // GEMINI 로 queryText -> should/exclude 분류
-            KeywordRule rule = tourLLmService.buildRuleFromQueryText(queryText);
+            KeywordRule rule = null;
+//                    tourLLmService.buildRuleFromQueryText(queryText);
 
             // ES 호출 파라미터
             final int TOP_N_ES = 200;
 
-            // ES 호출 (collapse + inner_hits 상위 m개 평균)
-            List<TopMatchDto>esTop = tourEsService.sendRawEsQueryTopNAllowed(
-                    rule, allowIds, TOP_N_ES, ES_K, ES_CANDIDATES, ES_MTOP
-            );
 
-            Map<Long, Double> sEsMap = esTop.stream()
-                    .collect(Collectors.toMap(TopMatchDto::tourId, TopMatchDto::score,(a, b) -> Math.max(a, b)));
-            log.info("ES KNN 집계 완료 : hits={},  distinctTours={}", esTop.size(), sEsMap.size());
-            for(Map.Entry<Long, Double> e : sEsMap.entrySet()){
-                log.info("tourId : {}, score: {}", e.getKey(), e.getValue());
-            }
+            // BM25 먼저 요청 → (부족: hit=0 or max_score<8.0)일 때만 kNN도 호출하여 ES 점수 생성
+            TourEsService.HybridResult hr =
+                    tourEsService.searchHybridSimple(queryText, new java.util.HashSet<>(allowIds), TOP_N_ES, rule);
 
+            // 기존 변수명 유지: sEsMap (tourId -> ES 점수)
+            Map<Long, Double> sEsMap = new HashMap<>(hr.scores);
+            log.info("ES 하이브리드 완료 : bm25Hits={}, bm25Max={}, usedVector={}, distinctTours={}",
+                    hr.bm25Hits, String.format(java.util.Locale.ROOT, "%.3f", hr.bm25MaxScore), hr.usedVector, sEsMap.size());
+
+            double dbMax = base.stream()
+                    .mapToDouble(dto -> NumberUtil.toDoubleOrZero(dto.getDbScore()))
+                    .max().orElse(1.0);
             // 3. ES 점수 정규화 + 가중합
             double esMax = allowIds.stream()
                     .mapToDouble(id -> NumberUtil.toDoubleOrZero(sEsMap.getOrDefault(id, 0.0)))
                     .max().orElse(1.0); // 전부 0 인 경우 분모에 0 들어가는거 방지
 
             for (TourRecommendationResponseDto dto : base) {
-                double dbN = NumberUtil.toDoubleOrZero(dto.getDbScore());
+                double dbRaw = NumberUtil.toDoubleOrZero(dto.getDbScore());
                 double esRaw = NumberUtil.toDoubleOrZero(sEsMap.getOrDefault(dto.getTourId(), 0.0));
-                double esN = (esMax > 0.0) ? (esRaw / esMax) : 0.0;
-                double finalScore = ALPHA_DB * dbN + BETA_ES * esN;
+                double dbN = (dbMax > 0.0) ? (dbRaw / dbMax) : 0.0;  // DB 정규화
+                double esN = (esMax > 0.0) ? (esRaw / esMax) : 0.0;  // ES 정규화
+
+                double finalScore = 0.5 * dbN + 0.5 * esN;           // 5:5 합산
 
                 dto.setEsScore(esN);
                 dto.setFinalScore(finalScore);
@@ -156,15 +160,13 @@ public class TourRecommendFacadeServiceImpl implements TourRecommendFacadeServic
         );
 
         if (hasDateFilter || hasPriceFilter) {
-            // 요청하신 기준: 일자 빠른 순만 적용(필요 시 tourId로 tie-break)
             base.sort(
-                    Comparator
-                            .comparing((TourRecommendationResponseDto r) -> earliestDeparture(r.getPackageDtos()),
-                                    Comparator.nullsLast(Date::compareTo))
+                    byFinalDesc
+                            .thenComparing(byEarliestDepAsc)
+                            .thenComparing(byMinPriceAsc)
                             .thenComparing(TourRecommendationResponseDto::getTourId, Comparator.nullsLast(Long::compareTo))
             );
         } else {
-            // 기존 점수 기반 정렬
             base.sort(
                     byFinalDesc
                             .thenComparing(byMinPriceAsc)
