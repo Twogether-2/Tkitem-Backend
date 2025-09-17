@@ -11,7 +11,7 @@
             PICK_LIMIT AS pickLimit,
             TYPE
         FROM SURVEY
-        ORDER BY DBMS_RANDOM.VALUE
+        ORDER BY SURVEY_ID
         FETCH FIRST 8 ROWS ONLY
     </select>
 
@@ -33,7 +33,7 @@
            AND SI.GENDER = #{gender}
         WHERE
             SQ.SURVEY_ID = #{surveyId}
-        ORDER BY DBMS_RANDOM.VALUE
+        ORDER BY SQ.SURVEY_QUESTION_ID
     </select>
 
     <select id="selectSurveyQValues" resultType="tkitem.backend.domain.survey.vo.SurveyQ">
