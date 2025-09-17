@@ -56,6 +56,7 @@ public class SurveyServiceImpl implements SurveyService{
 			for(SurveyQuestion surveyQuestion : surveyQuestionList){
 				String cdnUrl = CloudFrontUtil.getCloudFrontUrl(surveyQuestion.getImageUrl());
 				surveyQuestion.setImageUrl(cdnUrl);
+				log.info("surveyQuestion imageUrl: {}", cdnUrl);
 			}
 			survey.setQuestions(surveyQuestionList);
 		}
