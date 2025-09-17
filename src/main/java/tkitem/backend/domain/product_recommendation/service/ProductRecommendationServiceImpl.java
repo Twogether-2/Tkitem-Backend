@@ -122,12 +122,13 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
     public ProductCandidatesResponse getProductCandidates(Long tripId, Long checklistItemId, Character gender) {
         ChecklistItem checklistItem = recommendationMapper.findChecklistItemById(checklistItemId);
         Trip trip = recommendationMapper.findTripById(tripId);
+        String notes = Optional.ofNullable(checklistItem.getNotes()).orElse("");
 
         // 상품 후보군 조회 파라미터
         Map<String, Object> params = new HashMap<>();
         params.put("categoryId", checklistItem.getProductCategorySubId());
         params.put("memberId", trip.getMemberId());
-        params.put("notes", checklistItem.getNotes());
+        params.put("notes", notes);
         params.put("scheduleDate", checklistItem.getScheduleDate());
         params.put("limit", 20);
         params.put("gender", gender);
@@ -334,11 +335,27 @@ public class ProductRecommendationServiceImpl implements ProductRecommendationSe
         }
 
         // 최종: ' | ' 로 연결
-        return String.join(" | ", tokens);
+        String reason = tokens.stream()
+                .filter(t -> t != null && !t.trim().isEmpty())
+                // HIST: 로 시작하는 토큰은 아예 제거
+                .filter(t -> !t.matches("^\\s*HIST\\s*:?.*"))
+                // 모든 "단어:" 라벨 제거 (ACT:, WEATHER:, FLAGS:, DUR:, 등 전부)
+                .map(ProductRecommendationServiceImpl::stripLeadingLabel)
+                // 라벨 제거 후 빈 문자열이 될 수 있으니 한 번 더 필터
+                .filter(t -> !t.isBlank())
+                .collect(Collectors.joining(" | "));
+        return reason;
     }
 
     /* ====================== 헬퍼들 ====================== */
 
+    private static final Pattern TOKEN_LABEL
+            = Pattern.compile("^\\s*[\\p{L}\\p{N}_-]+\\s*:\\s*");
+
+    private static String stripLeadingLabel(String token) {
+        if (token == null) return "";
+        return TOKEN_LABEL.matcher(token).replaceFirst("");
+    }
     private static String safe(String s) { return s == null ? "" : s.trim(); }
     private static boolean isBlank(String s) { return s == null || s.trim().isEmpty(); }
 
