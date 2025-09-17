@@ -166,6 +166,7 @@ public class JwtAuthenticationProcessingFilter extends OncePerRequestFilter{
     private boolean isRefreshTokenValidInDatabase(Long memberId, String refreshToken){
         log.info("isRefreshTokenValidInDatabase 진입");
         String hashedRefreshToken = HashUtil.hash(refreshToken);
-        return redisUtil.get(memberId.toString()).equals(hashedRefreshToken);
+        String storedToken = redisUtil.get(memberId.toString());
+        return storedToken != null && storedToken.equals(hashedRefreshToken);
     }
 }
