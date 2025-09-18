@@ -58,7 +58,6 @@
         p.img_url     AS imgUrl
         FROM PRODUCT p
         WHERE 1=1
-        and p.gender = 'M'
         <if test="categoryIds != null and categoryIds.size() > 0">
             AND p.category_id IN
             <foreach collection="categoryIds" item="cid" open="(" separator="," close=")">
